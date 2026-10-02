@@ -57,7 +57,7 @@ func main() {
 		if err != nil {
 			return err
 		}
-		return migration.Run(db)
+		return migration.Run(context.Background(), db)
 	})
 	cli.Command("keys", "Manage encryption keys: keys status | keys rotate | keys rewrap", func(cmd *okapicli.Command) error {
 		return runKeys(cmd.Args())
@@ -85,7 +85,7 @@ func runServer(cli *okapicli.CLI) error {
 	if err != nil {
 		return err
 	}
-	if err := migration.Run(db); err != nil {
+	if err := migration.Run(ctx, db); err != nil {
 		return err
 	}
 	redisOpts, err := cfg.RedisOptions()
