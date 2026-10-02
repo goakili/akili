@@ -198,7 +198,7 @@ Autonomy levels are L0 (every call needs approval), L1 (auto-run low risk), L2 (
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/chat-dark.png">
-  <img src="docs/screenshots/chat.png" alt="A chat with an agent: tool calls show inline, and a read of /etc/shadow is denied by the developer policy">
+  <img src="docs/screenshots/chat.png" alt="A chat with an agent: tool calls show inline, and a read of /etc/hosts is denied by the developer policy">
 </picture>
 
 ## Coding: projects, branches and pull requests
@@ -229,7 +229,7 @@ For each coding task or chat on a project:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/approvals-dark.png">
-  <img src="docs/screenshots/approvals.png" alt="A change plan proposed after a DiskFull alert, waiting for approval: one step, two read-only checks, no rollback">
+  <img src="docs/screenshots/approvals.png" alt="A change plan waiting for approval next to a high-risk shell call: restart chronyd, two read-only checks and a rollback">
 </picture>
 
 `make e2e-ops` runs the whole flow: alert, then triage, then an approved plan, then verify and rollback, plus the terminal.
