@@ -9,6 +9,8 @@
 
 A security-first control plane for autonomous AI operator agents. **Default Deny. Explicit Allow. Always Auditable.**
 
+[![Deploy on Miabi](https://miabi.io/badges/deploy-on-miabi-purple.svg)](https://marketplace.miabi.io/templates/akili)
+
 - **[`server`](server)**: the control plane, the `akili` binary. It provides a web UI, a REST API with OpenAPI docs at `/docs`, and an LLM gateway. It stores state in Postgres and uses Redis for events, presence, leases and leader election.
 - **[`agent`](agent)**: the `akili-agent` binary. It runs on your servers. It dials out to the control plane (wstunnel, yamux over WebSocket) and runs chat and task sessions. It only acts within the signed policy it receives. The control plane serves its binary to the install script.
 - **[`proto`](proto)**: the wire contract both sides import. It holds the envelopes, tool catalog, policy engine and templates.
@@ -95,6 +97,17 @@ Releases are cut from `v*` tags and publish:
   - agent: `jkaninda/akili-agent` (Docker Hub) and `ghcr.io/goakili/akili-agent`
 - **Binaries** on [GitHub Releases](https://github.com/goakili/akili/releases): `akili` (the web UI is embedded) and `akili-agent`, for Linux and macOS on amd64 and arm64.
 - **Miabi marketplace templates**: Akili (the control plane with its PostgreSQL, Redis and route) and Akili Agent.
+
+**Docker Compose:** [`examples/`](examples) runs the published images in production mode: the control plane with PostgreSQL and Redis ([`compose.yml`](examples/compose.yml)), and an agent on another host ([`compose-agent.yml`](examples/compose-agent.yml)).
+
+```bash
+cd examples && cp .env.example .env   # set the URL and the secrets
+docker compose up -d
+```
+
+**Miabi:** deploy Akili from the [Miabi Marketplace](https://marketplace.miabi.io/templates/akili). Miabi provisions PostgreSQL, Redis and the route, and generates the secrets. It is still your own Akili, the same build, on your infrastructure.
+
+[![Deploy on Miabi](https://miabi.io/badges/deploy-on-miabi-purple.svg)](https://marketplace.miabi.io/templates/akili)
 
 The control plane needs PostgreSQL and Redis. In production (`AKILI_ENV=production`) it refuses to start without an `AKILI_JWT_SECRET` and an `AKILI_ENCRYPTION_KEY` of at least 32 characters each. Serve it over HTTPS with `AKILI_COOKIE_SECURE=true`, and set the proxy timeouts below. See [Configuration](#configuration-control-plane) and [Reverse proxy and load balancer](#reverse-proxy-and-load-balancer).
 
