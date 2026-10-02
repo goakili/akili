@@ -13,6 +13,11 @@ A security-first control plane for autonomous AI operator agents. **Default Deny
 - **[`agent`](agent)**: the `akili-agent` binary. It runs on your servers. It dials out to the control plane (wstunnel, yamux over WebSocket) and runs chat and task sessions. It only acts within the signed policy it receives. The control plane serves its binary to the install script.
 - **[`proto`](proto)**: the wire contract both sides import. It holds the envelopes, tool catalog, policy engine and templates.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark.png">
+  <img src="docs/screenshots/dashboard.png" alt="The Akili dashboard: agents online, running tasks, pending approvals and a change plan waiting for a decision">
+</picture>
+
 ## Architecture
 
 ```mermaid
@@ -138,6 +143,11 @@ CI runs the unit tests and the UI checks, then every end-to-end suite in paralle
 
 Autonomy levels are L0 (every call needs approval), L1 (auto-run low risk), L2 (up to medium) and L3 (up to high). **Critical actions always need a human.**
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/chat-dark.png">
+  <img src="docs/screenshots/chat.png" alt="A chat with an agent: tool calls show inline, and a read of /etc/shadow is denied by the developer policy">
+</picture>
+
 ## Coding: projects, branches and pull requests
 
 Connect a forge under **Integrations**: Gitea with a token, or GitHub with a token or a GitHub App. Installation tokens from an App are short-lived. Then add a **project**, either by connecting an existing repository or by creating a new one, optionally from a template such as *Go service (Okapi)*.
@@ -163,6 +173,11 @@ For each coding task or chat on a project:
 - **Recorded terminal:** admins can open a browser terminal on agents whose policy sets `terminal: true`. It is relayed through the control plane, so it works across replicas, recorded as an asciinema cast (output and input), audited, and closed after 15 minutes idle or 2 hours.
 - **Runbooks:** built-in, read-only skills (disk space, service down, high load, certificate expiry, incident triage, container crash loop, deployment rollback) steer the agent towards the right tools and towards `change_run`.
 - **Privileges:** `service_restart` uses `sudo -n systemctl restart <unit>`, so grant the `akili` user exactly the units it may restart, for example `akili ALL=(root) NOPASSWD: /usr/bin/systemctl restart nginx.service`.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/approvals-dark.png">
+  <img src="docs/screenshots/approvals.png" alt="A change plan proposed after a DiskFull alert, waiting for approval: one step, two read-only checks, no rollback">
+</picture>
 
 `make e2e-ops` runs the whole flow: alert, then triage, then an approved plan, then verify and rollback, plus the terminal.
 
@@ -353,6 +368,14 @@ Settings come from environment variables. On start the server also loads `./.env
 | `AKILI_MCP_BIN_DIR` | – | read-only directory searched before PATH for those executables |
 | `AKILI_GIT_EMAIL_TEMPLATE` | `akili+{agent_id}@akili.invalid` | commit email of agents without their own; `{agent_id}` and `{agent_name}` expand |
 | `AKILI_GIT_EMAIL_DOMAINS` | – | comma-separated domains allowed for per-agent commit emails; empty allows any |
+
+## Screenshots
+
+| | |
+|---|---|
+| <img src="docs/screenshots/agents.png" alt="Agents"> **Agents**: status, host and policy of every agent | <img src="docs/screenshots/agent-detail.png" alt="Agent detail"> **Agent**: host facts, guardrails and lifecycle |
+| <img src="docs/screenshots/tasks.png" alt="Tasks"> **Tasks**: work in flight and its outcome | <img src="docs/screenshots/change.png" alt="Change plan"> **Change plan**: why, what runs, and its approval |
+| <img src="docs/screenshots/policies.png" alt="Policies"> **Policies**: what each agent may do | <img src="docs/screenshots/audit.png" alt="Audit log"> **Audit log**: hash-chained, every decision recorded |
 
 ## License
 

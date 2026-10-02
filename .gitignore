@@ -6,4 +6,4 @@ server/internal/web/dist/*
 *.log
 .agent/
 .DS_Store
-dist/
+/dist/
