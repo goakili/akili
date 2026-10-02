@@ -1,0 +1,279 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Jonas Kaninda
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# End-to-end test: real Postgres + Redis (Docker), the control plane and one agent, driven through
+# the public API with the scripted provider (no LLM key needed).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# The agent is its own repository, checked out next to this one.
+AGENT_DIR="${AGENT_DIR:-$ROOT/agent}"
+WORK="$(mktemp -d)"
+PG_PORT=${PG_PORT:-55432}
+REDIS_PORT=${REDIS_PORT:-56379}
+PORT=${PORT:-18080}
+POSTA_PORT=${POSTA_PORT:-18770}
+POSTA="http://127.0.0.1:$POSTA_PORT"
+POSTA_KEY="psk_e2e_test_key"
+BASE="http://127.0.0.1:$PORT"
+API="$BASE/api/v1"
+JAR="$WORK/cookies"
+PASS="e2e-password-123456"
+SERVER_PID=""; AGENT_PID=""; SERVER2_PID=""; POSTA_PID=""
+
+cleanup() {
+  [ -n "$AGENT_PID" ] && kill "$AGENT_PID" 2>/dev/null || true
+  [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true
+  [ -n "$SERVER2_PID" ] && kill "$SERVER2_PID" 2>/dev/null || true
+  [ -n "$POSTA_PID" ] && kill "$POSTA_PID" 2>/dev/null || true
+  docker rm -f akili-e2e-pg akili-e2e-redis >/dev/null 2>&1 || true
+  if [ "${KEEP:-}" = "1" ]; then echo "logs kept in $WORK"; else rm -rf "$WORK"; fi
+}
+trap cleanup EXIT
+
+step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+fail() { printf '\033[31mFAIL: %s\033[0m\n' "$*"; echo "--- server log"; tail -40 "$WORK/server.log" || true; echo "--- agent log"; tail -40 "$WORK/agent.log" || true; KEEP=1; exit 1; }
+json() { python3 -c "import json,sys; d=json.load(sys.stdin); print(eval(sys.argv[1], {'d': d}))" "$1"; }
+api() { # method path [body]
+  local m=$1 p=$2 b=${3:-}
+  if [ -n "$b" ]; then curl -sS -b "$JAR" -c "$JAR" -X "$m" -H 'Content-Type: application/json' -d "$b" "$API$p"
+  else curl -sS -b "$JAR" -c "$JAR" -X "$m" "$API$p"; fi
+}
+wait_for() { # description timeout command...
+  local desc=$1 t=$2; shift 2
+  for _ in $(seq "$t"); do if "$@" >/dev/null 2>&1; then return 0; fi; sleep 1; done
+  fail "timed out waiting for $desc"
+}
+
+step "Starting Postgres and Redis"
+docker rm -f akili-e2e-pg akili-e2e-redis >/dev/null 2>&1 || true
+docker run -d --name akili-e2e-pg -e POSTGRES_USER=akili -e POSTGRES_PASSWORD=akili -e POSTGRES_DB=akili -p "$PG_PORT:5432" postgres:17-alpine >/dev/null
+docker run -d --name akili-e2e-redis -p "$REDIS_PORT:6379" redis:7-alpine >/dev/null
+wait_for "postgres" 60 docker exec akili-e2e-pg pg_isready -U akili
+
+step "Building"
+(cd "$ROOT/server" && go build -o "$WORK/akili" ./cmd/akili)
+(cd "$AGENT_DIR" && go build -o "$WORK/akili-agent" ./cmd/akili-agent)
+mkdir -p "$WORK/downloads"
+(cd "$AGENT_DIR" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$WORK/downloads/akili-agent-linux-amd64" ./cmd/akili-agent)
+(cd "$ROOT/server" && go build -o "$WORK/fakeposta" ./cmd/fakeposta)
+"$WORK/fakeposta" -addr "127.0.0.1:$POSTA_PORT" -key "$POSTA_KEY" >"$WORK/posta.log" 2>&1 &
+POSTA_PID=$!
+
+step "Starting the control plane"
+start_server() {
+  AKILI_ENV=development AKILI_PORT=$PORT AKILI_PUBLIC_URL=$BASE \
+  AKILI_DATABASE_URL="postgres://akili:akili@127.0.0.1:$PG_PORT/akili?sslmode=disable" \
+  AKILI_REDIS_ADDR="127.0.0.1:$REDIS_PORT" AKILI_ADMIN_EMAIL=admin@e2e.local AKILI_ADMIN_PASSWORD=$PASS \
+  AKILI_AGENT_DOWNLOADS_DIR="$WORK/downloads" \
+  ANTHROPIC_API_KEY= AKILI_ENV_FILE=/dev/null "$WORK/akili" server >>"$WORK/server.log" 2>&1 &
+  SERVER_PID=$!
+}
+start_server
+wait_for "control plane" 60 curl -fsS "$BASE/healthz"
+curl -fsS "$BASE/readyz" >/dev/null || fail "not ready"
+
+step "Agent downloads: the control plane serves the agent binary and its checksum to install-agent.sh"
+curl -fsS "$BASE/downloads/akili-agent-linux-amd64" -o "$WORK/dl-agent" || fail "agent download"
+[ "$(shasum -a 256 "$WORK/dl-agent" | cut -d' ' -f1)" = "$(curl -fsS "$BASE/downloads/akili-agent-linux-amd64.sha256" | cut -d' ' -f1)" ] || fail "agent checksum mismatch"
+cmp -s "$WORK/dl-agent" "$WORK/downloads/akili-agent-linux-amd64" || fail "served binary differs from the built one"
+for bad in akili-agent-linux-arm64 ..%2Fakili config akili-agent-linux-amd64%2F..%2F..%2Fakili; do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/downloads/$bad")" = "404" ] || fail "/downloads/$bad was not refused"
+done
+curl -fsS "$BASE/install-agent.sh" | grep >/dev/null '/downloads/akili-agent-linux-' || fail "install script does not download from the control plane"
+
+step "Logging in"
+login=$(api POST /auth/login "{\"email\":\"admin@e2e.local\",\"password\":\"$PASS\"}")
+[ "$(echo "$login" | json "d['success']")" = "True" ] || fail "login: $login"
+[ "$(api GET /auth/me | json "d['data']['user']['role']")" = "owner" ] || fail "me"
+bad=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"email":"admin@e2e.local","password":"wrong-password-xx"}' "$API/auth/login")
+[ "$bad" = "401" ] || fail "wrong password returned $bad"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$API/agents")" = "401" ] || fail "unauthenticated request was allowed"
+
+step "Email through Posta: integration, test email, settings"
+mails() { curl -s "$POSTA/_fake/sent" | python3 -c 'import json,sys; s=[m for m in json.load(sys.stdin) if not m["dry_run"]]; print(sum(1 for m in s if sys.argv[1] in m["subject"]))' "$1"; }
+mail_body() { curl -s "$POSTA/_fake/sent" | python3 -c 'import json,sys; s=[m for m in json.load(sys.stdin) if sys.argv[1] in m["subject"]]; print(s[-1]["text"]+s[-1]["html"] if s else "")' "$1"; }
+has_mail() { [ "$(mails "$1")" -ge 1 ]; }
+[ "$(api GET /auth/notifications | json "d['data']['email_available']")" = "False" ] || fail "email available before Posta is set up"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -X POST "$API/auth/notifications/test")" = "409" ] || fail "test email without Posta"
+BAD=$(api POST /integrations "{\"name\":\"posta-bad\",\"kind\":\"posta\",\"base_url\":\"$POSTA\",\"token\":\"psk_wrong\",\"sender\":\"Akili <akili@e2e.local>\"}" | json "d['data']['id']")
+api POST "/integrations/$BAD/test" | json "d['data']['error']" | grep >/dev/null "invalid API key" || fail "a wrong Posta key passed the test"
+api DELETE "/integrations/$BAD" >/dev/null
+R=$(curl -s -w '\n%{http_code}' -b "$JAR" -X POST -H 'Content-Type: application/json' -d "{\"name\":\"p\",\"kind\":\"posta\",\"base_url\":\"$POSTA\",\"token\":\"x\",\"sender\":\"Akili <a@b.c>\\nBcc: x@y.z\"}" "$API/integrations")
+[ "$(echo "$R" | tail -1)" = "400" ] && echo "$R" | grep >/dev/null "sender must be one line" || fail "a multi-line sender was accepted: $R"
+PI=$(api POST /integrations "{\"name\":\"posta\",\"kind\":\"posta\",\"base_url\":\"$POSTA\",\"token\":\"$POSTA_KEY\",\"sender\":\"Akili <akili@e2e.local>\"}" | json "d['data']['id']")
+[ "$(api POST "/integrations/$PI/test" | json "d['data']['ok']")" = "True" ] || fail "posta integration test"
+api GET /integrations | grep >/dev/null "$POSTA_KEY" && fail "the Posta key was returned by the API"
+[ "$(api GET /auth/notifications | json "d['data']['email_available']")" = "True" ] || fail "email not available with Posta"
+api POST /auth/notifications/test | json "d['data']['message']" | grep >/dev/null "admin@e2e.local" || fail "test email"
+has_mail "Akili test email" || fail "test email not received by Posta"
+
+step "Creating an agent bound to the developer policy (autonomy L2)"
+POLICY=$(api GET /policies | json "[p['id'] for p in d['data'] if p['name']=='developer'][0]")
+[ "$(api GET /policies | json "sorted(p['name'] for p in d['data'] if p['builtin'])")" = "['developer', 'full-no-approval', 'full-with-approval', 'operator', 'operator-safe', 'read-only']" ] || fail "built-in policies not seeded"
+created=$(api POST /agents "{\"name\":\"e2e-agent\",\"labels\":[\"env=test\"],\"policy_id\":\"$POLICY\",\"autonomy\":2}")
+AGENT=$(echo "$created" | json "d['data']['agent']['id']")
+TOKEN=$(echo "$created" | json "d['data']['join_token']")
+[ -n "$TOKEN" ] || fail "no join token: $created"
+
+step "Enrolling and starting the agent"
+mkdir -p "$WORK/agent-state" "$WORK/agent-work"
+AKILI_JOIN_TOKEN=$TOKEN AKILI_LOG_FORMAT=text "$WORK/akili-agent" enroll --url "$BASE" --state-dir "$WORK/agent-state" --workdir "$WORK/agent-work" >>"$WORK/agent.log" 2>&1 || fail "enroll"
+if AKILI_JOIN_TOKEN=$TOKEN "$WORK/akili-agent" enroll --url "$BASE" --state-dir "$WORK/agent-state2" >>"$WORK/agent.log" 2>&1; then fail "join token was accepted twice"; fi
+AKILI_LOG_FORMAT=text "$WORK/akili-agent" run --state-dir "$WORK/agent-state" >>"$WORK/agent.log" 2>&1 &
+AGENT_PID=$!
+agent_online() { [ "$(api GET /agents/$AGENT | json "d['data']['status']")" = "online" ]; }
+wait_for "agent online" 30 agent_online
+
+task_status() { api GET /tasks/$1 | json "d['data']['status']"; }
+wait_task() { # id expected timeout
+  for _ in $(seq "$3"); do s=$(task_status "$1"); [ "$s" = "$2" ] && return 0
+    case "$s" in succeeded|failed|cancelled|timed_out) fail "task $1 ended $s (wanted $2): $(api GET /tasks/$1)";; esac; sleep 1; done
+  fail "task $1 stuck in $(task_status "$1")"
+}
+
+step "Lost connection: the agent reconnects by itself after a control-plane restart (no re-enrollment)"
+kill "$SERVER_PID"; wait "$SERVER_PID" 2>/dev/null || true
+agent_offline_now() { ! curl -fsS "$BASE/healthz" >/dev/null 2>&1; }
+wait_for "control plane down" 10 agent_offline_now
+sleep 3
+start_server
+wait_for "control plane back" 60 curl -fsS "$BASE/healthz"
+wait_for "agent back online without a new token" 45 agent_online
+[ "$(grep -c 'msg=enrolled' "$WORK/agent.log")" = "1" ] || fail "agent enrolled more than once"
+
+step "Subscribing to the live event stream (SSE)"
+curl -sN -b "$JAR" "$API/events/stream" >"$WORK/events.sse" 2>/dev/null &
+SSE_PID=$!
+
+step "Task 1: a medium-risk write runs automatically at L2"
+T1=$(api POST /tasks "{\"title\":\"write a note\",\"goal\":\"write: note.txt :: hello from akili\",\"selector\":[\"env=test\"],\"autonomy\":2}" | json "d['data']['id']")
+wait_task "$T1" succeeded 30
+[ "$(cat "$WORK/agent-work/note.txt")" = "hello from akili" ] || fail "note.txt not written"
+wait_for "task email" 15 has_mail "Task succeeded: write a note"
+mail_body "Task succeeded: write a note" | grep >/dev/null "$BASE/tasks/$T1" || fail "task email has no link to the task"
+
+step "Task 2: a high-risk shell command waits for approval, then runs"
+T2=$(api POST /tasks "{\"title\":\"approval e2e\",\"goal\":\"run: echo approved-e2e\",\"agent_id\":\"$AGENT\",\"autonomy\":2}" | json "d['data']['id']")
+pending() { [ "$(api GET '/approvals?status=pending' | json "len(d['data'])")" -ge 1 ]; }
+wait_for "approval request" 30 pending
+APPROVAL=$(api GET '/approvals?status=pending' | json "d['data'][0]['id']")
+[ "$(api GET '/approvals?status=pending' | json "d['data'][0]['tool']")" = "shell" ] || fail "approval is not for shell"
+wait_for "approval email" 15 has_mail "Approval needed: shell on"
+mail_body "Approval needed: shell on" | grep >/dev/null "approved-e2e" && fail "the approval email contains the tool arguments"
+mail_body "Approval needed: shell on" | grep >/dev/null "$BASE/approvals" || fail "approval email has no link"
+api POST "/approvals/$APPROVAL/approve" '{"note":"ok for e2e"}' >/dev/null
+wait_task "$T2" succeeded 30
+api GET "/tasks/$T2" | json "d['data']['result']" | grep >/dev/null "approved-e2e" || fail "shell output missing from the task result"
+second=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -X POST -H 'Content-Type: application/json' -d '{}' "$API/approvals/$APPROVAL/deny")
+[ "$second" = "409" ] || fail "an approval was decided twice ($second)"
+
+step "Task 3: a denied approval is not executed (and, with task email off, mails nothing)"
+[ "$(api PUT /auth/notifications '{"email_tasks":false}' | json "d['data']['email_tasks']")" = "False" ] || fail "turning task email off"
+T3=$(api POST /tasks "{\"title\":\"denied e2e\",\"goal\":\"run: touch should-not-exist\",\"agent_id\":\"$AGENT\",\"autonomy\":2}" | json "d['data']['id']")
+wait_for "approval request" 30 pending
+APPROVAL=$(api GET '/approvals?status=pending' | json "d['data'][0]['id']")
+api POST "/approvals/$APPROVAL/deny" '{"note":"not today"}' >/dev/null
+wait_task "$T3" succeeded 30
+[ ! -e "$WORK/agent-work/should-not-exist" ] || fail "a denied command ran"
+sleep 2
+[ "$(mails "denied e2e")" = "0" ] || fail "task email sent although turned off"
+[ "$(mails "Approval needed")" = "1" ] || fail "a second approval email within a minute (rate limit)"
+api GET "/audit?action=notify.email" | json "d['data']['items'][0]['metadata']['posta_id']" | grep >/dev/null "^00000000-" || fail "email not audited with the Posta id"
+
+step "Chat: policy denies reading /etc/shadow"
+SES=$(api POST /sessions "{\"agent_id\":\"$AGENT\",\"title\":\"e2e chat\"}" | json "d['data']['id']")
+api POST "/sessions/$SES/messages" '{"text":"read: /etc/shadow"}' >/dev/null
+denied() { api GET "/sessions/$SES" | json "[e['payload']['effect'] for e in d['data']['events'] if e['type']=='tool.request']" | grep >/dev/null deny; }
+wait_for "denial event" 30 denied
+replied() { [ "$(api GET "/sessions/$SES" | json "len([m for m in d['data']['messages'] if m['role']=='assistant'])")" -ge 2 ]; }
+wait_for "assistant reply after denial" 30 replied
+
+step "Chat: second message in the same session keeps history"
+api POST "/sessions/$SES/messages" '{"text":"hello again"}' >/dev/null
+echoed() { api GET "/sessions/$SES" | json "[b.get('text','') for m in d['data']['messages'] for b in m['content']]" | grep >/dev/null "Echo: hello again"; }
+wait_for "echo reply" 30 echoed
+
+step "Chat: images are stored out of the history and resolved for the model"
+python3 -c 'import struct,zlib,sys
+row=b"\x00\xff\x00\x00"; c=lambda t,d: struct.pack(">I",len(d))+t+d+struct.pack(">I",zlib.crc32(t+d))
+sys.stdout.buffer.write(b"\x89PNG\r\n\x1a\n"+c(b"IHDR",struct.pack(">IIBBBBB",1,1,8,2,0,0,0))+c(b"IDAT",zlib.compress(row))+c(b"IEND",b""))' >"$WORK/pixel.png"
+upload() { curl -sS -b "$JAR" -o "$WORK/upload.json" -w '%{http_code}' -X POST -H 'Content-Type: application/octet-stream' --data-binary "@$1" "$API/sessions/$2/attachments"; }
+[ "$(upload "$WORK/pixel.png" "$SES")" = "201" ] || fail "image upload refused: $(cat "$WORK/upload.json")"
+ATT=$(json "d['data']['id']" <"$WORK/upload.json")
+[ "$(json "d['data']['media_type']" <"$WORK/upload.json")" = "image/png" ] || fail "media type not sniffed as image/png"
+printf '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>' >"$WORK/evil.svg"
+[ "$(upload "$WORK/evil.svg" "$SES")" = "415" ] || fail "an SVG was accepted as an image"
+head -c $((6 * 1024 * 1024)) /dev/zero >"$WORK/big.bin"
+[ "$(upload "$WORK/big.bin" "$SES")" = "413" ] || fail "an image over 5 MB was accepted"
+curl -sS -b "$JAR" -D "$WORK/att.headers" -o "$WORK/pixel.out" "$API/sessions/$SES/attachments/$ATT"
+cmp -s "$WORK/pixel.png" "$WORK/pixel.out" || fail "the downloaded image differs from the upload"
+grep -qi '^content-type: image/png' "$WORK/att.headers" || fail "attachment served without its image type"
+OTHER=$(api POST /sessions "{\"agent_id\":\"$AGENT\",\"title\":\"e2e other\"}" | json "d['data']['id']")
+code=$(curl -sS -b "$JAR" -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d "{\"text\":\"images?\",\"attachments\":[\"$ATT\"]}" "$API/sessions/$OTHER/messages")
+[ "$code" = "400" ] || fail "another session's attachment was accepted (HTTP $code)"
+code=$(curl -sS -b "$JAR" -o /dev/null -w '%{http_code}' "$API/sessions/$OTHER/attachments/$ATT")
+[ "$code" = "404" ] || fail "an attachment was served through another session (HTTP $code)"
+api POST "/sessions/$SES/messages" "{\"text\":\"images?\",\"attachments\":[\"$ATT\"]}" | grep >/dev/null '"success":true' || fail "message with an image refused"
+PNG_BYTES=$(wc -c <"$WORK/pixel.png" | tr -d ' ')
+seen_image() { api GET "/sessions/$SES" | json "[b.get('text','') for m in d['data']['messages'] for b in m['content']]" | grep >/dev/null "images: image/png $PNG_BYTES bytes"; }
+wait_for "the model to receive the image" 30 seen_image
+api GET "/sessions/$SES" | json "[b['source'] for m in d['data']['messages'] for b in m['content'] if b['type']=='image']" >"$WORK/stored.txt"
+grep -q "$ATT" "$WORK/stored.txt" || fail "the image block was not stored in the history"
+grep -q "'data'" "$WORK/stored.txt" && fail "image bytes were stored in the history"
+api POST "/sessions/$SES/messages" "{\"attachments\":[\"$ATT\"]}" | grep >/dev/null '"success":true' || fail "an image-only message was refused"
+
+step "Live events arrived over SSE"
+kill "$SSE_PID" 2>/dev/null || true
+for ev in ready task.updated approval.created tool.request message session.state; do
+  grep -q "\"type\":\"$ev\"" "$WORK/events.sse" || fail "no $ev event on the org stream"
+done
+grep -q '"type":"assistant.delta"' "$WORK/events.sse" && fail "token deltas leaked into the org stream"
+curl -sN -b "$JAR" "$API/events/stream?session=$SES" >"$WORK/session.sse" 2>/dev/null &
+SSE_PID=$!
+sleep 1
+api POST "/sessions/$SES/messages" '{"text":"stream me please"}' >/dev/null
+streamed() { grep -q '"type":"assistant.delta"' "$WORK/session.sse"; }
+wait_for "streamed deltas on the focused org stream" 20 streamed
+api POST "/sessions/$SES/messages" '{"text":"list: ."}' >/dev/null
+thought() { grep -q '"kind":"thinking"' "$WORK/session.sse"; }
+wait_for "reasoning deltas on the focused org stream" 20 thought
+kill "$SSE_PID" 2>/dev/null || true
+
+step "Multi-replica: a message sent through replica B reaches the agent tunnelled to replica A"
+PORT2=$((PORT + 1))
+AKILI_ENV=development AKILI_PORT=$PORT2 AKILI_PUBLIC_URL=$BASE \
+AKILI_DATABASE_URL="postgres://akili:akili@127.0.0.1:$PG_PORT/akili?sslmode=disable" \
+AKILI_REDIS_ADDR="127.0.0.1:$REDIS_PORT" AKILI_ENV_FILE=/dev/null "$WORK/akili" server >"$WORK/server2.log" 2>&1 &
+SERVER2_PID=$!
+wait_for "replica B" 60 curl -fsS "http://127.0.0.1:$PORT2/healthz"
+curl -sS -b "$JAR" -X POST -H 'Content-Type: application/json' -d '{"text":"via replica b"}' "http://127.0.0.1:$PORT2/api/v1/sessions/$SES/messages" | grep >/dev/null '"success":true' || fail "replica B could not route the message"
+via_b() { api GET "/sessions/$SES" | json "[b.get('text','') for m in d['data']['messages'] for b in m['content']]" | grep >/dev/null "Echo: via replica b"; }
+wait_for "reply to the message sent via replica B" 30 via_b
+kill "$SERVER2_PID" 2>/dev/null || true; SERVER2_PID=""
+
+step "Usage and overview"
+[ "$(api GET /overview | json "d['data']['tasks']['succeeded_24h']")" -ge 3 ] || fail "overview counts"
+api GET /usage | json "d['data'][0]['calls']" >/dev/null || fail "usage"
+
+step "Audit chain verifies"
+v=$(api GET /audit/verify)
+[ "$(echo "$v" | json "d['data']['valid']")" = "True" ] || fail "audit chain invalid: $v"
+[ "$(api GET '/audit?action=tool.request' | json "d['data']['total']")" -ge 4 ] || fail "tool requests not audited"
+
+step "Revocation cuts the tunnel and blocks reconnects"
+api POST "/agents/$AGENT/revoke" >/dev/null
+agent_offline() { [ "$(api GET /agents/$AGENT | json "d['data']['status']")" = "revoked" ]; }
+wait_for "agent revoked" 15 agent_offline
+sleep 3
+grep -q "connection lost" "$WORK/agent.log" || fail "agent did not lose its tunnel"
+reconnect_refused() { grep -q "refused this agent's identity" "$WORK/agent.log" && grep -q "agent connection refused" "$WORK/server.log"; }
+wait_for "reconnect refused" 40 reconnect_refused
+api GET '/audit?action=agent.connect_refused' | json "d['data']['items'][0]['metadata']['reason']" | grep >/dev/null "revoked" || fail "refused reconnect not audited with its reason"
+
+step "API key with read scope cannot write"
+KEY=$(api POST /api-keys '{"name":"ro","scopes":["read"]}' | json "d['data']['secret']")
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $KEY" "$API/agents")" = "200" ] || fail "read key cannot read"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -X POST -d '{"goal":"x"}' "$API/tasks")" = "403" ] || fail "read key could write"
+
+printf '\n\033[32mE2E PASSED\033[0m\n'

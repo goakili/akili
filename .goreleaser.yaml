@@ -1,0 +1,113 @@
+# GoReleaser builds the downloadable binaries and publishes a GitHub Release on every `v*` tag
+# (see .github/workflows/release.yml). The Docker images are built separately in that workflow.
+#
+# Two binaries from the go.work monorepo: `akili` (the control plane, with the web UI embedded) and
+# `akili-agent`. Module tags such as proto/v0.1.0 are ignored here.
+# Validate locally with `goreleaser check`; try a build with `goreleaser build --snapshot --clean`.
+version: 2
+
+project_name: akili
+
+before:
+  hooks:
+    # Build the Vue UI into server/internal/web/dist, which the akili binary embeds.
+    - npm --prefix web ci
+    - npm --prefix web run build
+
+builds:
+  - id: akili
+    dir: server
+    main: ./cmd/akili
+    binary: akili
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/goakili/akili/server/internal/config.Version={{ .Version }}
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  - id: akili-agent
+    dir: agent
+    main: ./cmd/akili-agent
+    binary: akili-agent
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.Version={{ .Version }}
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: akili
+    ids: [akili]
+    name_template: "akili_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+
+  - id: akili-agent
+    ids: [akili-agent]
+    name_template: "akili-agent_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - agent/README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+git:
+  # Globs passed to `git describe --exclude`, so the previous release is never a module tag.
+  ignore_tags:
+    - "proto/*"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-dev"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - "Merge pull request"
+      - "Merge branch"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: goakili
+    name: akili
+  draft: false
+  prerelease: auto
+  name_template: "Akili {{ .Tag }}"
+  footer: |
+    ---
+
+    ## Docker images
+
+    - Control plane: `jkaninda/akili` on Docker Hub and `ghcr.io/goakili/akili`
+    - Agent: `jkaninda/akili-agent` on Docker Hub and `ghcr.io/goakili/akili-agent`
+
+    Both are tagged `{{ .Version }}`, and `latest` for stable releases. The control plane image also
+    serves the agent binaries to `install-agent.sh`, so agents installed from it always match it.

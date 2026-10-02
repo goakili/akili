@@ -1,0 +1,9 @@
+{
+  "v": 1,
+  "type": "error",
+  "id": "id-1",
+  "ts": "2026-01-02T03:04:05Z",
+  "payload": {
+    "message": "boom"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "type": "control.hello",
+  "id": "id-1",
+  "ts": "2026-01-02T03:04:05Z",
+  "payload": {
+    "agent_id": "ag_1",
+    "name": "web-1",
+    "labels": [
+      "env=prod"
+    ],
+    "max_parallel": 2,
+    "draining": false
+  }
+}

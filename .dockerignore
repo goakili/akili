@@ -1,0 +1,9 @@
+.env
+.git
+.agent
+bin
+*.log
+web/node_modules
+server/internal/web/dist/*
+!server/internal/web/dist/.gitkeep
+dist

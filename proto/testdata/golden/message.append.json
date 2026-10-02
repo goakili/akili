@@ -1,0 +1,25 @@
+{
+  "v": 1,
+  "type": "message.append",
+  "id": "id-1",
+  "ts": "2026-01-02T03:04:05Z",
+  "payload": {
+    "message": {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "ok"
+        },
+        {
+          "type": "tool_use",
+          "id": "tu1",
+          "name": "shell",
+          "input": {
+            "command": "df -h"
+          }
+        }
+      ]
+    }
+  }
+}

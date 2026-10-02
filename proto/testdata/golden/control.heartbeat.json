@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "type": "control.heartbeat",
+  "id": "id-1",
+  "ts": "2026-01-02T03:04:05Z",
+  "payload": {
+    "facts": {
+      "hostname": "web-1",
+      "os": "linux",
+      "arch": "amd64",
+      "cpus": 4,
+      "agent_version": "0.1.0"
+    },
+    "active_sessions": [
+      "s1"
+    ],
+    "draining": false
+  }
+}

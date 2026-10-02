@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache-dependency-path: "**/go.sum"
+
+      - name: Go vet
+        run: make vet
+
+      - name: Go tests
+        run: make test
+
+      - name: Web UI
+        working-directory: web
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+  e2e:
+    name: ${{ matrix.suite }}
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [e2e, e2e-coder, e2e-ops, e2e-miabi, e2e-ha, e2e-hardening, e2e-chat]
+    steps:
+      - uses: actions/checkout@v7
+
+      # The terminal checks drive the WebSocket with Node's built-in client (Node 22+).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache-dependency-path: "**/go.sum"
+
+      # The Miabi MCP section runs the real CLI, pinned like the one bundled in the server image.
+      - name: Install the Miabi CLI
+        if: matrix.suite == 'e2e-miabi'
+        run: |
+          version=$(sed -n 's/^ARG MIABI_CLI_VERSION=//p' docker/Dockerfile)
+          GOWORK=off go install "github.com/miabi-io/cli@${version}"
+          echo "MIABI_CLI=$(go env GOPATH)/bin/cli" >> "$GITHUB_ENV"
+
+      - name: Run ${{ matrix.suite }}
+        run: make ${{ matrix.suite }}

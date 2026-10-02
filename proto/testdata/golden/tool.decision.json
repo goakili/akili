@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "type": "tool.decision",
+  "id": "id-1",
+  "ts": "2026-01-02T03:04:05Z",
+  "payload": {
+    "request_id": "r1",
+    "effect": "approve",
+    "reason": "needs approval",
+    "approval_id": "ap1"
+  }
+}

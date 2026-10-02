@@ -1,0 +1,56 @@
+# Local development stack: Postgres, Redis and the control plane.
+#   docker compose up -d --build            # UI on http://localhost:8080
+#   docker compose --profile agent up -d    # also run a local agent (set AKILI_JOIN_TOKEN first)
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: akili
+      POSTGRES_PASSWORD: akili
+      POSTGRES_DB: akili
+    ports: ["127.0.0.1:${AKILI_PG_PORT:-5433}:5432"]   # for `make dev` (server on the host)
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U akili"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:${AKILI_REDIS_PORT:-6380}:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  akili:
+    build: { context: ., dockerfile: docker/Dockerfile }
+    image: jkaninda/akili:dev
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports: ["8080:8080"]
+    environment:
+      AKILI_ENV: development
+      AKILI_DATABASE_URL: postgres://akili:akili@postgres:5432/akili?sslmode=disable
+      AKILI_REDIS_ADDR: redis:6379
+      AKILI_PUBLIC_URL: http://localhost:8080
+      AKILI_ADMIN_EMAIL: ${AKILI_ADMIN_EMAIL:-admin@akili.local}
+      AKILI_ADMIN_PASSWORD: ${AKILI_ADMIN_PASSWORD:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+
+  agent:
+    profiles: [agent]
+    build: { context: ., dockerfile: docker/Dockerfile.agent }
+    image: jkaninda/akili-agent:dev
+    depends_on: [akili]
+    environment:
+      AKILI_URL: http://akili:8080
+      AKILI_JOIN_TOKEN: ${AKILI_JOIN_TOKEN:-}
+      AKILI_CA_CERT_PEM: ${AKILI_CA_CERT_PEM:-}
+      AKILI_LOG_FORMAT: text
+    volumes: [agentstate:/var/lib/akili-agent]
+
+volumes:
+  pgdata:
+  agentstate:

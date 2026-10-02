@@ -1,0 +1,33 @@
+{
+  "v": 1,
+  "type": "session.open",
+  "id": "id-1",
+  "ts": "2026-01-02T03:04:05Z",
+  "payload": {
+    "session_id": "s1",
+    "task_id": "t1",
+    "mode": "task",
+    "goal": "check disk",
+    "system": "sys",
+    "history": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "hi"
+          }
+        ]
+      }
+    ],
+    "policy": {
+      "policy": {
+        "name": "p"
+      },
+      "signature": "AQI="
+    },
+    "autonomy": 1,
+    "max_turns": 20,
+    "deadline": "2026-01-02T04:04:05Z"
+  }
+}

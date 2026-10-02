@@ -1,0 +1,101 @@
+name: Release
+
+# Cut a release by pushing a SemVer tag:
+#   git tag v0.1.0 && git push origin v0.1.0
+# Publishes the akili and akili-agent binaries (GoReleaser) and multi-arch Docker images to Docker
+# Hub and the GitHub Container Registry (GHCR). Module tags such as proto/v0.1.0 do not match.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release and upload assets
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history so GoReleaser can build the changelog
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.work
+          cache-dependency-path: "**/go.sum"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Release
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The pushed tag, even when a module tag (proto/v…) points at the same commit.
+          GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+    strategy:
+      matrix:
+        include:
+          - name: akili
+            file: docker/Dockerfile
+          - name: akili-agent
+            file: docker/Dockerfile.agent
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set version
+        run: |
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          # A prerelease tag (v0.2.0-rc.1) must not move `latest`; GoReleaser's `prerelease: auto`
+          # keys on the same "-" suffix.
+          case "${GITHUB_REF_NAME}" in
+            *-*) echo "PRERELEASE=true"  >> "$GITHUB_ENV" ;;
+            *)   echo "PRERELEASE=false" >> "$GITHUB_ENV" ;;
+          esac
+
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.name }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            VERSION=${{ env.VERSION }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          tags: |
+            jkaninda/${{ matrix.name }}:${{ env.VERSION }}
+            ghcr.io/goakili/${{ matrix.name }}:${{ env.VERSION }}
+            ${{ env.PRERELEASE == 'false' && format('jkaninda/{0}:latest', matrix.name) || '' }}
+            ${{ env.PRERELEASE == 'false' && format('ghcr.io/goakili/{0}:latest', matrix.name) || '' }}

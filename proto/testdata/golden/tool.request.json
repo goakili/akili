@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "type": "tool.request",
+  "id": "id-1",
+  "ts": "2026-01-02T03:04:05Z",
+  "payload": {
+    "request_id": "r1",
+    "tool_use_id": "tu1",
+    "tool": "shell",
+    "input": {
+      "command": "df -h"
+    }
+  }
+}
