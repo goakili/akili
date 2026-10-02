@@ -1,0 +1,28 @@
+# Akili agent — on a host of its own
+# ==================================
+# Runs an agent that dials out to your control plane; it opens no port. It enrolls once with the
+# join token and keeps its identity in the agentstate volume, so restarts reconnect without a new
+# token.
+#
+# 1. In Akili: Agents → Add agent, pick its policy and autonomy, copy the join token.
+# 2. AKILI_URL=https://akili.example.com AKILI_JOIN_TOKEN=akj_... docker compose -f compose-agent.yml up -d
+#
+# In a container the agent can only act inside that container. To manage the host itself (systemd
+# services, packages, disks), install it on the host instead:
+#   curl -fsSL https://akili.example.com/install-agent.sh | sudo AKILI_URL=… AKILI_JOIN_TOKEN=… sh
+
+services:
+  agent:
+    image: jkaninda/akili-agent:${AKILI_VERSION:-latest}
+    environment:
+      AKILI_URL: ${AKILI_URL:?required, your control plane URL, e.g. https://akili.example.com}
+      # Used once to enroll; ignored afterwards.
+      AKILI_JOIN_TOKEN: ${AKILI_JOIN_TOKEN:-}
+      # Only for a control plane with a self-signed or private-CA certificate: base64-encoded PEM.
+      AKILI_CA_CERT_PEM: ${AKILI_CA_CERT_PEM:-}
+    volumes:
+      - agentstate:/var/lib/akili-agent
+    restart: unless-stopped
+
+volumes:
+  agentstate:

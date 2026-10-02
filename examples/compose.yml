@@ -1,0 +1,94 @@
+# Akili — single control plane
+# ============================
+# The control plane (web UI, API, LLM gateway, agent tunnels) with PostgreSQL and Redis.
+# Suits a single host, a first deployment or an evaluation. Put a TLS-terminating proxy in front
+# (see the README's reverse proxy section) or set AKILI_TLS_CERT_FILE and AKILI_TLS_KEY_FILE.
+#
+#   cp .env.example .env    # then fill in the secrets
+#   docker compose up -d    # http://localhost:8080
+#
+# The first start creates the owner account from AKILI_ADMIN_EMAIL / AKILI_ADMIN_PASSWORD.
+# To try an agent on the same host: create one in the UI (Agents → Add agent), put its join token
+# in AKILI_JOIN_TOKEN, then: docker compose --profile agent up -d
+
+services:
+  akili:
+    image: jkaninda/akili:${AKILI_VERSION:-latest}
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    environment:
+      AKILI_ENV: production
+      AKILI_PUBLIC_URL: ${AKILI_PUBLIC_URL:?required, the URL people and agents use, e.g. https://akili.example.com}
+      AKILI_DATABASE_URL: postgres://akili:${POSTGRES_PASSWORD:?required}@postgres:5432/akili?sslmode=disable
+      AKILI_REDIS_ADDR: redis:6379
+      # Production refuses to start unless both are at least 32 characters (openssl rand -hex 32).
+      AKILI_JWT_SECRET: ${AKILI_JWT_SECRET:?required, min 32 chars, generate with openssl rand -hex 32}
+      # Encrypts provider keys, integration tokens and the policy-signing key. Keep it safe.
+      AKILI_ENCRYPTION_KEY: ${AKILI_ENCRYPTION_KEY:?required, min 32 chars, generate with openssl rand -hex 32}
+      # true once Akili is served over HTTPS; false only for a local http://localhost test.
+      AKILI_COOKIE_SECURE: ${AKILI_COOKIE_SECURE:-true}
+      AKILI_ADMIN_EMAIL: ${AKILI_ADMIN_EMAIL:-admin@example.com}
+      # Empty: a password is generated on the first start and printed in the logs.
+      AKILI_ADMIN_PASSWORD: ${AKILI_ADMIN_PASSWORD:-}
+      # Optional: seeds Claude as the model provider. Without it, add one under Settings → Model providers.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Optional: an Akili Enterprise license token.
+      AKILI_LICENSE: ${AKILI_LICENSE:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: akili
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: akili
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U akili"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # An agent on this host, for trying Akili out. Production agents usually run on the servers they
+  # manage: install-agent.sh (systemd) or compose-agent.yml.
+  agent:
+    profiles: [agent]
+    image: jkaninda/akili-agent:${AKILI_VERSION:-latest}
+    environment:
+      AKILI_URL: http://akili:8080
+      AKILI_JOIN_TOKEN: ${AKILI_JOIN_TOKEN:-}
+    volumes:
+      - agentstate:/var/lib/akili-agent
+    depends_on:
+      akili:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  agentstate:
