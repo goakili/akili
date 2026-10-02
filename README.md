@@ -1,24 +1,64 @@
+# Akili
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/brand/akili-logo-dark.png">
-    <img src="docs/brand/akili-logo.png" alt="akili" width="240">
+    <img src="docs/brand/akili-logo.png" alt="Akili" width="200">
   </picture>
 </p>
 
-# Akili
+<p align="center">
+A security-first control plane for autonomous AI operator agents.<br>
+<strong>Default Deny. Explicit Allow. Always Auditable.</strong>
+</p>
+<p align="center">
+  <a href="#overview">Overview</a> ·
+  <a href="#quick-start">Quick Start</a> ·
+  <a href="#core-features">Features</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#configuration-control-plane">Configuration</a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#license">License</a>
+</p>
 
-A security-first control plane for autonomous AI operator agents. **Default Deny. Explicit Allow. Always Auditable.**
+[![CI](https://github.com/goakili/akili/actions/workflows/ci.yml/badge.svg)](https://github.com/goakili/akili/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/github/go-mod/go-version/goakili/akili?filename=server%2Fgo.mod)](https://go.dev/)
+[![Go Reference](https://pkg.go.dev/badge/github.com/goakili/akili/proto.svg)](https://pkg.go.dev/github.com/goakili/akili/proto)
+[![GitHub Release](https://img.shields.io/github/v/release/goakili/akili)](https://github.com/goakili/akili/releases)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSING.md)
+![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/jkaninda/akili?style=flat-square)
+![Docker Pulls](https://img.shields.io/docker/pulls/jkaninda/akili?style=flat-square)
+[![Deploy on Miabi](https://miabi.io/badge.svg?style=flat-square&label=deploy)](https://marketplace.miabi.io/templates/akili)
 
-[![Deploy on Miabi](https://miabi.io/badges/deploy-on-miabi-purple.svg)](https://marketplace.miabi.io/templates/akili)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark.png">
+    <img src="docs/screenshots/dashboard.png" alt="The Akili dashboard: agents online, running tasks, pending approvals and a change plan waiting for a decision" width="900">
+  </picture>
+</p>
 
-- **[`server`](server)**: the control plane, the `akili` binary. It provides a web UI, a REST API with OpenAPI docs at `/docs`, and an LLM gateway. It stores state in Postgres and uses Redis for events, presence, leases and leader election.
-- **[`agent`](agent)**: the `akili-agent` binary. It runs on your servers. It dials out to the control plane (wstunnel, yamux over WebSocket) and runs chat and task sessions. It only acts within the signed policy it receives. The control plane serves its binary to the install script.
-- **[`proto`](proto)**: the wire contract both sides import. It holds the envelopes, tool catalog, policy engine and templates.
+---
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/dashboard-dark.png">
-  <img src="docs/screenshots/dashboard.png" alt="The Akili dashboard: agents online, running tasks, pending approvals and a change plan waiting for a decision">
-</picture>
+## Overview
+
+Akili lets AI agents write code, operate servers and drive deployments, without handing them the keys. Agents run on your servers and dial out to the control plane; every model call goes through its gateway and every tool call is checked against a signed policy twice, once on the agent and once on the control plane, before anything runs. Risky actions wait for a human, and every decision lands in a hash-chained audit log.
+
+- **[`server`](server)**: the control plane, the `akili` binary. A web UI, a REST API with OpenAPI docs at `/docs`, and an LLM gateway that holds the provider keys. State lives in PostgreSQL; Redis carries events, presence, leases and leader election.
+- **[`agent`](agent)**: the `akili-agent` binary. It runs on your servers, dials out over an encrypted tunnel (yamux over WebSocket) and runs chat and task sessions within the signed policy it receives. It holds no model or forge credentials. The control plane serves its binary to the install script.
+- **[`proto`](proto)**: the wire contract both sides import: envelopes, the tool catalog with risk levels, the policy engine and templates.
+
+## Core features
+
+- **Policy before every action**: allow, deny or approve, decided by the agent and the control plane independently, with risk from a shared catalog. Autonomy levels L0 to L3; critical actions always need a human. [How a tool call is decided](#how-a-tool-call-is-decided)
+- **Coding agents**: projects on GitHub or Gitea, a branch per task, pull requests, sandboxed tests, and a git proxy that keeps forge credentials off the agent. [Coding](#coding-projects-branches-and-pull-requests)
+- **Operations**: alerts become triage tasks; fixes are change plans approved once, run step by step and rolled back automatically if a check fails. A recorded browser terminal. [Operations](#operations-alerts-change-plans-and-a-recorded-terminal)
+- **Miabi**: deploys, rollbacks, databases and workspaces, scoped by policy, with every deploy verified on real traffic. [Miabi](#miabi-workspaces-deploys-databases-and-more)
+- **Chat anywhere**: in the web UI (with images), or from Slack, Telegram and Signal with approval buttons. [Images in chat](#images-in-chat) · [Chat gateways](#chat-slack-telegram-and-signal)
+- **MCP servers**: tools from MCP servers, run on the control plane so agents never hold their credentials. [MCP](#mcp-servers)
+- **Hardened by default**: multiple replicas, encryption at rest with Vault Transit, OIDC SSO, SIEM streaming, agent mTLS and an organization-wide kill switch. [High availability and hardening](#high-availability-and-security-hardening)
+- **Lessons and notifications**: agents propose what they learned and an admin approves it; approvals and results reach you by sound and email. [Lessons](#lessons-what-agents-remember) · [Notifications](#notifications-dashboard-sounds-and-email)
+- **Community and Enterprise**: the complete Community edition is AGPL; Akili Enterprise adds teams, SAML/SCIM, approval governance and compliance features. [License](#license)
 
 ## Architecture
 
@@ -69,7 +109,7 @@ flowchart TB
 - **`proto`** is the contract between them: envelopes, the tool catalog with risk levels, and the policy engine.
 - **Replicas** share Postgres and Redis. An agent's tunnel lives on one replica, and Redis relays commands, events and the terminal to the others.
 
-## Quick start (Docker)
+## Quick start
 
 ```bash
 docker compose up -d --build          # http://localhost:8080
