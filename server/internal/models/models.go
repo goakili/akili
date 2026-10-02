@@ -733,9 +733,10 @@ func (*AuditLog) BeforeUpdate(*gorm.DB) error { return ErrAuditAppendOnly }
 // BeforeDelete refuses deletes: the audit log is append-only.
 func (*AuditLog) BeforeDelete(*gorm.DB) error { return ErrAuditAppendOnly }
 
-// SchemaMigration records an applied versioned migration step.
-type SchemaMigration struct {
-	ID        string `gorm:"primaryKey;size:120"`
+// UpgradeStep records an applied data-upgrade step (storage/migration/upgrade).
+type UpgradeStep struct {
+	Name      string `gorm:"primaryKey;size:120"`
+	Version   string `gorm:"size:40"`
 	AppliedAt time.Time
 }
 
@@ -762,7 +763,7 @@ func All() []any {
 	return []any{
 		&Organization{}, &User{}, &APIKey{}, &Agent{}, &JoinToken{}, &Skill{}, &Policy{}, &ModelProvider{},
 		&ChatSession{}, &SessionMessage{}, &SessionEvent{}, &Attachment{}, &Approval{}, &Task{}, &Schedule{}, &Usage{},
-		&AuditLog{}, &Setting{}, &SchemaMigration{}, &Integration{}, &Project{}, &Change{}, &AlertRoute{}, &TerminalSession{}, &MiabiWatch{},
+		&AuditLog{}, &Setting{}, &UpgradeStep{}, &Integration{}, &Project{}, &Change{}, &AlertRoute{}, &TerminalSession{}, &MiabiWatch{},
 		&MiabiWorkspace{}, &MCPServer{}, &MCPTool{}, &Lesson{}, &ChatChannel{}, &ChatIdentity{}, &ChatLinkCode{}, &ChatConversation{}, &License{},
 	}
 }

@@ -87,7 +87,7 @@ func runKeys(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := migration.Run(db); err != nil {
+	if err := migration.Run(ctx, db); err != nil {
 		return err
 	}
 	box, err := openBox(ctx, cfg, db)
