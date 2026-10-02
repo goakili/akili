@@ -19,6 +19,7 @@ import (
 	"github.com/goakili/akili/server/internal/config"
 	"github.com/goakili/akili/server/internal/crypto"
 	"github.com/goakili/akili/server/internal/dto"
+	"github.com/goakili/akili/server/internal/enterprise"
 	"github.com/goakili/akili/server/internal/fleet"
 	"github.com/goakili/akili/server/internal/lessons"
 	"github.com/goakili/akili/server/internal/mcp"
@@ -52,6 +53,7 @@ type Handlers struct {
 	Lessons  *lessons.Service
 	MCP      *mcp.Service
 	Mail     *notify.Mailer
+	EE       enterprise.EE
 }
 
 func ok[T any](c *okapi.Context, data T) error {
@@ -87,6 +89,12 @@ func mapErr(c *okapi.Context, err error) error {
 		return c.AbortConflict(err.Error())
 	case errors.Is(err, context.Canceled):
 		return nil
+	case errors.Is(err, enterprise.ErrLicenseRequired), errors.Is(err, enterprise.ErrEntitlementDenied):
+		return c.AbortPaymentRequired(err.Error())
+	case errors.Is(err, enterprise.ErrLicenseExpired), errors.Is(err, enterprise.ErrBindingMismatch):
+		return c.AbortForbidden(err.Error())
+	case errors.Is(err, enterprise.ErrCommunityEdition), errors.Is(err, enterprise.ErrNoPublicKey):
+		return c.AbortConflict(err.Error())
 	}
 	return c.AbortBadRequest(err.Error())
 }

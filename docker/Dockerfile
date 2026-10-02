@@ -16,8 +16,10 @@ COPY server/go.mod server/go.sum server/
 RUN cd server && go mod download
 COPY server/ server/
 COPY --from=web /src/server/internal/web/dist server/internal/web/dist
-RUN cd server && CGO_ENABLED=0 go build -trimpath \
-    -ldflags "-s -w -X github.com/goakili/akili/server/internal/config.Version=${VERSION}" \
+ARG GO_TAGS=enterprise
+ARG LICENSE_PUBLIC_KEY=
+RUN cd server && CGO_ENABLED=0 go build -trimpath -tags "${GO_TAGS}" \
+    -ldflags "-s -w -X github.com/goakili/akili/server/internal/config.Version=${VERSION} -X github.com/goakili/akili/server/internal/enterprise.embeddedPublicKey=${LICENSE_PUBLIC_KEY}" \
     -o /out/akili ./cmd/akili
 
 # Agent binaries for every supported architecture, whatever the image's own: hosts download them

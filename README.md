@@ -368,6 +368,7 @@ Settings come from environment variables. On start the server also loads `./.env
 | `AKILI_MCP_BIN_DIR` | – | read-only directory searched before PATH for those executables |
 | `AKILI_GIT_EMAIL_TEMPLATE` | `akili+{agent_id}@akili.invalid` | commit email of agents without their own; `{agent_id}` and `{agent_name}` expand |
 | `AKILI_GIT_EMAIL_DOMAINS` | – | comma-separated domains allowed for per-agent commit emails; empty allows any |
+| `AKILI_LICENSE` / `_FILE` | – | Akili Enterprise license token, installed on start when none is stored |
 
 ## Screenshots
 
@@ -380,5 +381,7 @@ Settings come from environment variables. On start the server also loads `./.env
 ## License
 
 Akili is free software, published under the [GNU Affero General Public License v3.0 or later](LICENSE) (`AGPL-3.0-or-later`). The wire contract in [`proto`](proto) is under the [Apache License 2.0](proto/LICENSE), so other clients can implement it.
+
+**Akili Enterprise** adds licensed features for large organizations on top of the complete Community edition. Official releases include them, inactive until an owner installs a license under **Settings → License** (or sets `AKILI_LICENSE`). See [LICENSING.md](LICENSING.md).
 
 Copyright © 2026 [Jonas Kaninda](https://jkaninda.dev/)

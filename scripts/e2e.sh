@@ -51,8 +51,29 @@ docker run -d --name akili-e2e-pg -e POSTGRES_USER=akili -e POSTGRES_PASSWORD=ak
 docker run -d --name akili-e2e-redis -p "$REDIS_PORT:6379" redis:7-alpine >/dev/null
 wait_for "postgres" 60 docker exec akili-e2e-pg pg_isready -U akili
 
-step "Building"
-(cd "$ROOT/server" && go build -o "$WORK/akili" ./cmd/akili)
+step "Building (Enterprise build, verifying licenses with a throwaway keypair)"
+(cd "$ROOT/server" && go build -o "$WORK/akili-license" ./cmd/akili-license)
+# A throwaway signing keypair for this run only (the real one is made by the private akili-keygen).
+cat >"$WORK/testkey.go" <<'GO'
+package main
+
+import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+)
+
+func main() {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	fmt.Printf("public_key: %s\nprivate_key: %s\n", base64.StdEncoding.EncodeToString(pub), base64.StdEncoding.EncodeToString(priv))
+}
+GO
+(cd "$WORK" && GOWORK=off go build -o testkey testkey.go)
+KEYPAIR=$("$WORK/testkey")
+LICENSE_PUB=$(echo "$KEYPAIR" | awk '/public_key/{print $2}')
+export AKILI_LICENSE_SIGNING_KEY=$(echo "$KEYPAIR" | awk '/private_key/{print $2}')
+(cd "$ROOT/server" && go build -tags enterprise -ldflags "-X github.com/goakili/akili/server/internal/enterprise.embeddedPublicKey=$LICENSE_PUB" -o "$WORK/akili" ./cmd/akili)
 (cd "$AGENT_DIR" && go build -o "$WORK/akili-agent" ./cmd/akili-agent)
 mkdir -p "$WORK/downloads"
 (cd "$AGENT_DIR" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$WORK/downloads/akili-agent-linux-amd64" ./cmd/akili-agent)
@@ -89,6 +110,24 @@ login=$(api POST /auth/login "{\"email\":\"admin@e2e.local\",\"password\":\"$PAS
 bad=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"email":"admin@e2e.local","password":"wrong-password-xx"}' "$API/auth/login")
 [ "$bad" = "401" ] || fail "wrong password returned $bad"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$API/agents")" = "401" ] || fail "unauthenticated request was allowed"
+
+step "Enterprise license: Community until installed; forged and foreign licenses refused"
+put_license() { curl -sS -b "$JAR" -o "$WORK/license.json" -w '%{http_code}' -X PUT -H 'Content-Type: application/json' -d "{\"token\":\"$1\"}" "$API/license"; }
+[ "$(api GET /license | json "(d['data']['edition'], d['data']['state'], d['data']['licensable'], len(d['data']['features']))")" = "('community', 'none', True, 15)" ] || fail "unlicensed edition: $(api GET /license)"
+[ "$(put_license 'akili-v1.bm90.YQ')" = "400" ] || fail "a malformed license was accepted"
+INSTALL_ID=$(api GET /license | json "d['data']['install_id']")
+case "$INSTALL_ID" in ins_*) ;; *) fail "no install id: $INSTALL_ID" ;; esac
+OTHER_INSTALL=$("$WORK/akili-license" sign --customer "Other Co" --install-id ins_someoneelse --flags saml)
+[ "$(put_license "$OTHER_INSTALL")" = "400" ] && grep >/dev/null "install ID ins_someoneelse" "$WORK/license.json" || fail "a license for another install was accepted: $(cat "$WORK/license.json")"
+FOREIGN=$("$WORK/akili-license" sign --customer "Other Co" --url https://akili.other.example.org --flags saml)
+[ "$(put_license "$FOREIGN")" = "400" ] || fail "a license for another deployment was accepted"
+FORGED=$(AKILI_LICENSE_SIGNING_KEY=$("$WORK/testkey" | awk '/private_key/{print $2}') "$WORK/akili-license" sign --customer Forger --flags all)
+[ "$(put_license "$FORGED")" = "400" ] || fail "a license signed with another key was accepted"
+LICENSE=$("$WORK/akili-license" sign --customer "Acme Corp" --install-id "$INSTALL_ID" --url "$BASE" --flags saml,scim --agents 25 --days 30)
+[ "$(put_license "$LICENSE")" = "200" ] || fail "license install: $(cat "$WORK/license.json")"
+[ "$(json "(d['data']['edition'], d['data']['state'], d['data']['customer'], d['data']['limits']['agents'])" <"$WORK/license.json")" = "('enterprise', 'valid', 'Acme Corp', 25)" ] || fail "installed license: $(cat "$WORK/license.json")"
+[ "$(json "sorted(f['name'] for f in d['data']['features'] if f['granted'])" <"$WORK/license.json")" = "['saml', 'scim']" ] || fail "granted features: $(cat "$WORK/license.json")"
+api GET '/audit?action=license.install' | json "d['data']['items'][0]['metadata']['customer']" | grep >/dev/null "Acme Corp" || fail "license install not audited"
 
 step "Email through Posta: integration, test email, settings"
 mails() { curl -s "$POSTA/_fake/sent" | python3 -c 'import json,sys; s=[m for m in json.load(sys.stdin) if not m["dry_run"]]; print(sum(1 for m in s if sys.argv[1] in m["subject"]))' "$1"; }
@@ -140,6 +179,9 @@ sleep 3
 start_server
 wait_for "control plane back" 60 curl -fsS "$BASE/healthz"
 wait_for "agent back online without a new token" 45 agent_online
+[ "$(api GET /license | json "(d['data']['state'], d['data']['customer'], d['data']['agents_in_use'], d['data']['install_id'])")" = "('valid', 'Acme Corp', 1, '$INSTALL_ID')" ] || fail "license or install id not kept across the restart: $(api GET /license)"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -X DELETE "$API/license")" = "200" ] || fail "license removal"
+[ "$(api GET /license | json "d['data']['edition']")" = "community" ] || fail "still Enterprise after removal"
 [ "$(grep -c 'msg=enrolled' "$WORK/agent.log")" = "1" ] || fail "agent enrolled more than once"
 
 step "Subscribing to the live event stream (SSE)"

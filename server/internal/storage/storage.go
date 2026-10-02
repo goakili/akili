@@ -73,6 +73,7 @@ func ConnectRedis(ctx context.Context, opts *redis.Options) (*redis.Client, erro
 type Seeded struct {
 	OrgID      string
 	SigningKey ed25519.PrivateKey
+	InstallID  string
 }
 
 // SigningKeySetting is the settings key of the encrypted policy-signing key.
@@ -166,7 +167,11 @@ func Seed(db *gorm.DB, cfg *config.Config, box *crypto.Box) (*Seeded, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Seeded{OrgID: org.ID, SigningKey: key}, nil
+	installID, err := EnsureInstallID(context.Background(), db)
+	if err != nil {
+		return nil, fmt.Errorf("install id: %w", err)
+	}
+	return &Seeded{OrgID: org.ID, SigningKey: key, InstallID: installID}, nil
 }
 
 func signingKey(db *gorm.DB, box *crypto.Box) (ed25519.PrivateKey, error) {
