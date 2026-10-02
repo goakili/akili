@@ -1,5 +1,11 @@
 VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
-LDFLAGS_SERVER = -s -w -X github.com/goakili/akili/server/internal/config.Version=$(VERSION)
+# Release builds are Enterprise builds: the Enterprise code stays inactive until a license is installed.
+# LICENSE_PUBLIC_KEY is the issuer's public key (from the private akili-keygen tool); without it no license verifies.
+GO_TAGS            ?= enterprise
+LICENSE_PUBLIC_KEY ?=
+LDFLAGS_SERVER = -s -w -X github.com/goakili/akili/server/internal/config.Version=$(VERSION) \
+	-X github.com/goakili/akili/server/internal/enterprise.embeddedPublicKey=$(LICENSE_PUBLIC_KEY)
+DOCKER_ARGS    = --build-arg VERSION=$(VERSION) --build-arg GO_TAGS=$(GO_TAGS) --build-arg LICENSE_PUBLIC_KEY=$(LICENSE_PUBLIC_KEY)
 LDFLAGS_AGENT  = -s -w -X main.Version=$(VERSION)
 
 # .env (if present) feeds the run targets, e.g. AKILI_JOIN_TOKEN for run-agent.
@@ -34,7 +40,7 @@ web/node_modules/.package-lock.json: web/package-lock.json
 web: build-ui
 
 server:
-	cd server && CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS_SERVER)" -o $(CURDIR)/bin/akili ./cmd/akili
+	cd server && CGO_ENABLED=0 go build -trimpath -tags "$(GO_TAGS)" -ldflags "$(LDFLAGS_SERVER)" -o $(CURDIR)/bin/akili ./cmd/akili
 
 # Host binary only (used by run-agent).
 agent-bin:
@@ -48,7 +54,7 @@ agent: agent-bin
 docker-build: docker-build-server docker-build-agent
 
 docker-build-server:
-	docker buildx build --load -f docker/Dockerfile --build-arg VERSION=$(VERSION) -t $(SERVER_IMAGE):$(IMAGE_TAG) -t $(SERVER_IMAGE):latest .
+	docker buildx build --load -f docker/Dockerfile $(DOCKER_ARGS) -t $(SERVER_IMAGE):$(IMAGE_TAG) -t $(SERVER_IMAGE):latest .
 
 docker-build-agent:
 	docker buildx build --load -f docker/Dockerfile.agent --build-arg VERSION=$(VERSION) \
@@ -61,7 +67,7 @@ docker-builder:
 docker-push: docker-push-server docker-push-agent
 
 docker-push-server: docker-builder
-	docker buildx build --builder $(BUILDER) --platform $(PLATFORMS) -f docker/Dockerfile --build-arg VERSION=$(VERSION) \
+	docker buildx build --builder $(BUILDER) --platform $(PLATFORMS) -f docker/Dockerfile $(DOCKER_ARGS) \
 		-t $(SERVER_IMAGE):$(IMAGE_TAG) -t $(SERVER_IMAGE):latest --push .
 
 docker-push-agent: docker-builder
@@ -70,12 +76,14 @@ docker-push-agent: docker-builder
 
 MODULES = proto agent server
 
-# Unit tests of every module.
+# Unit tests of every module; the server in both editions.
 test:
 	@for m in $(MODULES); do (cd $$m && go test ./...) || exit 1; done
+	cd server && go test -tags enterprise ./...
 
 vet:
 	@for m in $(MODULES); do (cd $$m && go vet ./...) || exit 1; done
+	cd server && go vet -tags enterprise ./...
 
 # Build the UI and the server, then run the built binary (embedded UI on :8080) against the compose
 # Postgres/Redis. Settings come from .env. It serves the agent binaries built by `make agent`.

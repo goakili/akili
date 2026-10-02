@@ -39,6 +39,8 @@ type Config struct {
 	PublicURL   string
 	LogLevel    string
 	DatabaseURL string
+	// License is an Akili Enterprise license token, installed on start when none is stored.
+	License string
 
 	// RedisURL (redis:// or rediss:// for TLS) overrides RedisAddr, RedisPassword and RedisDB.
 	RedisURL      string
@@ -138,6 +140,7 @@ func Load() *Config {
 		Port:              goutils.EnvInt("AKILI_PORT", 8080),
 		PublicURL:         strings.TrimRight(goutils.Env("AKILI_PUBLIC_URL", "http://localhost:8080"), "/"),
 		LogLevel:          goutils.Env("AKILI_LOG_LEVEL", "info"),
+		License:           envOrFile("AKILI_LICENSE"),
 		DatabaseURL:       goutils.Env("AKILI_DATABASE_URL", "postgres://akili:akili@localhost:5432/akili?sslmode=disable"),
 		RedisURL:          envOrFile("AKILI_REDIS_URL"),
 		RedisAddr:         goutils.Env("AKILI_REDIS_ADDR", "localhost:6379"),

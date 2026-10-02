@@ -252,6 +252,37 @@ export interface Attachment {
   created_at: ISODate
 }
 
+// ---- edition and license ----------------------------------------------------------------------
+
+export interface LicenseFeature {
+  name: string
+  description: string
+  granted: boolean
+}
+
+export type LicenseState = 'valid' | 'grace' | 'degraded' | 'none' | 'binding_mismatch'
+
+export interface LicenseInfo {
+  edition: 'community' | 'enterprise'
+  state: LicenseState
+  customer?: string
+  license_id?: string
+  /** This deployment's Install ID; customers quote it to get a license bound to it. */
+  install_id: string
+  /** The Install ID the installed license is bound to, if any. */
+  license_install_id?: string
+  url?: string
+  /** False for a Community build or one without a license public key. */
+  licensable: boolean
+  binding_error?: string
+  flags: Record<string, boolean>
+  limits: Record<string, number>
+  not_after?: ISODate
+  grace_ends?: ISODate
+  features: LicenseFeature[]
+  agents_in_use: number
+}
+
 /** Accepted image types and limits; the control plane enforces the same. */
 export const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -1329,4 +1360,7 @@ export const api = {
   verifyAudit: () => get<VerifyResult>('/audit/verify'),
   security: (o?: RequestOptions) => get<SecurityStatus>('/security', o),
   setKillSwitch: (enabled: boolean) => post<{ enabled: boolean }>('/system/kill-switch', { enabled }),
+  getLicense: (o?: RequestOptions) => get<LicenseInfo>('/license', o),
+  installLicense: (token: string) => put<LicenseInfo>('/license', { token }),
+  removeLicense: () => del<LicenseInfo>('/license'),
 }

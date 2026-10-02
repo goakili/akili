@@ -18,6 +18,7 @@ import (
 	"github.com/goakili/akili/server/internal/coder"
 	"github.com/goakili/akili/server/internal/config"
 	"github.com/goakili/akili/server/internal/dto"
+	"github.com/goakili/akili/server/internal/enterprise"
 	"github.com/goakili/akili/server/internal/fleet"
 	"github.com/goakili/akili/server/internal/gateway"
 	"github.com/goakili/akili/server/internal/handlers"
@@ -111,6 +112,7 @@ func runServer(cli *okapicli.CLI) error {
 		return fmt.Errorf("seed: %w", err)
 	}
 
+	ee := enterprise.New(db, cfg.License, cfg.PublicURL, seeded.InstallID)
 	b := bus.New(rdb)
 	auditLog := audit.New(db)
 	notifier := notify.New(cfg.NotifyWebhookURL, cfg.PublicURL)
@@ -148,7 +150,7 @@ func runServer(cli *okapicli.CLI) error {
 	chatSvc := chat.New(db, box, b, auditLog, hub, taskSvc, elector)
 
 	h := &handlers.Handlers{Cfg: cfg, DB: db, Bus: b, Audit: auditLog, Auth: authSvc, Fleet: fleetSvc, Tunnels: tunnels,
-		Sessions: hub, Tasks: taskSvc, Box: box, Coder: coderSvc, Miabi: miabiSvc, OIDC: sso, SIEM: forwarder, Chat: chatSvc, Lessons: lessonSvc, MCP: mcpSvc, Mail: mailer}
+		Sessions: hub, Tasks: taskSvc, Box: box, Coder: coderSvc, Miabi: miabiSvc, OIDC: sso, SIEM: forwarder, Chat: chatSvc, Lessons: lessonSvc, MCP: mcpSvc, Mail: mailer, EE: ee}
 	routes.Register(app, h, middlewares.NewAuthenticator(db, authSvc))
 
 	return cli.RunServer(&okapicli.RunOptions{

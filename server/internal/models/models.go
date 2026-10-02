@@ -739,6 +739,17 @@ type SchemaMigration struct {
 	AppliedAt time.Time
 }
 
+// License is the installed Enterprise license. The signed token is authoritative; the other columns
+// are for display and are re-derived from it on every start.
+type License struct {
+	ID        uint      `gorm:"primaryKey" json:"-"`
+	LicenseID string    `gorm:"size:80" json:"license_id"`
+	Customer  string    `gorm:"size:200" json:"customer"`
+	Token     string    `gorm:"type:text;not null" json:"-"`
+	NotAfter  time.Time `json:"not_after"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // Setting is a key/value row for control-plane state (e.g. the encrypted policy-signing key).
 type Setting struct {
 	Key       string `gorm:"primaryKey;size:80"`
@@ -752,6 +763,6 @@ func All() []any {
 		&Organization{}, &User{}, &APIKey{}, &Agent{}, &JoinToken{}, &Skill{}, &Policy{}, &ModelProvider{},
 		&ChatSession{}, &SessionMessage{}, &SessionEvent{}, &Attachment{}, &Approval{}, &Task{}, &Schedule{}, &Usage{},
 		&AuditLog{}, &Setting{}, &SchemaMigration{}, &Integration{}, &Project{}, &Change{}, &AlertRoute{}, &TerminalSession{}, &MiabiWatch{},
-		&MiabiWorkspace{}, &MCPServer{}, &MCPTool{}, &Lesson{}, &ChatChannel{}, &ChatIdentity{}, &ChatLinkCode{}, &ChatConversation{},
+		&MiabiWorkspace{}, &MCPServer{}, &MCPTool{}, &Lesson{}, &ChatChannel{}, &ChatIdentity{}, &ChatLinkCode{}, &ChatConversation{}, &License{},
 	}
 }

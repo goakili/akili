@@ -1,12 +1,26 @@
 <!-- SPDX-FileCopyrightText: 2026 Jonas Kaninda -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { api, type LicenseInfo } from '../api'
 import { useLive } from '../stores/live'
 import PageHeader from '../components/PageHeader.vue'
 import Icon from '../components/Icon'
 
 const live = useLive()
+const license = ref<LicenseInfo | null>(null)
+const edition = computed(() => {
+  const l = license.value
+  if (!l) return '—'
+  return l.edition === 'enterprise' ? `Enterprise · licensed to ${l.customer}` : 'Community'
+})
+onMounted(async () => {
+  try {
+    license.value = await api.getLicense({ quiet: true })
+  } catch {
+    /* the edition row stays empty */
+  }
+})
 const version = computed(() => (/^\d/.test(live.version) ? `v${live.version}` : live.version || 'unknown'))
 </script>
 
@@ -45,6 +59,8 @@ const version = computed(() => (/^\d/.test(live.version) ? `v${live.version}` : 
       <div class="card-body">
         <dl class="kv">
           <dt>Version</dt><dd class="mono">{{ version }}</dd>
+          <dt>Edition</dt>
+          <dd>{{ edition }}</dd>
           <dt>Source</dt>
           <dd><a href="https://github.com/goakili/akili" target="_blank" rel="noopener noreferrer">github.com/goakili/akili</a></dd>
           <dt>License</dt>

@@ -23,9 +23,13 @@ builds:
       - CGO_ENABLED=0
     flags:
       - -trimpath
+    # Enterprise build: the Enterprise code stays inactive (Community) until a license is installed.
+    tags:
+      - enterprise
     ldflags:
       - -s -w
       - -X github.com/goakili/akili/server/internal/config.Version={{ .Version }}
+      - -X github.com/goakili/akili/server/internal/enterprise.embeddedPublicKey={{ envOrDefault "LICENSE_PUBLIC_KEY" "" }}
     goos: [linux, darwin]
     goarch: [amd64, arm64]
     mod_timestamp: "{{ .CommitTimestamp }}"

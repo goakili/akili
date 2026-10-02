@@ -13,6 +13,7 @@ import UsageTab from './settings/UsageTab.vue'
 import KillSwitchTab from './settings/KillSwitchTab.vue'
 import AccountTab from './settings/AccountTab.vue'
 import SecurityTab from './settings/SecurityTab.vue'
+import LicenseTab from './settings/LicenseTab.vue'
 
 const auth = useAuth()
 const route = useRoute()
@@ -37,6 +38,7 @@ const SECTIONS: Section[] = [
   { id: 'usage', label: 'Usage & spend', icon: 'gauge', admin: false, group: 'Organization', title: 'Usage & spend', desc: 'Model calls, tokens and cost per agent and model.', comp: UsageTab },
   { id: 'kill', label: 'Kill switch', icon: 'power', admin: true, group: 'Organization', title: 'Kill switch', desc: 'An emergency stop for the whole fleet.', comp: KillSwitchTab },
   { id: 'security', label: 'Security', icon: 'lock', admin: true, group: 'Organization', title: 'Security', desc: 'Encryption at rest, audit export to your SIEM, and how people and agents authenticate. Read-only: these are set in the control-plane environment and CLI.', comp: SecurityTab },
+  { id: 'license', label: 'License', icon: 'award', admin: true, group: 'Organization', title: 'License', desc: 'The edition and the Akili Enterprise license. Only the owner can install or remove it.', comp: LicenseTab },
   { id: 'audit', label: 'Audit log', icon: 'scroll', admin: true, group: 'Organization', title: 'Audit log', desc: '', href: '/audit' },
 ]
 

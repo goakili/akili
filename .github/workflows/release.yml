@@ -39,6 +39,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Baked into the akili binary so it can verify Enterprise licenses (public; not a secret).
+          LICENSE_PUBLIC_KEY: ${{ vars.LICENSE_PUBLIC_KEY }}
           # The pushed tag, even when a module tag (proto/v…) points at the same commit.
           GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
 
@@ -92,6 +94,7 @@ jobs:
           push: true
           build-args: |
             VERSION=${{ env.VERSION }}
+            LICENSE_PUBLIC_KEY=${{ vars.LICENSE_PUBLIC_KEY }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
           tags: |
