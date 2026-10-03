@@ -19,6 +19,7 @@ import (
 	"github.com/goakili/akili/proto"
 	"github.com/goakili/akili/server/internal/audit"
 	"github.com/goakili/akili/server/internal/bus"
+	"github.com/goakili/akili/server/internal/config"
 	"github.com/goakili/akili/server/internal/crypto"
 	"github.com/goakili/akili/server/internal/gitid"
 	"github.com/goakili/akili/server/internal/models"
@@ -275,7 +276,7 @@ func (s *Service) issueToken(tx *gorm.DB, a *models.Agent, userID string) (*Enro
 		Agent: a, JoinToken: token, ExpiresAt: jt.ExpiresAt,
 		InstallCommand: fmt.Sprintf("curl -fsSL %s/install-agent.sh | sudo AKILI_URL=%s AKILI_JOIN_TOKEN=%s sh", s.publicURL, s.publicURL, token),
 		DockerCommand: fmt.Sprintf("docker run -d --name akili-agent --restart unless-stopped -v akili-agent:/var/lib/akili-agent "+
-			"-e AKILI_URL=%s -e AKILI_JOIN_TOKEN=%s jkaninda/akili-agent:latest", s.publicURL, token),
+			"-e AKILI_URL=%s -e AKILI_JOIN_TOKEN=%s jkaninda/akili-agent:%s", s.publicURL, token, config.AgentVersion()),
 	}, nil
 }
 

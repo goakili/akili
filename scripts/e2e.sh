@@ -75,8 +75,6 @@ LICENSE_PUB=$(echo "$KEYPAIR" | awk '/public_key/{print $2}')
 export AKILI_LICENSE_SIGNING_KEY=$(echo "$KEYPAIR" | awk '/private_key/{print $2}')
 (cd "$ROOT/server" && go build -tags enterprise -ldflags "-X github.com/goakili/akili/server/internal/enterprise.embeddedPublicKey=$LICENSE_PUB" -o "$WORK/akili" ./cmd/akili)
 (cd "$AGENT_DIR" && go build -o "$WORK/akili-agent" ./cmd/akili-agent)
-mkdir -p "$WORK/downloads"
-(cd "$AGENT_DIR" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$WORK/downloads/akili-agent-linux-amd64" ./cmd/akili-agent)
 (cd "$ROOT/server" && go build -o "$WORK/fakeposta" ./cmd/fakeposta)
 "$WORK/fakeposta" -addr "127.0.0.1:$POSTA_PORT" -key "$POSTA_KEY" >"$WORK/posta.log" 2>&1 &
 POSTA_PID=$!
@@ -86,7 +84,6 @@ start_server() {
   AKILI_ENV=development AKILI_PORT=$PORT AKILI_PUBLIC_URL=$BASE \
   AKILI_DATABASE_URL="postgres://akili:akili@127.0.0.1:$PG_PORT/akili?sslmode=disable" \
   AKILI_REDIS_ADDR="127.0.0.1:$REDIS_PORT" AKILI_ADMIN_EMAIL=admin@e2e.local AKILI_ADMIN_PASSWORD=$PASS \
-  AKILI_AGENT_DOWNLOADS_DIR="$WORK/downloads" \
   ANTHROPIC_API_KEY= AKILI_ENV_FILE=/dev/null "$WORK/akili" server >>"$WORK/server.log" 2>&1 &
   SERVER_PID=$!
 }
@@ -94,14 +91,12 @@ start_server
 wait_for "control plane" 60 curl -fsS "$BASE/healthz"
 curl -fsS "$BASE/readyz" >/dev/null || fail "not ready"
 
-step "Agent downloads: the control plane serves the agent binary and its checksum to install-agent.sh"
-curl -fsS "$BASE/downloads/akili-agent-linux-amd64" -o "$WORK/dl-agent" || fail "agent download"
-[ "$(shasum -a 256 "$WORK/dl-agent" | cut -d' ' -f1)" = "$(curl -fsS "$BASE/downloads/akili-agent-linux-amd64.sha256" | cut -d' ' -f1)" ] || fail "agent checksum mismatch"
-cmp -s "$WORK/dl-agent" "$WORK/downloads/akili-agent-linux-amd64" || fail "served binary differs from the built one"
-for bad in akili-agent-linux-arm64 ..%2Fakili config akili-agent-linux-amd64%2F..%2F..%2Fakili; do
-  [ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/downloads/$bad")" = "404" ] || fail "/downloads/$bad was not refused"
-done
-curl -fsS "$BASE/install-agent.sh" | grep >/dev/null '/downloads/akili-agent-linux-' || fail "install script does not download from the control plane"
+step "Install script: the agent comes from the GitHub release, verified against checksums.txt"
+SCRIPT=$(curl -fsS "$BASE/install-agent.sh")
+echo "$SCRIPT" | grep >/dev/null 'https://github.com/goakili/akili/releases' || fail "install script does not download from GitHub releases"
+echo "$SCRIPT" | grep >/dev/null 'AKILI_AGENT_VERSION:-latest}' || fail "a dev build should install the latest agent release"
+echo "$SCRIPT" | grep >/dev/null 'checksums.txt' || fail "install script does not verify the checksum"
+echo "$SCRIPT" | grep >/dev/null '__AKILI_AGENT_VERSION__' && fail "version placeholder left in the install script"
 
 step "Logging in"
 login=$(api POST /auth/login "{\"email\":\"admin@e2e.local\",\"password\":\"$PASS\"}")
@@ -153,6 +148,7 @@ POLICY=$(api GET /policies | json "[p['id'] for p in d['data'] if p['name']=='de
 created=$(api POST /agents "{\"name\":\"e2e-agent\",\"labels\":[\"env=test\"],\"policy_id\":\"$POLICY\",\"autonomy\":2}")
 AGENT=$(echo "$created" | json "d['data']['agent']['id']")
 TOKEN=$(echo "$created" | json "d['data']['join_token']")
+echo "$created" | json "d['data']['docker_command']" | grep >/dev/null " jkaninda/akili-agent:latest$" || fail "a dev build should run the latest agent image: $created"
 [ -n "$TOKEN" ] || fail "no join token: $created"
 
 step "Enrolling and starting the agent"
