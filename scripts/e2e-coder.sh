@@ -85,12 +85,19 @@ wait_for "agent online" 30 online
 
 step "Git identity: a member's email and a malformed one are refused, a bot email is kept"
 patch_code() { curl -sS -o /dev/null -w '%{http_code}' -b "$JAR" -X PATCH -H 'Content-Type: application/json' -d "$1" "$API/agents/$AGENT"; }
-[ "$(api GET /agents/$AGENT | json "d['data']['git_identity']['email']")" = "akili+$AGENT@akili.invalid" ] || fail "default git identity"
+[ "$(api GET /agents/$AGENT | json "d['data']['git_identity']['email']")" = "agent@goakili.dev" ] || fail "default git identity"
 [ "$(patch_code '{"git_email":"Admin@e2e.local"}')" = "400" ] || fail "an agent was given a member's email"
 [ "$(patch_code '{"git_email":"bot@e2e.local\n[core]"}')" = "400" ] || fail "an email with a newline was accepted"
 [ "$(patch_code '{"git_name":"Coder One","git_email":"coder-1@agents.e2e.local"}')" = "200" ] || fail "setting the git identity"
 [ "$(api GET /agents/$AGENT | json "d['data']['git_identity']['email']")" = "coder-1@agents.e2e.local" ] || fail "git identity not saved"
 api GET "/audit?action=agent.update" | grep >/dev/null "coder-1@agents.e2e.local" || fail "git identity change not audited"
+
+step "Requester credit: the admin opts in to a co-author trailer and a PR mention"
+put_code() { curl -sS -o /dev/null -w '%{http_code}' -b "$JAR" -X PUT -H 'Content-Type: application/json' -d "$1" "$API/auth/git-identity"; }
+[ "$(put_code '{"forge_login":"x-->"}')" = "400" ] || fail "a forge login that breaks markdown was accepted"
+[ "$(put_code '{"co_author_email":"a@b.c>"}')" = "400" ] || fail "a malformed co-author email was accepted"
+[ "$(put_code '{"forge_login":"@e2e-admin","co_author_email":"1+e2e-admin@users.noreply.github.com"}')" = "200" ] || fail "setting the co-author identity"
+[ "$(api GET /auth/git-identity | json "d['data']['forge_login']")" = "e2e-admin" ] || fail "forge login not saved without its @"
 
 step "Gitea integration"
 INT=$(api POST /integrations "{\"name\":\"gitea\",\"kind\":\"gitea\",\"base_url\":\"$GITEA\",\"username\":\"$GUSER\",\"token\":\"$GTOKEN\",\"webhook_secret\":\"hook-secret\"}" | json "d['data']['id']")
@@ -123,6 +130,11 @@ HEAD_COMMIT=$(gitea "/repos/$GUSER/demo-svc/commits?sha=$BRANCH&limit=1")
 [ "$(echo "$HEAD_COMMIT" | json "d[0]['commit']['author']['email'] + ' ' + d[0]['commit']['committer']['email']")" = "coder-1@agents.e2e.local coder-1@agents.e2e.local" ] || fail "commit not made with the agent's identity: $HEAD_COMMIT"
 [ "$(echo "$HEAD_COMMIT" | json "d[0]['commit']['author']['name']")" = "Coder One" ] || fail "commit author name"
 echo "$HEAD_COMMIT" | json "d[0]['commit']['message']" | grep >/dev/null "^Akili-Task: $T1$" || fail "commit has no Akili-Task trailer: $HEAD_COMMIT"
+echo "$HEAD_COMMIT" | json "d[0]['commit']['message']" | grep >/dev/null "^Akili-Agent: coder-1$" || fail "commit has no Akili-Agent trailer: $HEAD_COMMIT"
+echo "$HEAD_COMMIT" | json "d[0]['commit']['message']" | grep >/dev/null "^Co-Authored-By: .* <1+e2e-admin@users.noreply.github.com>$" || fail "commit does not credit the requester: $HEAD_COMMIT"
+PR_BODY=$(gitea /repos/$GUSER/demo-svc/pulls/$PRN | json "d['body']")
+echo "$PR_BODY" | grep >/dev/null "requested by @e2e-admin · task \`$T1\`" || fail "PR footer does not credit the requester: $PR_BODY"
+echo "$PR_BODY" | grep >/dev/null "<!-- akili:task=$T1 agent=$AGENT -->" || fail "PR footer has no marker: $PR_BODY"
 SES1=$(api GET /tasks/$T1 | json "d['data']['session_id']")
 api GET /sessions/$SES1 | grep >/dev/null "SANDBOX_OK" || fail "sandbox output missing"
 api GET /sessions/$SES1 | json "[e['payload'].get('output','') for e in d['data']['events'] if e['type']=='tool.result' and e['payload'].get('tool')=='sandbox_exec'][0]" | grep >/dev/null "SBX_UID=$(id -u)$" || fail "sandbox did not run as the agent's user"

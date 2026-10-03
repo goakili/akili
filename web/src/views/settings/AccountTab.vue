@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { api, type NotificationSettings } from '../../api'
+import { api, type GitIdentitySettings, type NotificationSettings } from '../../api'
 import { useAuth } from '../../stores/auth'
 import { useToast } from '../../stores/toast'
 import { fmtDate } from '../../lib/format'
@@ -18,13 +18,33 @@ const error = ref('')
 const notif = ref<NotificationSettings | null>(null)
 const testing = ref(false)
 
+const credit = ref<GitIdentitySettings>({ forge_login: '', co_author_email: '' })
+const savingCredit = ref(false)
+
 onMounted(async () => {
   try {
     notif.value = await api.notifications()
   } catch {
     /* toasted */
   }
+  try {
+    credit.value = await api.gitIdentity()
+  } catch {
+    /* toasted */
+  }
 })
+
+async function saveCredit() {
+  savingCredit.value = true
+  try {
+    credit.value = await api.updateGitIdentity(credit.value)
+    toast.success('Saved')
+  } catch {
+    /* toasted */
+  } finally {
+    savingCredit.value = false
+  }
+}
 
 async function setNotif(key: 'email_approvals' | 'email_tasks', ev: Event) {
   const on = (ev.target as HTMLInputElement).checked
@@ -101,6 +121,25 @@ async function submit() {
         </div>
       </div>
     </section>
+    <form class="card" @submit.prevent="saveCredit">
+      <div class="card-head"><h2>Credit on agent work</h2></div>
+      <div class="card-body stack">
+        <div class="field">
+          <label for="ac-forge">Forge username <span class="opt">(optional)</span></label>
+          <input id="ac-forge" v-model="credit.forge_login" class="input mono" maxlength="65" autocomplete="off" placeholder="octocat" aria-describedby="ac-forge-hint" />
+          <span id="ac-forge-hint" class="hint">Pull requests from your sessions say “requested by @{{ credit.forge_login.replace(/^@/, '') || 'username' }}”.</span>
+        </div>
+        <div class="field">
+          <label for="ac-coauthor">Co-author email <span class="opt">(optional)</span></label>
+          <input id="ac-coauthor" v-model="credit.co_author_email" class="input mono" type="email" maxlength="254" autocomplete="off" placeholder="12345+octocat@users.noreply.github.com" aria-describedby="ac-coauthor-hint" />
+          <span id="ac-coauthor-hint" class="hint">Commits from your sessions add a <code>Co-Authored-By</code> line with this email, so the forge shows you next to the agent.</span>
+        </div>
+        <p class="hint" style="margin: 0">Both appear in the repository and can be public. Use your forge's noreply address to keep your email private. Leave a field empty to stay out.</p>
+        <div class="row" style="justify-content: flex-end">
+          <button type="submit" class="btn btn-primary" :disabled="savingCredit"><span v-if="savingCredit" class="spinner" />Save</button>
+        </div>
+      </div>
+    </form>
     <form class="card" @submit.prevent="submit">
       <div class="card-head"><h2>Change password</h2></div>
       <div class="card-body stack">

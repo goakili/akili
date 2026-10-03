@@ -979,6 +979,13 @@ export interface NotificationSettings {
   can_approve: boolean
 }
 
+export interface GitIdentitySettings {
+  /** Mentioned in pull requests the user's sessions open; empty leaves it out. */
+  forge_login: string
+  /** Credited with a Co-Authored-By trailer on commits; empty leaves it out. */
+  co_author_email: string
+}
+
 export interface IntegrationInput {
   name: string
   kind: IntegrationKind
@@ -1191,6 +1198,8 @@ export const api = {
     post<MessageResponse>('/auth/password', { current_password, new_password }),
   notifications: () => get<NotificationSettings>('/auth/notifications'),
   updateNotifications: (b: Partial<Pick<NotificationSettings, 'email_approvals' | 'email_tasks'>>) => put<NotificationSettings>('/auth/notifications', b),
+  gitIdentity: () => get<GitIdentitySettings>('/auth/git-identity'),
+  updateGitIdentity: (b: Partial<GitIdentitySettings>) => put<GitIdentitySettings>('/auth/git-identity', b),
   testNotification: () => post<MessageResponse>('/auth/notifications/test', {}),
 
   // users & keys

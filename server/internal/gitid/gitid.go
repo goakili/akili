@@ -15,11 +15,17 @@ import (
 	"github.com/goakili/akili/server/internal/models"
 )
 
-// DefaultEmailTemplate uses a reserved domain (RFC 2606), so no forge account can claim the commits.
-const DefaultEmailTemplate = "akili+{agent_id}@akili.invalid"
+// Defaults for agents without their own identity. The email is verified on the akili-agent GitHub
+// account, so commits link to it.
+const (
+	DefaultNameTemplate  = "Akili Agent"
+	DefaultEmailTemplate = "agent@goakili.dev"
+)
 
 // Config is the server-wide identity setup.
 type Config struct {
+	// NameTemplate is the name of agents without their own; {agent_id} and {agent_name} expand.
+	NameTemplate string
 	// EmailTemplate is the email of agents without their own; {agent_id} and {agent_name} expand.
 	EmailTemplate string
 	// AllowedDomains restricts the emails an admin may give an agent; empty allows any domain.
@@ -33,15 +39,23 @@ type Identity = models.GitIdentity
 func (c Config) For(a *models.Agent) Identity {
 	id := Identity{Name: a.GitName, Email: a.GitEmail}
 	if id.Name == "" {
-		id.Name = "Akili (" + cleanName(a.Name) + ")"
+		id.Name = c.renderName(a.ID, a.Name)
 	}
 	if id.Email == "" {
-		id.Email = c.render(a.ID, a.Name)
+		id.Email = c.renderEmail(a.ID, a.Name)
 	}
 	return id
 }
 
-func (c Config) render(agentID, agentName string) string {
+func (c Config) renderName(agentID, agentName string) string {
+	t := c.NameTemplate
+	if t == "" {
+		t = DefaultNameTemplate
+	}
+	return strings.NewReplacer("{agent_id}", agentID, "{agent_name}", cleanName(agentName)).Replace(t)
+}
+
+func (c Config) renderEmail(agentID, agentName string) string {
 	t := c.EmailTemplate
 	if t == "" {
 		t = DefaultEmailTemplate
@@ -49,9 +63,12 @@ func (c Config) render(agentID, agentName string) string {
 	return strings.NewReplacer("{agent_id}", agentID, "{agent_name}", slug(agentName)).Replace(t)
 }
 
-// Validate checks the template and the domain list.
+// Validate checks the templates and the domain list.
 func (c Config) Validate() error {
-	if err := ValidateEmail(c.render("ag_example", "example"), nil); err != nil {
+	if err := ValidateName(c.renderName("ag_example", "example")); err != nil {
+		return fmt.Errorf("AKILI_GIT_NAME_TEMPLATE: %w", err)
+	}
+	if err := ValidateEmail(c.renderEmail("ag_example", "example"), nil); err != nil {
 		return fmt.Errorf("AKILI_GIT_EMAIL_TEMPLATE: %w", err)
 	}
 	for _, d := range c.AllowedDomains {
@@ -128,6 +145,41 @@ func ValidateName(name string) error {
 	}
 	return nil
 }
+
+// ValidateForgeLogin accepts a GitHub or Gitea username, which is written into pull request bodies.
+func ValidateForgeLogin(login string) error {
+	if login == "" || len(login) > 64 || !isAlnum(rune(login[0])) {
+		return errors.New("forge username must be 1-64 letters, digits, '.', '_' or '-', starting with a letter or digit")
+	}
+	for _, r := range login {
+		if !isAlnum(r) && !strings.ContainsRune("._-", r) {
+			return errors.New("forge username must be 1-64 letters, digits, '.', '_' or '-', starting with a letter or digit")
+		}
+	}
+	return nil
+}
+
+// AgentTrailer names the agent that made a commit.
+func AgentTrailer(a *models.Agent) string {
+	return "Akili-Agent: " + cleanName(a.Name)
+}
+
+// CoAuthor is the Co-Authored-By trailer crediting u, or "" when u has not opted in.
+func CoAuthor(u *models.User) string {
+	if u == nil || u.CoAuthorEmail == "" {
+		return ""
+	}
+	name := strings.TrimSpace(cleanName(u.Name))
+	if name == "" {
+		name = u.ForgeLogin
+	}
+	if name == "" {
+		name, _, _ = strings.Cut(u.CoAuthorEmail, "@")
+	}
+	return "Co-Authored-By: " + name + " <" + u.CoAuthorEmail + ">"
+}
+
+func isAlnum(r rune) bool { return r < 128 && (unicode.IsLetter(r) || unicode.IsDigit(r)) }
 
 // cleanName drops what git strips or refuses in a name, since agent names are not restricted.
 func cleanName(s string) string {

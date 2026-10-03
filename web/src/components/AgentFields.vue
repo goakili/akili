@@ -9,7 +9,7 @@ import AutonomySelect from './AutonomySelect.vue'
 import Icon from './Icon'
 
 const form = defineModel<AgentForm>({ required: true })
-defineProps<{ disabled?: boolean; showErrors?: boolean; gitDefaultEmail?: string }>()
+defineProps<{ disabled?: boolean; showErrors?: boolean; gitDefaultName?: string; gitDefaultEmail?: string }>()
 const catalog = useCatalog()
 const providers = ref<ModelProvider[]>([])
 const providersDenied = ref(false)
@@ -107,7 +107,7 @@ function toggleSkill(id: string) {
       <div class="grid-2">
         <div class="field">
           <label for="ag-git-name">Commit name <span class="opt">(optional)</span></label>
-          <input id="ag-git-name" v-model="form.git_name" class="input" maxlength="120" :placeholder="`Akili (${form.name.trim() || 'agent'})`" />
+          <input id="ag-git-name" v-model="form.git_name" class="input" maxlength="120" :placeholder="gitDefaultName ?? 'Server default'" />
         </div>
         <div class="field">
           <label for="ag-git-email">Commit email <span class="opt">(optional)</span></label>

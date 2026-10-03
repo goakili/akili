@@ -436,12 +436,28 @@ func (s *Service) Spec(ctx context.Context, sess *models.ChatSession, agent *mod
 		return nil, nil, err
 	}
 	id := s.git.For(agent)
-	trailer := "Akili-Session: " + sess.ID
+	var trailers []string
 	if sess.TaskID != nil {
-		trailer = "Akili-Task: " + *sess.TaskID
+		trailers = append(trailers, "Akili-Task: "+*sess.TaskID)
+	}
+	trailers = append(trailers, gitid.AgentTrailer(agent))
+	if co := gitid.CoAuthor(s.requester(ctx, sess)); co != "" {
+		trailers = append(trailers, co)
 	}
 	return &proto.ProjectSpec{ID: p.ID, Slug: p.Slug, Name: p.Name, Repo: p.FullName(), DefaultBranch: p.DefaultBranch, Branch: sess.Branch,
-		SandboxImage: p.SandboxImage, GitName: id.Name, GitEmail: id.Email, Trailers: []string{trailer}}, p, nil
+		SandboxImage: p.SandboxImage, GitName: id.Name, GitEmail: id.Email, Trailers: trailers}, p, nil
+}
+
+// requester is the active user who started sess, or nil (scheduled and webhook tasks may have none).
+func (s *Service) requester(ctx context.Context, sess *models.ChatSession) *models.User {
+	if sess.CreatedBy == "" {
+		return nil
+	}
+	var u models.User
+	if err := s.db.WithContext(ctx).Where("organization_id = ? AND id = ? AND active", sess.OrganizationID, sess.CreatedBy).First(&u).Error; err != nil {
+		return nil
+	}
+	return &u
 }
 
 func emptyToNil(s *string) *string {

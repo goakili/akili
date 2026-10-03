@@ -76,6 +76,10 @@ type User struct {
 	// Email notifications (sent through the default Posta integration, when there is one).
 	EmailApprovals bool `gorm:"not null;default:true" json:"email_approvals"`
 	EmailTasks     bool `gorm:"not null;default:true" json:"email_tasks"`
+	// ForgeLogin and CoAuthorEmail are opt-in: they credit the user on the public commits and pull
+	// requests of the agent sessions they start.
+	ForgeLogin    string `gorm:"size:64" json:"forge_login"`
+	CoAuthorEmail string `gorm:"size:254" json:"co_author_email"`
 }
 
 // APIKey authenticates non-browser clients. Only the SHA-256 hash is stored.
