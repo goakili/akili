@@ -88,7 +88,7 @@ AGENT=$(echo "$created" | json "d['data']['agent']['id']")
 TOKEN=$(echo "$created" | json "d['data']['join_token']")
 mkdir -p "$WORK/st" "$WORK/wk"
 AKILI_JOIN_TOKEN=$TOKEN AKILI_LOG_FORMAT=text "$WORK/akili-agent" enroll --url "$BASE" --state-dir "$WORK/st" --workdir "$WORK/wk" >>"$WORK/agent.log" 2>&1
-AKILI_LOG_FORMAT=text "$WORK/akili-agent" run --state-dir "$WORK/st" >>"$WORK/agent.log" 2>&1 &
+AKILI_LOG_FORMAT=text "$WORK/akili-agent" start --state-dir "$WORK/st" >>"$WORK/agent.log" 2>&1 &
 AGENT_PID=$!
 online() { [ "$(api GET /agents/$AGENT | json "d['data']['status']")" = "online" ]; }
 wait_for "agent online" 30 online

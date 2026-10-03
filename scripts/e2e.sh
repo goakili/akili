@@ -155,7 +155,7 @@ step "Enrolling and starting the agent"
 mkdir -p "$WORK/agent-state" "$WORK/agent-work"
 AKILI_JOIN_TOKEN=$TOKEN AKILI_LOG_FORMAT=text "$WORK/akili-agent" enroll --url "$BASE" --state-dir "$WORK/agent-state" --workdir "$WORK/agent-work" >>"$WORK/agent.log" 2>&1 || fail "enroll"
 if AKILI_JOIN_TOKEN=$TOKEN "$WORK/akili-agent" enroll --url "$BASE" --state-dir "$WORK/agent-state2" >>"$WORK/agent.log" 2>&1; then fail "join token was accepted twice"; fi
-AKILI_LOG_FORMAT=text "$WORK/akili-agent" run --state-dir "$WORK/agent-state" >>"$WORK/agent.log" 2>&1 &
+AKILI_LOG_FORMAT=text "$WORK/akili-agent" start --state-dir "$WORK/agent-state" >>"$WORK/agent.log" 2>&1 &
 AGENT_PID=$!
 agent_online() { [ "$(api GET /agents/$AGENT | json "d['data']['status']")" = "online" ]; }
 wait_for "agent online" 30 agent_online

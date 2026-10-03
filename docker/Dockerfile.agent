@@ -21,4 +21,4 @@ USER 10001
 ENV AKILI_STATE_DIR=/var/lib/akili-agent
 VOLUME /var/lib/akili-agent
 ENTRYPOINT ["akili-agent"]
-CMD ["run"]
+CMD ["start"]
