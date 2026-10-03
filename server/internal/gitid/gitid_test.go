@@ -11,10 +11,11 @@ import (
 
 func TestFor(t *testing.T) {
 	a := &models.Agent{Base: models.Base{ID: "ag_1"}, Name: "Web <01>\n"}
-	if got := (Config{}).For(a); got.Name != "Akili (Web 01)" || got.Email != "akili+ag_1@akili.invalid" {
+	if got := (Config{}).For(a); got.String() != "Akili Agent <agent@goakili.dev>" {
 		t.Fatalf("default: %v", got)
 	}
-	if got := (Config{EmailTemplate: "{agent_name}@agents.example.com"}).For(a); got.Email != "web-01@agents.example.com" {
+	tpl := Config{NameTemplate: "Akili ({agent_name})", EmailTemplate: "{agent_name}@agents.example.com"}
+	if got := tpl.For(a); got.String() != "Akili (Web 01) <web-01@agents.example.com>" {
 		t.Fatalf("template: %v", got)
 	}
 	a.GitName, a.GitEmail = "Builder", "builder@example.com"
@@ -72,10 +73,44 @@ func TestConfigValidate(t *testing.T) {
 	if err := (Config{EmailTemplate: DefaultEmailTemplate}).Validate(); err != nil {
 		t.Fatal(err)
 	}
+	if err := (Config{NameTemplate: " {agent_name}"}).Validate(); err == nil {
+		t.Fatal("name template with surrounding spaces accepted")
+	}
 	if err := (Config{EmailTemplate: "{agent_id}"}).Validate(); err == nil {
 		t.Fatal("template without a domain accepted")
 	}
 	if err := (Config{AllowedDomains: []string{"a@b"}}).Validate(); err == nil {
 		t.Fatal("bad domain accepted")
+	}
+}
+
+func TestTrailers(t *testing.T) {
+	if got := AgentTrailer(&models.Agent{Name: "coder\n01"}); got != "Akili-Agent: coder01" {
+		t.Fatalf("agent: %q", got)
+	}
+	for _, tt := range []struct {
+		u    *models.User
+		want string
+	}{
+		{nil, ""},
+		{&models.User{Name: "Ada", ForgeLogin: "ada"}, ""},
+		{&models.User{Name: "Ada <L>", CoAuthorEmail: "1+ada@users.noreply.github.com"}, "Co-Authored-By: Ada L <1+ada@users.noreply.github.com>"},
+		{&models.User{ForgeLogin: "ada", CoAuthorEmail: "ada@example.com"}, "Co-Authored-By: ada <ada@example.com>"},
+		{&models.User{CoAuthorEmail: "ada@example.com"}, "Co-Authored-By: ada <ada@example.com>"},
+	} {
+		if got := CoAuthor(tt.u); got != tt.want {
+			t.Errorf("%+v: got %q, want %q", tt.u, got, tt.want)
+		}
+	}
+}
+
+func TestValidateForgeLogin(t *testing.T) {
+	for login, ok := range map[string]bool{
+		"jkaninda": true, "akili-agent": true, "first.last_1": true,
+		"": false, "-lead": false, "a b": false, "x-->": false, "@ada": false, "ünï": false,
+	} {
+		if err := ValidateForgeLogin(login); (err == nil) != ok {
+			t.Errorf("%q: ok=%v err=%v", login, err == nil, err)
+		}
 	}
 }

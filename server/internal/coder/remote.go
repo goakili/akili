@@ -78,11 +78,18 @@ func (s *Service) openPR(ctx context.Context, sess *models.ChatSession, p *model
 func (s *Service) footer(ctx context.Context, sess *models.ChatSession) string {
 	var agent models.Agent
 	s.db.WithContext(ctx).Select("name").First(&agent, "id = ?", sess.AgentID)
-	ref := "session " + sess.ID
+	kind, id := "session", sess.ID
 	if sess.TaskID != nil {
-		ref = "task " + *sess.TaskID
+		kind, id = "task", *sess.TaskID
 	}
-	return fmt.Sprintf("_Opened by the Akili agent **%s** for %s._", agent.Name, ref)
+	by := ""
+	if u := s.requester(ctx, sess); u != nil && u.ForgeLogin != "" {
+		by = " · requested by @" + u.ForgeLogin
+	}
+	// The marker carries only IDs, so webhooks can match the PR to its session even after the
+	// visible text is edited; agent names are free text and could close the comment.
+	return fmt.Sprintf("Opened by [Akili](https://goakili.dev) agent **%s**%s · %s `%s`\n<!-- akili:%s=%s agent=%s -->",
+		agent.Name, by, kind, id, kind, id, sess.AgentID)
 }
 
 func (s *Service) prStatus(ctx context.Context, sess *models.ChatSession, p *models.Project, f forge.Forge) (string, error) {

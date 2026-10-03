@@ -417,6 +417,7 @@ onUnmounted(() => off?.())
           v-model="form"
           :disabled="!auth.isAdmin || saving"
           :show-errors="true"
+          :git-default-name="agent.git_name ? undefined : agent.git_identity?.name"
           :git-default-email="agent.git_email ? undefined : agent.git_identity?.email"
         />
       </div>

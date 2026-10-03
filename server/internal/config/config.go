@@ -74,7 +74,7 @@ type Config struct {
 	MCPCommands []string
 	// MCPBinDir is searched before PATH for those executables; it must be read-only to the server.
 	MCPBinDir string
-	// Git is the commit identity of agents (AKILI_GIT_EMAIL_TEMPLATE, AKILI_GIT_EMAIL_DOMAINS).
+	// Git is the commit identity of agents (AKILI_GIT_NAME_TEMPLATE, AKILI_GIT_EMAIL_TEMPLATE, AKILI_GIT_EMAIL_DOMAINS).
 	Git gitid.Config
 
 	KMS   string // local | vault-transit: who holds the key that wraps the data keys
@@ -161,6 +161,7 @@ func Load() *Config {
 		MCPCommands:       list(goutils.Env("AKILI_MCP_COMMANDS", "miabi")),
 		MCPBinDir:         goutils.Env("AKILI_MCP_BIN_DIR", ""),
 		Git: gitid.Config{
+			NameTemplate:   goutils.Env("AKILI_GIT_NAME_TEMPLATE", gitid.DefaultNameTemplate),
 			EmailTemplate:  goutils.Env("AKILI_GIT_EMAIL_TEMPLATE", gitid.DefaultEmailTemplate),
 			AllowedDomains: list(strings.ToLower(goutils.Env("AKILI_GIT_EMAIL_DOMAINS", ""))),
 		},

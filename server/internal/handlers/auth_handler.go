@@ -10,6 +10,7 @@ import (
 
 	"github.com/goakili/akili/server/internal/audit"
 	"github.com/goakili/akili/server/internal/auth"
+	"github.com/goakili/akili/server/internal/gitid"
 	"github.com/goakili/akili/server/internal/middlewares"
 	"github.com/goakili/akili/server/internal/models"
 	"github.com/goakili/akili/server/internal/notify"
@@ -158,6 +159,72 @@ func (h *Handlers) UpdateNotifications(c *okapi.Context, req *NotificationsReque
 		h.record(c, "user.notifications", "user", u.ID, set)
 	}
 	return ok(c, h.notificationSettings(c, u))
+}
+
+// GitIdentitySettings is how the current user is credited on agent commits and pull requests.
+type GitIdentitySettings struct {
+	// ForgeLogin is mentioned in pull requests ("requested by @login"); empty leaves it out.
+	ForgeLogin string `json:"forge_login"`
+	// CoAuthorEmail adds a Co-Authored-By trailer to commits; empty leaves it out.
+	CoAuthorEmail string `json:"co_author_email"`
+}
+
+// GitIdentityRequest changes the credit settings; omitted fields are kept and "" clears one.
+type GitIdentityRequest struct {
+	Body struct {
+		ForgeLogin    *string `json:"forge_login"`
+		CoAuthorEmail *string `json:"co_author_email"`
+	} `json:"body"`
+}
+
+// GetGitIdentity returns how the current user is credited on agent work.
+func (h *Handlers) GetGitIdentity(c *okapi.Context) error {
+	u, err := h.Auth.User(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c))
+	if err != nil {
+		return mapErr(c, err)
+	}
+	return ok(c, GitIdentitySettings{ForgeLogin: u.ForgeLogin, CoAuthorEmail: u.CoAuthorEmail})
+}
+
+// UpdateGitIdentity changes how the current user is credited on agent work.
+func (h *Handlers) UpdateGitIdentity(c *okapi.Context, req *GitIdentityRequest) error {
+	ctx := c.Request().Context()
+	u, err := h.Auth.User(ctx, middlewares.OrgID(c), middlewares.UserID(c))
+	if err != nil {
+		return mapErr(c, err)
+	}
+	set := map[string]any{}
+	if req.Body.ForgeLogin != nil {
+		login := strings.TrimPrefix(strings.TrimSpace(*req.Body.ForgeLogin), "@")
+		if login != "" {
+			if err := gitid.ValidateForgeLogin(login); err != nil {
+				return c.AbortBadRequest(err.Error())
+			}
+		}
+		set["forge_login"], u.ForgeLogin = login, login
+	}
+	if req.Body.CoAuthorEmail != nil {
+		email := strings.TrimSpace(*req.Body.CoAuthorEmail)
+		if email != "" {
+			if err := gitid.ValidateEmail(email, nil); err != nil {
+				return c.AbortBadRequest(err.Error())
+			}
+			// Forges link a co-author by email, so crediting a colleague would put their name on work they did not ask for.
+			var n int64
+			h.DB.WithContext(ctx).Model(&models.User{}).Where("organization_id = ? AND id <> ? AND lower(email) = lower(?)", u.OrganizationID, u.ID, email).Count(&n)
+			if n > 0 {
+				return c.AbortBadRequest("co-author email belongs to another user of this organization")
+			}
+		}
+		set["co_author_email"], u.CoAuthorEmail = email, email
+	}
+	if len(set) > 0 {
+		if err := h.DB.Model(u).Updates(set).Error; err != nil {
+			return c.AbortInternalServerError("update failed", err)
+		}
+		h.record(c, "user.git_identity", "user", u.ID, set)
+	}
+	return ok(c, GitIdentitySettings{ForgeLogin: u.ForgeLogin, CoAuthorEmail: u.CoAuthorEmail})
 }
 
 // TestNotification emails the current user now.
