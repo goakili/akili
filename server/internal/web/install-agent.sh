@@ -93,6 +93,9 @@ if [ -n "${AKILI_CA_CERT:-}" ]; then
   CA_FLAG="--ca-cert $STATE/ca.pem"
 fi
 
+START=start
+"$BIN" help 2>&1 | grep -q '^  start ' || START=run
+
 echo "akili: enrolling with $AKILI_URL"
 # The token is passed through the environment, not argv, so it never shows in `ps`.
 env AKILI_JOIN_TOKEN="$AKILI_JOIN_TOKEN" runuser -u akili -- "$BIN" enroll \
@@ -107,7 +110,7 @@ Wants=network-online.target
 [Service]
 User=akili
 Group=akili
-ExecStart=$BIN run --state-dir $STATE
+ExecStart=$BIN $START --state-dir $STATE
 Restart=always
 RestartSec=5
 # Drain in-flight sessions on stop.

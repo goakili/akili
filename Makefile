@@ -95,7 +95,7 @@ run-agent: agent
 		fi; \
 		AKILI_LOG_FORMAT=text ./bin/akili-agent enroll --url $(AKILI_URL) --state-dir $(AGENT_STATE_DIR) --workdir $(AGENT_WORKDIR) $(ENROLL_FLAGS); \
 	fi
-	AKILI_LOG_FORMAT=text ./bin/akili-agent run --state-dir $(AGENT_STATE_DIR)
+	AKILI_LOG_FORMAT=text ./bin/akili-agent start --state-dir $(AGENT_STATE_DIR)
 
 # Run the control plane on the host against the compose Postgres/Redis. Settings come from .env
 # (cp .env.example .env); run `cd web && npm run dev` alongside for the UI with hot reload.

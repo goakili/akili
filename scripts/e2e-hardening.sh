@@ -138,7 +138,7 @@ export AKILI_CLIENT_CERT_FILE="$WORK/client.pem" AKILI_CLIENT_KEY_FILE="$WORK/cl
 # The CA as base64 PEM (as a single-line form field would pass it); run then uses the saved copy.
 AKILI_CA_CERT_PEM="$(base64 <"$WORK/ca.pem" | tr -d '\n')" AKILI_JOIN_TOKEN=$TOKEN "$WORK/akili-agent" enroll --url "$BASE" --state-dir "$WORK/st" --workdir "$WORK/wk" >>"$WORK/agent.log" 2>&1 || fail "enrollment with a client certificate failed"
 cmp -s "$WORK/ca.pem" "$WORK/st/ca.pem" || fail "the CA was not saved in the state directory"
-AKILI_LOG_FORMAT=text "$WORK/akili-agent" run --state-dir "$WORK/st" >>"$WORK/agent.log" 2>&1 &
+AKILI_LOG_FORMAT=text "$WORK/akili-agent" start --state-dir "$WORK/st" >>"$WORK/agent.log" 2>&1 &
 AGENT_PID=$!
 unset AKILI_CLIENT_CERT_FILE AKILI_CLIENT_KEY_FILE
 online() { [ "$(api GET /agents/$AGENT | json "d['data']['status']")" = "online" ]; }

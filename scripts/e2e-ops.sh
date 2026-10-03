@@ -72,7 +72,7 @@ mkdir -p "$WORK/st" "$WORK/wk/cache"
 dd if=/dev/zero of="$WORK/wk/cache/big.bin" bs=1048576 count=20 2>/dev/null
 echo keep > "$WORK/wk/cache/keep.txt"
 AKILI_JOIN_TOKEN=$TOKEN AKILI_LOG_FORMAT=text "$WORK/akili-agent" enroll --url "$BASE" --state-dir "$WORK/st" --workdir "$WORK/wk" >>"$WORK/agent.log" 2>&1
-AKILI_LOG_FORMAT=text "$WORK/akili-agent" run --state-dir "$WORK/st" >>"$WORK/agent.log" 2>&1 &
+AKILI_LOG_FORMAT=text "$WORK/akili-agent" start --state-dir "$WORK/st" >>"$WORK/agent.log" 2>&1 &
 AGENT_PID=$!
 online() { [ "$(api GET /agents/$AGENT | json "d['data']['status']")" = "online" ]; }
 wait_for "agent online" 30 online

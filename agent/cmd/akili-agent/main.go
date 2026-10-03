@@ -49,8 +49,8 @@ func main() {
 	switch os.Args[1] {
 	case "enroll":
 		err = enroll(os.Args[2:])
-	case "run":
-		err = run(os.Args[2:])
+	case "start", "run":
+		err = start(os.Args[1], os.Args[2:])
 	case "version":
 		fmt.Println(Version)
 	case "help", "-h", "--help":
@@ -70,14 +70,15 @@ func usage() {
 
 Commands:
   enroll   Enroll with a control plane using a one-time join token (AKILI_JOIN_TOKEN)
-  run      Connect to the control plane and serve sessions
+  start    Connect to the control plane and serve sessions
   version  Print the version
+  run      Deprecated: use start
 
 Environment: AKILI_URL, AKILI_JOIN_TOKEN, AKILI_STATE_DIR, AKILI_AGENT_WORKDIR, AKILI_INSECURE,
   AKILI_CA_CERT, AKILI_CA_CERT_PEM
                           CA to trust for a control plane with a self-signed or private-CA
                           certificate: a PEM file path, or the PEM itself (or base64 of it); copied into the state
-                          directory and used by enroll and run
+                          directory and used by enroll and start
   AKILI_AGENT_SHELL_ENV   comma-separated variable names passed to shell tools (e.g. KUBECONFIG,PATH);
                           everything else is scrubbed from the tools' environment
   AKILI_CLIENT_CERT_FILE, AKILI_CLIENT_KEY_FILE
@@ -157,7 +158,7 @@ func enroll(args []string) error {
 	}
 	if resp.StatusCode == http.StatusUnauthorized {
 		return fmt.Errorf("enroll rejected: the join token is invalid, already used or expired. Join tokens are single-use: " +
-			"if this machine was enrolled before, keep its state and just run `akili-agent run`; otherwise click Re-enroll on the agent page for a new token")
+			"if this machine was enrolled before, keep its state and just run `akili-agent start`; otherwise click Re-enroll on the agent page for a new token")
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("enroll rejected: %s: %s", resp.Status, bytes.TrimSpace(raw))
@@ -175,12 +176,17 @@ func enroll(args []string) error {
 	return nil
 }
 
-func run(args []string) error {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
+// start serves sessions. cmd is the command it was invoked as: "run" is its deprecated name, kept
+// so existing systemd units, containers and scripts keep working.
+func start(cmd string, args []string) error {
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	stateDir := fs.String("state-dir", env("AKILI_STATE_DIR", defaultStateDir), "state directory")
 	caCert := fs.String("ca-cert", env("AKILI_CA_CERT", ""), "CA bundle (PEM file) to trust for the control plane; replaces the one saved at enrollment")
 	_ = fs.Parse(args)
 	setupLogger()
+	if cmd == "run" {
+		logger.Warn("`akili-agent run` is deprecated and will be removed in a future release; use `akili-agent start`")
+	}
 
 	// Docker-style bootstrap: enroll on first start when a join token is provided.
 	if _, err := state.Load(*stateDir); err != nil && os.Getenv("AKILI_JOIN_TOKEN") != "" {
