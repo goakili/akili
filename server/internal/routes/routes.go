@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/goakili/akili/server/internal/config"
 	"github.com/goakili/akili/server/internal/handlers"
 	"github.com/goakili/akili/server/internal/middlewares"
 	"github.com/goakili/akili/server/internal/web"
@@ -38,12 +39,11 @@ func Register(app *okapi.Okapi, h *handlers.Handlers, authn *middlewares.Authent
 		app.Register(defs...)
 	}
 
+	installScript := web.InstallScript(config.AgentVersion())
 	app.Get("/install-agent.sh", func(c *okapi.Context) error {
 		c.SetHeader("Cache-Control", "no-cache")
-		return c.Data(http.StatusOK, "text/x-shellscript; charset=utf-8", web.InstallScript)
+		return c.Data(http.StatusOK, "text/x-shellscript; charset=utf-8", installScript)
 	}, okapi.DocHide())
-	// Public: hosts download the agent before they enroll, and the binary holds no secret.
-	app.Get("/downloads/{file}", r.h.AgentDownload, okapi.DocHide())
 
 	if h.Cfg.WebDir != "" {
 		app.Web("/", h.Cfg.WebDir)

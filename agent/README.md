@@ -5,8 +5,9 @@ control plane over an encrypted tunnel, and runs chat and task sessions within t
 control plane sends it. It holds no LLM or forge credentials: every model call and every git push goes
 through the control plane.
 
-Install it from your control plane (Agents → Add agent). The control plane serves this binary at
-`/downloads/akili-agent-linux-<arch>`, so the agent always matches it.
+Install it from your control plane (Agents → Add agent). The install script downloads the agent from
+the [GitHub release](https://github.com/goakili/akili/releases) with the control plane's version, so
+the two always match.
 
 ## Development
 
@@ -14,7 +15,7 @@ This module lives in the [Akili repository](https://github.com/goakili/akili) ne
 (`../server`) and the wire contract (`../proto`, via the `replace` in go.mod). From the repository root:
 
 ```bash
-make agent   # bin/akili-agent and the Linux binaries
+make agent   # bin/akili-agent
 make test    # unit tests of every module, including sandbox-escape cases
 make vet
 ```

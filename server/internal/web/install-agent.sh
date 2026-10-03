@@ -8,10 +8,14 @@
 #   curl -fsSL --cacert ca.pem https://akili.example.com/install-agent.sh | sudo AKILI_URL=... AKILI_JOIN_TOKEN=... AKILI_CA_CERT=$PWD/ca.pem sh
 #
 # Installs akili-agent as a hardened systemd service running as the unprivileged "akili" user,
-# enrolls it with the control plane using the one-time join token, and starts it.
+# enrolls it with the control plane using the one-time join token, and starts it. The agent is
+# downloaded from the GitHub release matching the control plane, so the host needs to reach github.com.
 #
 # Optional:
-#   AKILI_AGENT_BINARY_URL  where to download the binary (default: $AKILI_URL/downloads/akili-agent-linux-<arch>)
+#   AKILI_AGENT_VERSION     the release to install, e.g. 0.0.2 (default: the control plane's version)
+#   AKILI_AGENT_RELEASE_URL a mirror with the GitHub release layout, for hosts without access to
+#                           github.com (default: https://github.com/goakili/akili/releases).
+#                           Set AKILI_AGENT_VERSION too: "latest" is only resolved on GitHub.
 #   AKILI_AGENT_WORKDIR     the agent's working directory (default: /var/lib/akili-agent/work)
 #   AKILI_CA_CERT           path to a CA bundle (PEM) to trust for the control plane
 #   AKILI_CA_CERT_PEM       the same CA as inline PEM, instead of a file
@@ -33,12 +37,16 @@ esac
 BIN=/usr/local/bin/akili-agent
 STATE=/var/lib/akili-agent
 WORKDIR="${AKILI_AGENT_WORKDIR:-$STATE/work}"
-# The control plane serves the agent built with it, so versions match and no other host is needed.
-URL="${AKILI_AGENT_BINARY_URL:-${AKILI_URL%/}/downloads/akili-agent-linux-$ARCH}"
+RELEASES="${AKILI_AGENT_RELEASE_URL:-https://github.com/goakili/akili/releases}"
+RELEASES="${RELEASES%/}"
+# The control plane fills in its own version when it serves this script, so the agent matches it.
+VERSION="${AKILI_AGENT_VERSION:-__AKILI_AGENT_VERSION__}"
+command -v sha256sum >/dev/null 2>&1 || fail "sha256sum is required to verify the download"
+command -v tar >/dev/null 2>&1 || fail "tar is required"
 
-tmp="$(mktemp)"
+tmp="$(mktemp -d)"
 cafile=""
-trap 'rm -f "$tmp" "$cafile"' EXIT
+trap 'rm -rf "$tmp" "$cafile"' EXIT
 if [ -n "${AKILI_CA_CERT_PEM:-}" ]; then
   cafile="$(mktemp)"
   printf '%s\n' "$AKILI_CA_CERT_PEM" >"$cafile"
@@ -49,15 +57,29 @@ if [ -n "${AKILI_CA_CERT:-}" ]; then
   grep -q "BEGIN CERTIFICATE" "$AKILI_CA_CERT" || fail "AKILI_CA_CERT is not a PEM certificate"
 fi
 
-echo "akili: downloading agent ($ARCH)"
-# The CA also covers a binary served by the control plane itself (AKILI_AGENT_BINARY_URL).
-curl -fsSL ${AKILI_CA_CERT:+--cacert "$AKILI_CA_CERT"} "$URL" -o "$tmp" || fail "download failed: $URL"
-if command -v sha256sum >/dev/null 2>&1 && sum="$(curl -fsSL ${AKILI_CA_CERT:+--cacert "$AKILI_CA_CERT"} "$URL.sha256" 2>/dev/null)"; then
-  [ "$(sha256sum "$tmp" | cut -d' ' -f1)" = "${sum%% *}" ] || fail "checksum mismatch for $URL"
-elif [ -z "${AKILI_AGENT_BINARY_URL:-}" ]; then
-  fail "could not verify the download: $URL.sha256 is unavailable or sha256sum is missing"
+if [ "$VERSION" = latest ]; then
+  # GitHub redirects /releases/latest to /releases/tag/v<version>.
+  tag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$RELEASES/latest")" || fail "cannot find the latest release at $RELEASES/latest"
+  VERSION="${tag##*/}"
 fi
-install -m 0755 "$tmp" "$BIN"
+VERSION="${VERSION#v}"
+case "$VERSION" in
+  [0-9]*.[0-9]*.[0-9]*) ;;
+  *) fail "not a release version: '$VERSION' (set AKILI_AGENT_VERSION, e.g. 0.0.2)" ;;
+esac
+case "$VERSION" in *[!0-9A-Za-z.-]*) fail "not a release version: '$VERSION'" ;; esac
+
+# Downloads use the system's trusted CAs, not AKILI_CA_CERT: that CA is for the control plane only.
+ARCHIVE="akili-agent_${VERSION}_linux_${ARCH}.tar.gz"
+BASE="$RELEASES/download/v$VERSION"
+echo "akili: downloading agent $VERSION ($ARCH)"
+curl -fsSL "$BASE/$ARCHIVE" -o "$tmp/$ARCHIVE" || fail "download failed: $BASE/$ARCHIVE"
+curl -fsSL "$BASE/checksums.txt" -o "$tmp/checksums.txt" || fail "download failed: $BASE/checksums.txt"
+want="$(awk -v f="$ARCHIVE" '$2 == f || $2 == "*" f { print $1 }' "$tmp/checksums.txt")"
+[ -n "$want" ] || fail "$ARCHIVE is not listed in $BASE/checksums.txt"
+[ "$(sha256sum "$tmp/$ARCHIVE" | cut -d' ' -f1)" = "$want" ] || fail "checksum mismatch for $ARCHIVE"
+tar -xzf "$tmp/$ARCHIVE" -C "$tmp" akili-agent || fail "$ARCHIVE has no akili-agent binary"
+install -m 0755 "$tmp/akili-agent" "$BIN"
 
 if ! id akili >/dev/null 2>&1; then
   useradd --system --home-dir "$STATE" --shell /usr/sbin/nologin akili

@@ -5,14 +5,21 @@
 // build artifact (make web); only a .gitkeep is committed so `go build` works without the UI.
 package web
 
-import "embed"
+import (
+	"bytes"
+	"embed"
+)
 
 // Assets holds the built SPA under "dist/", served with Okapi's WebFS.
 //
 //go:embed all:dist
 var Assets embed.FS
 
-// InstallScript is served at /install-agent.sh.
-//
 //go:embed install-agent.sh
-var InstallScript []byte
+var installScript []byte
+
+// InstallScript is served at /install-agent.sh. It installs agent release version (see
+// config.AgentVersion).
+func InstallScript(version string) []byte {
+	return bytes.ReplaceAll(installScript, []byte("__AKILI_AGENT_VERSION__"), []byte(version))
+}

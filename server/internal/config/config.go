@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -25,6 +26,19 @@ import (
 
 // Version is set at build time with -ldflags.
 var Version = "dev"
+
+// releaseVersion matches published releases only: not "dev", snapshots ("-dev") or
+// `git describe` builds ("-3-gabc1234"), which have no release to download.
+var releaseVersion = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-(alpha|beta|rc)(\.\d+)?)?$`)
+
+// AgentVersion is the agent release that matches this control plane: its own version without the
+// "v", or "latest" when it is not a release build. Release tags and image tags have no "v".
+func AgentVersion() string {
+	if releaseVersion.MatchString(Version) {
+		return strings.TrimPrefix(Version, "v")
+	}
+	return "latest"
+}
 
 const minSecretLen = 32
 
@@ -63,10 +77,7 @@ type Config struct {
 
 	NotifyWebhookURL string
 	WebDir           string
-	// AgentDownloadsDir holds the akili-agent-linux-{amd64,arm64} binaries served at /downloads
-	// (the image ships them); install-agent.sh downloads from there.
-	AgentDownloadsDir string
-	OpenAPIDocs       bool
+	OpenAPIDocs      bool
 	// TrustedProxies are the CIDRs whose X-Forwarded-For / X-Real-IP headers are believed. Empty
 	// means none: the client IP (rate limits, audit) is always the connection address.
 	TrustedProxies []string
@@ -136,30 +147,29 @@ func (t TLSConfig) Enabled() bool { return t.CertFile != "" && t.KeyFile != "" }
 func Load() *Config {
 	loadEnvFile()
 	c := &Config{
-		Env:               goutils.Env("AKILI_ENV", "development"),
-		Port:              goutils.EnvInt("AKILI_PORT", 8080),
-		PublicURL:         strings.TrimRight(goutils.Env("AKILI_PUBLIC_URL", "http://localhost:8080"), "/"),
-		LogLevel:          goutils.Env("AKILI_LOG_LEVEL", "info"),
-		License:           envOrFile("AKILI_LICENSE"),
-		DatabaseURL:       goutils.Env("AKILI_DATABASE_URL", "postgres://akili:akili@localhost:5432/akili?sslmode=disable"),
-		RedisURL:          envOrFile("AKILI_REDIS_URL"),
-		RedisAddr:         goutils.Env("AKILI_REDIS_ADDR", "localhost:6379"),
-		RedisPassword:     goutils.Env("AKILI_REDIS_PASSWORD", ""),
-		RedisDB:           goutils.EnvInt("AKILI_REDIS_DB", 0),
-		JWTSecret:         goutils.Env("AKILI_JWT_SECRET", ""),
-		CookieSecure:      goutils.EnvBool("AKILI_COOKIE_SECURE", false),
-		EncryptionKey:     goutils.Env("AKILI_ENCRYPTION_KEY", ""),
-		AdminEmail:        goutils.Env("AKILI_ADMIN_EMAIL", "admin@akili.local"),
-		AdminPassword:     goutils.Env("AKILI_ADMIN_PASSWORD", ""),
-		AnthropicAPIKey:   goutils.Env("ANTHROPIC_API_KEY", ""),
-		DefaultModel:      goutils.Env("AKILI_DEFAULT_MODEL", "claude-opus-5-5"),
-		NotifyWebhookURL:  goutils.Env("AKILI_NOTIFY_WEBHOOK_URL", ""),
-		WebDir:            goutils.Env("AKILI_WEB_DIR", ""),
-		AgentDownloadsDir: goutils.Env("AKILI_AGENT_DOWNLOADS_DIR", ""),
-		OpenAPIDocs:       goutils.EnvBool("AKILI_OPENAPI_DOCS", true),
-		TrustedProxies:    list(goutils.Env("AKILI_TRUSTED_PROXIES", "")),
-		MCPCommands:       list(goutils.Env("AKILI_MCP_COMMANDS", "miabi")),
-		MCPBinDir:         goutils.Env("AKILI_MCP_BIN_DIR", ""),
+		Env:              goutils.Env("AKILI_ENV", "development"),
+		Port:             goutils.EnvInt("AKILI_PORT", 8080),
+		PublicURL:        strings.TrimRight(goutils.Env("AKILI_PUBLIC_URL", "http://localhost:8080"), "/"),
+		LogLevel:         goutils.Env("AKILI_LOG_LEVEL", "info"),
+		License:          envOrFile("AKILI_LICENSE"),
+		DatabaseURL:      goutils.Env("AKILI_DATABASE_URL", "postgres://akili:akili@localhost:5432/akili?sslmode=disable"),
+		RedisURL:         envOrFile("AKILI_REDIS_URL"),
+		RedisAddr:        goutils.Env("AKILI_REDIS_ADDR", "localhost:6379"),
+		RedisPassword:    goutils.Env("AKILI_REDIS_PASSWORD", ""),
+		RedisDB:          goutils.EnvInt("AKILI_REDIS_DB", 0),
+		JWTSecret:        goutils.Env("AKILI_JWT_SECRET", ""),
+		CookieSecure:     goutils.EnvBool("AKILI_COOKIE_SECURE", false),
+		EncryptionKey:    goutils.Env("AKILI_ENCRYPTION_KEY", ""),
+		AdminEmail:       goutils.Env("AKILI_ADMIN_EMAIL", "admin@akili.local"),
+		AdminPassword:    goutils.Env("AKILI_ADMIN_PASSWORD", ""),
+		AnthropicAPIKey:  goutils.Env("ANTHROPIC_API_KEY", ""),
+		DefaultModel:     goutils.Env("AKILI_DEFAULT_MODEL", "claude-opus-5-5"),
+		NotifyWebhookURL: goutils.Env("AKILI_NOTIFY_WEBHOOK_URL", ""),
+		WebDir:           goutils.Env("AKILI_WEB_DIR", ""),
+		OpenAPIDocs:      goutils.EnvBool("AKILI_OPENAPI_DOCS", true),
+		TrustedProxies:   list(goutils.Env("AKILI_TRUSTED_PROXIES", "")),
+		MCPCommands:      list(goutils.Env("AKILI_MCP_COMMANDS", "miabi")),
+		MCPBinDir:        goutils.Env("AKILI_MCP_BIN_DIR", ""),
 		Git: gitid.Config{
 			NameTemplate:   goutils.Env("AKILI_GIT_NAME_TEMPLATE", gitid.DefaultNameTemplate),
 			EmailTemplate:  goutils.Env("AKILI_GIT_EMAIL_TEMPLATE", gitid.DefaultEmailTemplate),

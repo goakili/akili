@@ -25,7 +25,7 @@ AKILI_URL       ?= $(or $(AKILI_PUBLIC_URL),http://localhost:8080)
 AGENT_STATE_DIR ?= .agent/state
 AGENT_WORKDIR   ?= .agent/work
 
-.PHONY: all build-ui web server agent agent-bin run run-agent e2e-coder e2e-ops e2e-miabi e2e-ha e2e-hardening e2e-chat e2e-all loadtest docker-build docker-build-server docker-build-agent docker-builder docker-push docker-push-server docker-push-agent test vet dev up down e2e clean
+.PHONY: all build-ui web server agent run run-agent e2e-coder e2e-ops e2e-miabi e2e-ha e2e-hardening e2e-chat e2e-all loadtest docker-build docker-build-server docker-build-agent docker-builder docker-push docker-push-server docker-push-agent test vet dev up down e2e clean
 
 all: build-ui server agent
 
@@ -42,14 +42,8 @@ web: build-ui
 server:
 	cd server && CGO_ENABLED=0 go build -trimpath -tags "$(GO_TAGS)" -ldflags "$(LDFLAGS_SERVER)" -o $(CURDIR)/bin/akili ./cmd/akili
 
-# Host binary only (used by run-agent).
-agent-bin:
+agent:
 	cd agent && CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS_AGENT)" -o $(CURDIR)/bin/akili-agent ./cmd/akili-agent
-
-# The host binary plus the Linux binaries the control plane serves at /downloads (AKILI_AGENT_DOWNLOADS_DIR=bin).
-agent: agent-bin
-	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS_AGENT)" -o $(CURDIR)/bin/akili-agent-linux-amd64 ./cmd/akili-agent
-	cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS_AGENT)" -o $(CURDIR)/bin/akili-agent-linux-arm64 ./cmd/akili-agent
 
 docker-build: docker-build-server docker-build-agent
 
@@ -86,15 +80,15 @@ vet:
 	cd server && go vet -tags enterprise ./...
 
 # Build the UI and the server, then run the built binary (embedded UI on :8080) against the compose
-# Postgres/Redis. Settings come from .env. It serves the agent binaries built by `make agent`.
+# Postgres/Redis. Settings come from .env.
 run: server
 	@test -f .env || cp .env.example .env
-	AKILI_AGENT_DOWNLOADS_DIR=$${AKILI_AGENT_DOWNLOADS_DIR:-bin} ./bin/akili server
+	./bin/akili server
 
 # Run a local agent against the control plane (make run). The first run enrolls with AKILI_JOIN_TOKEN
 # (from .env or the command line: make run-agent AKILI_JOIN_TOKEN=akj_...); later runs reuse the state.
 # To enroll again with a new token: make run-agent AKILI_JOIN_TOKEN=akj_... ENROLL_FLAGS=--force
-run-agent: agent-bin
+run-agent: agent
 	@if [ ! -f $(AGENT_STATE_DIR)/state.json ] || [ -n "$(ENROLL_FLAGS)" ]; then \
 		if [ -z "$(AKILI_JOIN_TOKEN)" ]; then \
 			echo "AKILI_JOIN_TOKEN is required to enroll: create an agent in the UI (Agents → Add agent) and set it in .env"; exit 1; \

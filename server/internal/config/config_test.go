@@ -122,3 +122,22 @@ func TestRedisOptions(t *testing.T) {
 		t.Fatal("an invalid AKILI_REDIS_URL passed validation")
 	}
 }
+
+func TestAgentVersion(t *testing.T) {
+	defer func(v string) { Version = v }(Version)
+	for version, want := range map[string]string{
+		"0.0.2":                "0.0.2",
+		"v1.4.0":               "1.4.0",
+		"1.0.0-rc.1":           "1.0.0-rc.1",
+		"dev":                  "latest",
+		"0.0.3-dev":            "latest",
+		"v0.0.2-3-gabc1234":    "latest",
+		"abc1234":              "latest",
+		"0.0.2\nrm -rf /tmp/x": "latest",
+	} {
+		Version = version
+		if got := AgentVersion(); got != want {
+			t.Errorf("%q: got %q, want %q", version, got, want)
+		}
+	}
+}

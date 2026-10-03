@@ -151,7 +151,7 @@ docker compose up -d
 
 The control plane needs PostgreSQL and Redis. In production (`AKILI_ENV=production`) it refuses to start without an `AKILI_JWT_SECRET` and an `AKILI_ENCRYPTION_KEY` of at least 32 characters each. Serve it over HTTPS with `AKILI_COOKIE_SECURE=true`, and set the proxy timeouts below. See [Configuration](#configuration-control-plane) and [Reverse proxy and load balancer](#reverse-proxy-and-load-balancer).
 
-The control plane image also carries the agent binaries and serves them to `install-agent.sh`, so agents installed from it always match it.
+`install-agent.sh` downloads the agent from the [GitHub release](https://github.com/goakili/akili/releases) with the control plane's version, so agents always match it, and checks it against the release's `checksums.txt`. The Docker install command uses the agent image with the same version tag. A control plane that is not a release build installs the latest release and image. Hosts need to reach `github.com`. Without that access, mirror the release assets with the same layout and set `AKILI_AGENT_RELEASE_URL` and `AKILI_AGENT_VERSION` for the install script.
 
 ## Development
 
@@ -176,7 +176,7 @@ make vet
 make e2e         # Postgres + Redis in Docker, server + agent, full API walk-through
 make e2e-all     # every end-to-end suite (coder, ops, miabi, ha, hardening, chat)
 make build-ui    # build the UI into the server's embed directory
-make server agent   # agent also builds the Linux binaries that `make run` serves at /downloads
+make server agent   # bin/akili and bin/akili-agent
 make docker-build   # both images (docker/Dockerfile, docker/Dockerfile.agent)
 make run         # build UI + server, run the binary (embedded UI on :8080) with compose Postgres/Redis and .env
 make run-agent   # build and run a local agent; enrolls on first run with AKILI_JOIN_TOKEN from .env
@@ -416,7 +416,6 @@ Settings come from environment variables. On start the server also loads `./.env
 | `AKILI_DEFAULT_MODEL` | `claude-opus-5-5` | model for the seeded provider |
 | `AKILI_NOTIFY_WEBHOOK_URL` | – | Slack-compatible webhook for approvals and task results |
 | `AKILI_WEB_DIR` | – | serve the UI from disk instead of the embedded build |
-| `AKILI_AGENT_DOWNLOADS_DIR` | image: bundled binaries | directory with `akili-agent-linux-{amd64,arm64}`, served at `/downloads` for `install-agent.sh` |
 | `AKILI_MCP_COMMANDS` | `miabi` | executables admins may run as stdio MCP servers |
 | `AKILI_MCP_BIN_DIR` | – | read-only directory searched before PATH for those executables |
 | `AKILI_GIT_NAME_TEMPLATE` | `Akili Agent` | commit name of agents without their own; `{agent_id}` and `{agent_name}` expand |
