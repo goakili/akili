@@ -69,6 +69,45 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+# Homebrew formula for the agent, pushed to github.com/goakili/homebrew-tap on every release.
+brews:
+  - name: akili-agent
+    ids: [akili-agent]
+    homepage: "https://goakili.dev"
+    description: "Agent for Akili, the security-first control plane for autonomous AI operator agents"
+    license: "AGPL-3.0-or-later"
+    directory: Formula
+    repository:
+      owner: goakili
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    commit_author:
+      name: Akili Agent
+      email: agent@goakili.dev
+    install: |
+      bin.install "akili-agent"
+    post_install: |
+      (var/"akili-agent").mkpath
+      (var/"log").mkpath
+    caveats: |
+      Enroll the agent once with the join token from your control plane (Agents → Add agent):
+
+        AKILI_JOIN_TOKEN=akj_... akili-agent enroll --url https://akili.example.com --state-dir #{var}/akili-agent
+
+      Then start it in the background, now and at login:
+
+        brew services start akili-agent
+
+      Logs: #{var}/log/akili-agent.log
+    service: |
+      run [opt_bin/"akili-agent", "run", "--state-dir", var/"akili-agent"]
+      keep_alive true
+      log_path var/"log/akili-agent.log"
+      error_log_path var/"log/akili-agent.log"
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/akili-agent version")
+
 git:
   # Globs passed to `git describe --exclude`, so the previous release is never a module tag.
   ignore_tags:

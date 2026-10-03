@@ -136,6 +136,7 @@ Releases are cut from `v*` tags and publish:
   - control plane: `jkaninda/akili` (Docker Hub) and `ghcr.io/goakili/akili`
   - agent: `jkaninda/akili-agent` (Docker Hub) and `ghcr.io/goakili/akili-agent`
 - **Binaries** on [GitHub Releases](https://github.com/goakili/akili/releases): `akili` (the web UI is embedded) and `akili-agent`, for Linux and macOS on amd64 and arm64.
+- **Homebrew** (macOS and Linux) for the agent: `brew install goakili/tap/akili-agent`, then enroll and `brew services start akili-agent`. See [goakili/homebrew-tap](https://github.com/goakili/homebrew-tap).
 - **Miabi marketplace templates**: Akili (the control plane with its PostgreSQL, Redis and route) and Akili Agent.
 
 **Docker Compose:** [`examples/`](examples) runs the published images in production mode: the control plane with PostgreSQL and Redis ([`compose.yml`](examples/compose.yml)), and an agent on another host ([`compose-agent.yml`](examples/compose-agent.yml)).
