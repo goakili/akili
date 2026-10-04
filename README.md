@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-A security-first control plane for autonomous AI operator agents.<br>
+The security-first platform for orchestrating, governing, and safely automating AI agents.<br>
 <strong>Default Deny. Explicit Allow. Always Auditable.</strong>
 </p>
 <p align="center">
@@ -42,7 +42,13 @@ A security-first control plane for autonomous AI operator agents.<br>
 
 ## Overview
 
-Akili lets AI agents write code, operate servers and drive deployments, without handing them the keys. Agents run on your servers and dial out to the control plane; every model call goes through its gateway and every tool call is checked against a signed policy twice — once on the agent and once on the control plane — before anything runs. Risky actions wait for a human, and every decision lands in a hash-chained audit log.
+Akili is a platform for orchestrating, governing, and safely automating AI agents. It lets AI agents write code, operate servers and drive deployments, without handing them the keys.
+
+- **Orchestrate**: hand work to a fleet of agents from one control plane — coding tasks, alert triage, deployments and chat sessions — and watch them run in real time.
+- **Govern**: every model call goes through the control plane's gateway, and every tool call is checked against a signed policy twice — once on the agent and once on the control plane — before anything runs. Risky actions wait for a human.
+- **Automate safely**: agents run on your servers and dial out to the control plane; approved change plans run step by step and roll back automatically if a check fails, and every decision lands in a hash-chained audit log.
+
+The platform ships as three parts:
 
 - **[`server`](server)**: the control plane, the `akili` binary. A web UI, a REST API with OpenAPI docs at `/docs`, and an LLM gateway that holds the provider keys. State lives in PostgreSQL; Redis carries events, presence, leases and leader election.
 - **[`agent`](agent)**: the `akili-agent` binary. It runs on your servers, dials out over an encrypted tunnel (yamux over WebSocket) and runs chat and task sessions within the signed policy it receives. It holds no model or forge credentials, and is installed from [GitHub Releases](https://github.com/goakili/akili/releases).
