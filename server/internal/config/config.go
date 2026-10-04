@@ -147,7 +147,7 @@ func (t TLSConfig) Enabled() bool { return t.CertFile != "" && t.KeyFile != "" }
 func Load() *Config {
 	loadEnvFile()
 	c := &Config{
-		Env:              goutils.Env("AKILI_ENV", "development"),
+		Env:              goutils.Env("AKILI_ENV", "production"),
 		Port:             goutils.EnvInt("AKILI_PORT", 9000),
 		PublicURL:        strings.TrimRight(goutils.Env("AKILI_PUBLIC_URL", "http://localhost:9000"), "/"),
 		LogLevel:         goutils.Env("AKILI_LOG_LEVEL", "info"),
