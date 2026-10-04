@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/brand/akili-logo-dark.png">
-    <img src="docs/brand/akili-logo.png" alt="Akili" width="200">
+    <img src="docs/brand/akili-logo.png" alt="Akili logo" width="200">
   </picture>
 </p>
 
@@ -42,10 +42,10 @@ A security-first control plane for autonomous AI operator agents.<br>
 
 ## Overview
 
-Akili lets AI agents write code, operate servers and drive deployments, without handing them the keys. Agents run on your servers and dial out to the control plane; every model call goes through its gateway and every tool call is checked against a signed policy twice, once on the agent and once on the control plane, before anything runs. Risky actions wait for a human, and every decision lands in a hash-chained audit log.
+Akili lets AI agents write code, operate servers and drive deployments, without handing them the keys. Agents run on your servers and dial out to the control plane; every model call goes through its gateway and every tool call is checked against a signed policy twice — once on the agent and once on the control plane — before anything runs. Risky actions wait for a human, and every decision lands in a hash-chained audit log.
 
 - **[`server`](server)**: the control plane, the `akili` binary. A web UI, a REST API with OpenAPI docs at `/docs`, and an LLM gateway that holds the provider keys. State lives in PostgreSQL; Redis carries events, presence, leases and leader election.
-- **[`agent`](agent)**: the `akili-agent` binary. It runs on your servers, dials out over an encrypted tunnel (yamux over WebSocket) and runs chat and task sessions within the signed policy it receives. It holds no model or forge credentials. The control plane serves its binary to the install script.
+- **[`agent`](agent)**: the `akili-agent` binary. It runs on your servers, dials out over an encrypted tunnel (yamux over WebSocket) and runs chat and task sessions within the signed policy it receives. It holds no model or forge credentials, and is installed from [GitHub Releases](https://github.com/goakili/akili/releases).
 - **[`proto`](proto)**: the wire contract both sides import: envelopes, the tool catalog with risk levels, the policy engine and templates.
 
 ## Core features
@@ -101,10 +101,10 @@ flowchart TB
     clients --> cp
     cp --> data
     cp --> ext
-    host -- "agent dials out: wstunnel, yamux over WebSocket" --> cp
+    host -- "agent dials out: yamux over WebSocket" --> cp
 ```
 
-- **The agent dials out.** No inbound port is opened on your servers. Model calls, git pushes and Miabi or MCP calls go through the control plane, so the agent never holds provider keys or forge credentials.
+- **The agent dials out.** No inbound port is opened on your servers. Model calls, git pushes, and Miabi or MCP calls go through the control plane, so the agent never holds provider keys or forge credentials.
 - **Every tool call is checked twice**: by the agent against its signed policy bundle and by the control plane against the current policy, which writes the audit record before anything runs (see [How a tool call is decided](#how-a-tool-call-is-decided)).
 - **`proto`** is the contract between them: envelopes, the tool catalog with risk levels, and the policy engine.
 - **Replicas** share Postgres and Redis. An agent's tunnel lives on one replica, and Redis relays commands, events and the terminal to the others.
@@ -112,13 +112,13 @@ flowchart TB
 ## Quick start
 
 ```bash
-docker compose up -d --build          # http://localhost:8080
-docker compose logs akili | grep password   # first-run owner password (or set AKILI_ADMIN_PASSWORD)
+docker compose up -d --build                     # http://localhost:8080
+docker compose logs akili | grep password        # first-run owner password (or set AKILI_ADMIN_PASSWORD)
 ```
 
-With no `ANTHROPIC_API_KEY`, the control plane seeds a **scripted development provider** so you can try everything end to end. It understands `run: <cmd>`, `read: <path>`, `list: <path>`, `write: <path> :: <text>` and `host`. To use Claude, set `ANTHROPIC_API_KEY` before the first start, or add a provider under **Settings → Model providers**.
+With no `ANTHROPIC_API_KEY`, the control plane seeds a **scripted development provider** so you can try everything end to end. It understands `run: <cmd>`, `read: <path>`, `list: <path>`, `write: <path> :: <text>` and `host`. To use a real model, set `ANTHROPIC_API_KEY` before the first start, or add a provider under **Settings → Model providers**.
 
-Add an agent in the UI (**Agents → Add agent**). It shows a one-time join token and an install command:
+Add an agent in the UI (**Agents → Add agent**). The UI shows a one-time join token and an install command:
 
 ```bash
 # On a server (systemd, runs as the unprivileged "akili" user)
@@ -132,12 +132,12 @@ AKILI_JOIN_TOKEN=akj_... docker compose --profile agent up -d
 
 Releases are cut from `v*` tags and publish:
 
-- **Container images** for `linux/amd64` and `linux/arm64`, tagged with the version and `latest`:
-  - control plane: `jkaninda/akili` (Docker Hub) and `ghcr.io/goakili/akili`
-  - agent: `jkaninda/akili-agent` (Docker Hub) and `ghcr.io/goakili/akili-agent`
-- **Binaries** on [GitHub Releases](https://github.com/goakili/akili/releases): `akili` (the web UI is embedded) and `akili-agent`, for Linux and macOS on amd64 and arm64.
-- **Homebrew** (macOS and Linux) for the agent: `brew install goakili/tap/akili-agent`, then enroll and `brew services start akili-agent`. See [goakili/homebrew-tap](https://github.com/goakili/homebrew-tap).
-- **Miabi marketplace templates**: Akili (the control plane with its PostgreSQL, Redis and route) and Akili Agent.
+| Channel | What you get |
+|---|---|
+| **Container images** | `linux/amd64` and `linux/arm64`, tagged with the version and `latest`. Control plane: `jkaninda/akili` (Docker Hub) and `ghcr.io/goakili/akili`. Agent: `jkaninda/akili-agent` (Docker Hub) and `ghcr.io/goakili/akili-agent` |
+| **Binaries** | `akili` (the web UI is embedded) and `akili-agent` on [GitHub Releases](https://github.com/goakili/akili/releases), for Linux and macOS on amd64 and arm64 |
+| **Homebrew** | The agent on macOS and Linux: `brew install goakili/tap/akili-agent`, then enroll and `brew services start akili-agent`. See [goakili/homebrew-tap](https://github.com/goakili/homebrew-tap) |
+| **Miabi marketplace** | Templates for Akili (the control plane with its PostgreSQL, Redis and route) and the Akili Agent |
 
 **Docker Compose:** [`examples/`](examples) runs the published images in production mode: the control plane with PostgreSQL and Redis ([`compose.yml`](examples/compose.yml)), and an agent on another host ([`compose-agent.yml`](examples/compose-agent.yml)).
 
@@ -152,7 +152,14 @@ docker compose up -d
 
 The control plane needs PostgreSQL and Redis. In production (`AKILI_ENV=production`) it refuses to start without an `AKILI_JWT_SECRET` and an `AKILI_ENCRYPTION_KEY` of at least 32 characters each. Serve it over HTTPS with `AKILI_COOKIE_SECURE=true`, and set the proxy timeouts below. See [Configuration](#configuration-control-plane) and [Reverse proxy and load balancer](#reverse-proxy-and-load-balancer).
 
-`install-agent.sh` downloads the agent from the [GitHub release](https://github.com/goakili/akili/releases) with the control plane's version, so agents always match it, and checks it against the release's `checksums.txt`. The Docker install command uses the agent image with the same version tag. A control plane that is not a release build installs the latest release and image. Hosts need to reach `github.com`. Without that access, mirror the release assets with the same layout and set `AKILI_AGENT_RELEASE_URL` and `AKILI_AGENT_VERSION` for the install script.
+The install script downloads the agent from the [GitHub release](https://github.com/goakili/akili/releases) matching the control plane's version and verifies it against the release's `checksums.txt`, so agents always match the control plane. The Docker install command uses the agent image with the same version tag. A control plane that is not a release build installs the latest release and image. Either way, hosts need to reach `github.com`.
+
+**No access to github.com?** Mirror the release assets with the same layout and point the install script at the mirror:
+
+```bash
+curl -fsSL https://akili.example.com/install-agent.sh | sudo AKILI_URL=… AKILI_JOIN_TOKEN=… \
+  AKILI_AGENT_RELEASE_URL=https://mirror.example.com/akili/releases AKILI_AGENT_VERSION=1.2.3 sh
+```
 
 ## Development
 
@@ -189,11 +196,11 @@ CI runs the unit tests and the UI checks, then every end-to-end suite in paralle
 
 ## How a tool call is decided
 
-1. The model (via the control plane's LLM gateway) asks for a tool call.
+1. The model (through the control plane's LLM gateway) asks for a tool call.
 2. The agent evaluates it against its **signed** policy bundle, then sends `tool.request` to the control plane.
 3. The control plane re-evaluates it against the **current** policy, using risk from the shared catalog (never the agent's claim). It writes the audit record **before** anything runs; if the audit write fails, the call is denied.
 4. The result is **allow**, **deny**, or **approve**. An approval waits for an operator decision bound to that exact request, and expires after 30 minutes.
-5. The tool runs only if **both** the agent and the control plane allow it. The agent then re-checks real paths after resolving symlinks, runs shell commands with a scrubbed environment in their own process group, and refuses private addresses for `http_fetch`.
+5. The tool runs only if **both** the agent and the control plane allow it. The agent then re-checks real paths after resolving symlinks, runs shell commands with a scrubbed environment in their own process group, and refuses private and loopback addresses for `http_fetch`.
 
 Autonomy levels are L0 (every call needs approval), L1 (auto-run low risk), L2 (up to medium) and L3 (up to high). **Critical actions always need a human.**
 
