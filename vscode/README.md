@@ -15,7 +15,23 @@ holds no model or forge keys and decides nothing on its own.
   `akili/<task>` branch to review it locally.
 - **Approvals**: when an agent in one of your sessions waits for a decision, a notification shows
   the exact call. **Approve** shows the full arguments before it decides.
-- **Status bar**: the server, the linked project and pending approvals.
+- **Status bar**: the server, the linked project and pending approvals. Click it for the account
+  menu: new chat or task, link a project, settings, change server, sign out.
+
+The sidebar's title bar has **New chat**, **New task** and **Refresh**; its `…` menu has the project
+and account actions. The sidebar footer shows who you are signed in as, with **Settings** and
+**Sign out**.
+
+## Settings
+
+| Setting | Default | |
+|---|---|---|
+| `akili.url` | | Your control plane. User settings only; change it with **Akili: Change server** |
+| `akili.notifyApprovals` | `true` | Notify when an agent in one of your sessions waits for an approval |
+| `akili.linkProjects` | `ask` | When a folder matches a project: `ask`, link it automatically (`auto`), or `never` look |
+
+**Akili: Settings** opens them. **Sign out** revokes this editor's API key on the server, after a
+confirmation.
 
 Agents run on your Akili fleet and work on their own clone of the repository; their work reaches
 you as a branch and a pull request.

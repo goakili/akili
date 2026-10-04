@@ -85,6 +85,7 @@ export class Approvals {
 
   private async ask(sessionId: string, approval: Approval | undefined): Promise<void> {
     await this.refresh()
+    if (!vscode.workspace.getConfiguration('akili').get<boolean>('notifyApprovals', true)) return
     if (!approval?.id || !(await this.mine(sessionId))) return
     const args = JSON.stringify(approval.input ?? {})
     const pick = await vscode.window.showWarningMessage(

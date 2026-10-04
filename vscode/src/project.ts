@@ -19,6 +19,7 @@ export async function git(cwd: string, ...args: string[]): Promise<string> {
 /** Links the open folder to an Akili project. The link is kept in workspace state, per folder. */
 export class ProjectLink {
   project: Project | null = null
+  private suggested = false
   private readonly changed = new vscode.EventEmitter<void>()
   readonly onDidChange = this.changed.event
 
@@ -43,14 +44,25 @@ export class ProjectLink {
       }
     }
     this.changed.fire()
-    if (client && !this.project && vscode.workspace.isTrusted) await this.suggest()
+    if (client && !this.project && vscode.workspace.isTrusted && !this.suggested) {
+      this.suggested = true
+      await this.suggest()
+    }
+  }
+
+  /** Forgets the loaded project (signed out); the folder's link is kept for the next sign-in. */
+  clear(): void {
+    this.project = null
+    this.suggested = false
+    this.changed.fire()
   }
 
   /** Finds the project by the folder's git remote, or by the slug in .akili.json, and offers to link it. */
   private async suggest(): Promise<void> {
     const client = this.auth.client
     const folder = this.folder()
-    if (!client || !folder) return
+    const mode = vscode.workspace.getConfiguration('akili').get<string>('linkProjects', 'ask')
+    if (!client || !folder || mode === 'never') return
     let found: Project | undefined
     try {
       const remote = await git(folder.uri.fsPath, 'remote', 'get-url', 'origin')
@@ -59,8 +71,13 @@ export class ProjectLink {
       found = await this.fromFile(folder)
     }
     if (!found) return
-    const pick = await vscode.window.showInformationMessage(`Link this folder to the Akili project "${found.name}"?`, 'Link', 'Not now')
+    if (mode === 'auto') {
+      await this.set(found)
+      return
+    }
+    const pick = await vscode.window.showInformationMessage(`Link this folder to the Akili project "${found.name}"?`, 'Link', 'Not now', 'Never ask')
     if (pick === 'Link') await this.set(found)
+    if (pick === 'Never ask') await vscode.workspace.getConfiguration('akili').update('linkProjects', 'never', vscode.ConfigurationTarget.Global)
   }
 
   private async fromFile(folder: vscode.WorkspaceFolder): Promise<Project | undefined> {

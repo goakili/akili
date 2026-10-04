@@ -59,23 +59,174 @@
       ]
     },
     "commands": [
-      { "command": "akili.signIn", "title": "Sign in", "category": "Akili" },
-      { "command": "akili.signInWithKey", "title": "Sign in with an API key", "category": "Akili" },
-      { "command": "akili.signOut", "title": "Sign out", "category": "Akili" },
-      { "command": "akili.linkProject", "title": "Link this folder to a project", "category": "Akili" },
-      { "command": "akili.unlinkProject", "title": "Unlink this folder", "category": "Akili" },
-      { "command": "akili.openWeb", "title": "Open in the browser", "category": "Akili" }
+      {
+        "command": "akili.signIn",
+        "title": "Sign in",
+        "category": "Akili",
+        "icon": "$(sign-in)"
+      },
+      {
+        "command": "akili.signInWithKey",
+        "title": "Sign in with an API key",
+        "category": "Akili",
+        "icon": "$(key)"
+      },
+      {
+        "command": "akili.cancelSignIn",
+        "title": "Cancel sign-in",
+        "category": "Akili"
+      },
+      {
+        "command": "akili.signOut",
+        "title": "Sign out",
+        "category": "Akili",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "akili.changeServer",
+        "title": "Change server",
+        "category": "Akili",
+        "icon": "$(server)"
+      },
+      {
+        "command": "akili.newChat",
+        "title": "New chat",
+        "category": "Akili",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "akili.newTask",
+        "title": "New task",
+        "category": "Akili",
+        "icon": "$(add)"
+      },
+      {
+        "command": "akili.refresh",
+        "title": "Refresh",
+        "category": "Akili",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "akili.linkProject",
+        "title": "Link this folder to a project",
+        "category": "Akili",
+        "icon": "$(link)"
+      },
+      {
+        "command": "akili.unlinkProject",
+        "title": "Unlink this folder",
+        "category": "Akili"
+      },
+      {
+        "command": "akili.openWeb",
+        "title": "Open in the browser",
+        "category": "Akili",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "akili.openSettings",
+        "title": "Settings",
+        "category": "Akili",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "akili.showMenu",
+        "title": "Show account menu",
+        "category": "Akili",
+        "icon": "$(account)"
+      }
     ],
     "menus": {
       "commandPalette": [
-        { "command": "akili.signOut", "when": "akili.signedIn" },
-        { "command": "akili.linkProject", "when": "akili.signedIn" },
-        { "command": "akili.unlinkProject", "when": "akili.signedIn" },
-        { "command": "akili.openWeb", "when": "akili.signedIn" }
+        {
+          "command": "akili.cancelSignIn",
+          "when": "false"
+        },
+        {
+          "command": "akili.signOut",
+          "when": "akili.signedIn"
+        },
+        {
+          "command": "akili.newChat",
+          "when": "akili.signedIn"
+        },
+        {
+          "command": "akili.newTask",
+          "when": "akili.signedIn"
+        },
+        {
+          "command": "akili.refresh",
+          "when": "akili.signedIn"
+        },
+        {
+          "command": "akili.linkProject",
+          "when": "akili.signedIn"
+        },
+        {
+          "command": "akili.unlinkProject",
+          "when": "akili.signedIn && akili.projectLinked"
+        },
+        {
+          "command": "akili.openWeb",
+          "when": "akili.signedIn"
+        }
       ],
       "view/title": [
-        { "command": "akili.linkProject", "when": "view == akili.sidebar && akili.signedIn" },
-        { "command": "akili.openWeb", "when": "view == akili.sidebar && akili.signedIn" }
+        {
+          "command": "akili.newChat",
+          "when": "view == akili.sidebar && akili.signedIn",
+          "group": "navigation@1"
+        },
+        {
+          "command": "akili.newTask",
+          "when": "view == akili.sidebar && akili.signedIn",
+          "group": "navigation@2"
+        },
+        {
+          "command": "akili.refresh",
+          "when": "view == akili.sidebar && akili.signedIn",
+          "group": "navigation@3"
+        },
+        {
+          "command": "akili.showMenu",
+          "when": "view == akili.sidebar",
+          "group": "navigation@9"
+        },
+        {
+          "command": "akili.linkProject",
+          "when": "view == akili.sidebar && akili.signedIn",
+          "group": "1_project@1"
+        },
+        {
+          "command": "akili.unlinkProject",
+          "when": "view == akili.sidebar && akili.signedIn && akili.projectLinked",
+          "group": "1_project@2"
+        },
+        {
+          "command": "akili.openWeb",
+          "when": "view == akili.sidebar && akili.signedIn",
+          "group": "1_project@3"
+        },
+        {
+          "command": "akili.openSettings",
+          "when": "view == akili.sidebar",
+          "group": "2_account@1"
+        },
+        {
+          "command": "akili.changeServer",
+          "when": "view == akili.sidebar",
+          "group": "2_account@2"
+        },
+        {
+          "command": "akili.signOut",
+          "when": "view == akili.sidebar && akili.signedIn",
+          "group": "2_account@3"
+        },
+        {
+          "command": "akili.signIn",
+          "when": "view == akili.sidebar && !akili.signedIn",
+          "group": "2_account@3"
+        }
       ]
     },
     "configuration": {
@@ -85,7 +236,30 @@
           "type": "string",
           "default": "",
           "scope": "application",
-          "markdownDescription": "URL of your Akili control plane, e.g. `https://akili.example.com`. Read from user settings only: a repository's workspace settings can't change it."
+          "order": 1,
+          "markdownDescription": "URL of your Akili control plane, e.g. `https://akili.example.com`. Read from user settings only: a repository's workspace settings can't change it. Use **Akili: Change server** to switch."
+        },
+        "akili.notifyApprovals": {
+          "type": "boolean",
+          "default": true,
+          "order": 2,
+          "markdownDescription": "Show a notification when an agent in one of your sessions waits for an approval. The status bar shows the count either way."
+        },
+        "akili.linkProjects": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "auto",
+            "never"
+          ],
+          "default": "ask",
+          "order": 3,
+          "enumDescriptions": [
+            "Ask before linking a folder to the Akili project that matches its git remote",
+            "Link matching folders without asking",
+            "Never look for a matching project; link with **Akili: Link this folder to a project**"
+          ],
+          "markdownDescription": "What to do when an opened folder matches an Akili project."
         }
       }
     }

@@ -1,4 +1,4 @@
-/* Sidebar layout: narrow, full height, the editor's font. */
+/* Sidebar layout: narrow, full height, the editor's font and colours where they matter. */
 html,
 body,
 #app {
@@ -15,36 +15,100 @@ body {
   flex-direction: column;
   height: 100%;
 }
-.vsc-empty {
+.vsc-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 16px;
+  text-align: center;
+}
+.vsc-empty h2 {
+  font-size: 14px;
+  margin: 4px 0 0;
+}
+.vsc-empty p {
+  margin: 0 0 6px;
+  max-width: 280px;
+}
+.vsc-empty .btn {
+  width: 100%;
+  max-width: 240px;
+}
+
+.vsc-head {
+  border-bottom: 1px solid var(--border);
+}
+.vsc-project {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 2px;
+  min-width: 0;
+}
+.vsc-project strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vsc-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-3, #888);
+}
+.dot.online {
+  background: var(--ok, #2e9e5b);
 }
 .vsc-tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
+  gap: 2px;
+  padding: 4px 6px 0;
 }
 .vsc-tabs button {
   background: none;
   border: 0;
-  padding: 4px 8px;
-  border-radius: 6px;
+  border-bottom: 2px solid transparent;
+  padding: 5px 8px;
   color: inherit;
+  opacity: 0.75;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 .vsc-tabs button.on {
-  background: var(--surface-2, rgba(127, 127, 127, 0.15));
+  opacity: 1;
+  border-bottom-color: var(--accent, var(--vscode-focusBorder));
   font-weight: 600;
 }
-.vsc-project {
-  margin-left: auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.7;
-  font-size: 12px;
+.count {
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 8px;
+  background: var(--vscode-badge-background, rgba(127, 127, 127, 0.25));
+  color: var(--vscode-badge-foreground, inherit);
+  font-weight: 600;
 }
+.vsc-mini {
+  margin-left: auto;
+  width: 12px;
+  height: 12px;
+}
+
 .vsc-panel {
   flex: 1;
   min-height: 0;
@@ -54,13 +118,24 @@ body {
   padding: 8px;
   overflow: auto;
 }
+.vsc-session {
+  padding: 0;
+  gap: 0;
+}
 .vsc-bar {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.vsc-bar-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .vsc-title {
-  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -73,6 +148,32 @@ body {
 .vsc-form {
   padding: 10px;
 }
+.vsc-actions {
+  justify-content: flex-end;
+  gap: 6px;
+}
+.vsc-search {
+  height: 28px;
+}
+.vsc-filters {
+  display: flex;
+  gap: 4px;
+}
+.vsc-filters button {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 12px;
+  color: inherit;
+  cursor: pointer;
+}
+.vsc-filters button.on {
+  background: var(--vscode-button-secondaryBackground, rgba(127, 127, 127, 0.2));
+  color: var(--vscode-button-secondaryForeground, inherit);
+  border-color: transparent;
+}
+
 .vsc-list {
   list-style: none;
   margin: 0;
@@ -84,7 +185,8 @@ body {
 .vsc-item {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
+  gap: 2px;
   width: 100%;
   text-align: left;
   background: none;
@@ -96,28 +198,93 @@ body {
 }
 .vsc-item:hover,
 .vsc-item:focus-visible {
-  border-color: var(--border);
+  background: var(--vscode-list-hoverBackground, rgba(127, 127, 127, 0.1));
+}
+.vsc-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
 }
 .vsc-item-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+  min-width: 0;
+  display: block;
+}
+.vsc-state {
+  font-size: 11px;
+  color: var(--accent, var(--vscode-textLink-foreground));
+  white-space: nowrap;
 }
 .vsc-task {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .vsc-task-head {
   display: flex;
   justify-content: space-between;
-  gap: 6px;
   align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.vsc-task-head:disabled {
+  cursor: default;
 }
 .vsc-task-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
-  margin-top: 4px;
+  margin: 2px -6px 0;
+}
+.vsc-empty-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 8px;
+  text-align: center;
+  opacity: 0.9;
+}
+.vsc-empty-list p {
+  margin: 0;
+}
+
+.vsc-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+}
+.vsc-avatar {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--vscode-badge-background, rgba(127, 127, 127, 0.25));
+  color: var(--vscode-badge-foreground, inherit);
+}
+.vsc-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
 }
