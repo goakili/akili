@@ -27,6 +27,7 @@ import (
 	"github.com/goakili/akili/server/internal/mcp"
 	"github.com/goakili/akili/server/internal/miabi"
 	"github.com/goakili/akili/server/internal/middlewares"
+	"github.com/goakili/akili/server/internal/models"
 	"github.com/goakili/akili/server/internal/notify"
 	"github.com/goakili/akili/server/internal/plans"
 	"github.com/goakili/akili/server/internal/procsec"
@@ -122,6 +123,7 @@ func runServer(cli *okapicli.CLI) error {
 	hub := sessions.New(db, b, auditLog, notifier, seeded.SigningKey)
 	gw := gateway.New(db, box, auditLog, hub)
 	coderSvc := coder.New(db, box, auditLog, cfg.Git)
+	coderSvc.Production = !cfg.IsDev()
 	hub.SetRemoteTools(coderSvc)
 	miabiSvc := miabi.NewService(db, box, auditLog)
 	hub.AddRemoteRunner(miabi.Tools, miabiSvc.RunRemote)
@@ -164,6 +166,11 @@ func runServer(cli *okapicli.CLI) error {
 			go forwarder.Run(ctx)
 			go chatSvc.Run(ctx)
 			go mcpSvc.RunRefresh(ctx)
+			go coderSvc.RunTokenExpiry(ctx, elector.Leading, func(_ context.Context, it *models.Integration) {
+				notifier.Send(fmt.Sprintf("Akili: the %s integration's token expires on %s. Replace it: %s", it.Name,
+					it.TokenExpiresAt.Format("2006-01-02"), notifier.Link("/integrations")))
+				mailer.TokenExpiring(it.OrganizationID, it)
+			})
 			go miabiSvc.RunEvents(ctx, elector, func(ctx context.Context, t *miabi.Trigger) { h.MiabiTrigger(ctx, t) })
 			logger.Info("akili control plane starting", "version", config.Version, "port", cfg.Port, "public_url", cfg.PublicURL,
 				"kms", box.Keyring().Provider(), "tls", cfg.TLS.Enabled(), "agent_mtls", cfg.TLS.AgentMTLS, "sso", sso != nil, "siem_sinks", len(sinks))

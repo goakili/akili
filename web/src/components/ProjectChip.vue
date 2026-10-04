@@ -6,6 +6,7 @@ import { computed } from 'vue'
 import type { Project } from '../api'
 import { useCoder } from '../stores/coder'
 import Icon from './Icon'
+import { forgeIcon } from '../lib/forge'
 
 const props = defineProps<{
   project?: Project | null
@@ -23,7 +24,7 @@ const name = computed(() => (props.compact && props.project ? props.project.repo
 <template>
   <span class="pchip" :title="branch ? `${full} · ${branch}` : full">
     <span class="pc-repo">
-      <Icon :name="coder.forgeOf(project) === 'github' ? 'github' : 'gitea'" />
+      <Icon :name="forgeIcon(coder.forgeOf(project))" />
       <RouterLink v-if="link && project" :to="`/projects/${project.id}`" class="truncate">{{ name }}</RouterLink>
       <span v-else class="truncate">{{ name }}</span>
     </span>

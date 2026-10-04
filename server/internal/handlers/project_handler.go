@@ -89,6 +89,7 @@ func (h *Handlers) CreateIntegration(c *okapi.Context, req *IntegrationRequest) 
 			logger.Warn("miabi workspace sync failed", "integration", it.ID, "error", err)
 		}
 	}
+	h.refreshTokenInfo(c, it)
 	return created(c, h.integrationView(*it))
 }
 
@@ -102,7 +103,18 @@ func (h *Handlers) UpdateIntegration(c *okapi.Context, req *IntegrationRequest) 
 		return c.AbortBadRequest(err.Error())
 	}
 	h.record(c, "integration.update", "integration", it.ID, map[string]any{"secret_changed": req.Body.Token != "" || req.Body.PrivateKey != "", "default": it.Default})
+	h.refreshTokenInfo(c, &it)
 	return ok(c, h.integrationView(it))
+}
+
+// refreshTokenInfo reads a GitLab token's kind and expiry; best effort, "Test" retries.
+func (h *Handlers) refreshTokenInfo(c *okapi.Context, it *models.Integration) {
+	if it.Kind != models.ForgeGitLab {
+		return
+	}
+	if err := h.Coder.RefreshTokenInfo(c.Request().Context(), it); err != nil {
+		logger.Warn("gitlab token check failed", "integration", it.ID, "error", err)
+	}
 }
 
 // SetDefaultIntegration makes a Miabi integration the default for tool calls that name none.

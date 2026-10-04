@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Jonas Kaninda
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package forge talks to git forges (Gitea, GitHub). Only the control plane uses it: agents never
+// Package forge talks to git forges (Gitea, GitHub, GitLab). Only the control plane uses it: agents never
 // hold forge credentials.
 package forge
 
@@ -99,17 +99,23 @@ func newClient(base string, auth func(context.Context, http.Header) error, heade
 
 // do sends a request; out may be nil, or *string for a raw body.
 func (c *client) do(ctx context.Context, method, path string, in, out any, accept ...string) error {
+	_, err := c.doH(ctx, method, path, in, out, accept...)
+	return err
+}
+
+// doH is do that also returns the response headers (for paging).
+func (c *client) doH(ctx context.Context, method, path string, in, out any, accept ...string) (http.Header, error) {
 	var body io.Reader
 	if in != nil {
 		b, err := json.Marshal(in)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		body = bytes.NewReader(b)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.base+path, body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -123,46 +129,55 @@ func (c *client) do(ctx context.Context, method, path string, in, out any, accep
 	}
 	if c.auth != nil {
 		if err := c.auth(ctx, req.Header); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("forge: %w", err)
+		return nil, fmt.Errorf("forge: %w", err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return ErrNotFound
+		return resp.Header, ErrNotFound
 	}
 	if resp.StatusCode >= 300 {
-		msg := strings.TrimSpace(string(raw))
-		var e struct {
-			Message string `json:"message"`
-		}
-		if json.Unmarshal(raw, &e) == nil && e.Message != "" {
-			msg = e.Message
-		}
-		if len(msg) > 500 {
-			msg = msg[:500]
-		}
-		return &APIError{Status: resp.StatusCode, Message: msg}
+		return resp.Header, &APIError{Status: resp.StatusCode, Message: errorMessage(raw)}
 	}
 	switch o := out.(type) {
 	case nil:
-		return nil
+		return resp.Header, nil
 	case *string:
 		*o = string(raw)
-		return nil
+		return resp.Header, nil
 	default:
 		if len(raw) == 0 {
-			return nil
+			return resp.Header, nil
 		}
-		return json.Unmarshal(raw, out)
+		return resp.Header, json.Unmarshal(raw, out)
 	}
+}
+
+// errorMessage reads "message" (or GitLab's "error") when it is a string, else keeps the raw body.
+func errorMessage(raw []byte) string {
+	msg := strings.TrimSpace(string(raw))
+	var e map[string]json.RawMessage
+	if json.Unmarshal(raw, &e) == nil {
+		for _, k := range []string{"message", "error"} {
+			var s string
+			if json.Unmarshal(e[k], &s) == nil && s != "" {
+				msg = s
+				break
+			}
+		}
+	}
+	if len(msg) > 500 {
+		msg = msg[:500]
+	}
+	return msg
 }
 
 // combine folds individual check states into one: any failure fails, any pending is pending.

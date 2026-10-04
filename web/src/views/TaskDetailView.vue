@@ -13,6 +13,7 @@ import { useToast } from '../stores/toast'
 import { useUi } from '../stores/ui'
 import { durationSec, fmtDate, fmtTime, usd, duration, safeUrl } from '../lib/format'
 import { copyText } from '../lib/clipboard'
+import { prNoun, prNumber } from '../lib/forge'
 import { useNow } from '../lib/now'
 import Badge from '../components/Badge.vue'
 import SafeMarkdown from '../components/SafeMarkdown'
@@ -267,7 +268,7 @@ onUnmounted(() => {
     <section v-if="task.project_id" class="card" aria-labelledby="code-title">
       <div class="card-head">
         <h2 id="code-title"><Icon name="gitBranch" />Code</h2>
-        <PrLink v-if="task.pr_url" :url="task.pr_url" :number="task.pr_number" button :label="`Pull request #${task.pr_number}`" />
+        <PrLink v-if="task.pr_url" :url="task.pr_url" :number="task.pr_number" button :label="`${prNoun(task.pr_url).replace(/^./, (c) => c.toUpperCase())} ${prNumber(task.pr_url, task.pr_number)}`" />
       </div>
       <div class="card-body stack">
         <dl class="kv code-kv">

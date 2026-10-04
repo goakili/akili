@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -35,6 +36,8 @@ type Service struct {
 	audit   *audit.Logger
 	gitHTTP *http.Client
 	git     gitid.Config
+	// Production refuses plain-http GitLab URLs other than localhost.
+	Production bool
 
 	mu     sync.Mutex
 	forges map[string]cachedForge // by integration id
@@ -103,6 +106,17 @@ func (s *Service) SaveIntegration(ctx context.Context, it *models.Integration, i
 			return errors.New("base_url is required for Gitea")
 		}
 		in.AuthType = models.AuthToken
+	case models.ForgeGitLab:
+		in.BaseURL = strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(in.BaseURL), "/"), "/api/v4")
+		if in.BaseURL == "" {
+			in.BaseURL = "https://gitlab.com"
+		}
+		for _, u := range []string{in.BaseURL, in.WebURL} {
+			if err := s.checkForgeURL(u); err != nil {
+				return err
+			}
+		}
+		in.AuthType = models.AuthToken
 	case models.ForgeGitHub:
 		if in.BaseURL == "" {
 			in.BaseURL = "https://api.github.com"
@@ -114,7 +128,7 @@ func (s *Service) SaveIntegration(ctx context.Context, it *models.Integration, i
 			in.AuthType = models.AuthToken
 		}
 	default:
-		return errors.New("kind must be gitea, github, miabi or posta")
+		return errors.New("kind must be gitea, github, gitlab, miabi or posta")
 	}
 	if in.AuthType != models.AuthToken && in.AuthType != models.AuthGitHubApp {
 		return errors.New("auth_type must be token or github_app")
@@ -141,6 +155,8 @@ func (s *Service) SaveIntegration(ctx context.Context, it *models.Integration, i
 	}
 	var err error
 	if in.Token != "" {
+		// A new token has its own kind and expiry; verify reads them again.
+		it.TokenKind, it.TokenExpiresAt, it.TokenExpiryNotified = "", nil, false
 		if it.TokenEnc, err = s.box.Encrypt(in.Token); err != nil {
 			return err
 		}
@@ -186,6 +202,25 @@ func (s *Service) SaveIntegration(ctx context.Context, it *models.Integration, i
 		it.HasSecret = true
 		return nil
 	})
+}
+
+// checkForgeURL accepts https, and plain http only for localhost or outside production.
+func (s *Service) checkForgeURL(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
+		return fmt.Errorf("%q is not an http(s) URL", raw)
+	}
+	if u.Scheme == "http" && s.Production {
+		switch u.Hostname() {
+		case "localhost", "127.0.0.1", "::1":
+		default:
+			return errors.New("GitLab URLs must use https in production (the token is sent with every request)")
+		}
+	}
+	return nil
 }
 
 // validSender accepts "Name <address>" or a bare address, without line breaks (it becomes a header).
@@ -256,6 +291,14 @@ func (s *Service) Forge(it *models.Integration) (forge.Forge, error) {
 			return nil, err
 		}
 		f = forge.NewGitHubToken(it.BaseURL, it.WebURL, tok)
+	case it.Kind == models.ForgeGitLab:
+		tok, err := s.box.Decrypt(it.TokenEnc)
+		if err != nil {
+			return nil, err
+		}
+		if f, err = forge.NewGitLab(it.BaseURL, it.WebURL, tok, it.CACert); err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("unsupported forge %q", it.Kind)
 	}
@@ -271,7 +314,8 @@ func (s *Service) integration(ctx context.Context, org, id string) (*models.Inte
 	return &it, nil
 }
 
-// TestIntegration checks an integration's credentials.
+// TestIntegration checks an integration's credentials. For GitLab it also records the token's kind
+// and expiry, which the result mentions.
 func (s *Service) TestIntegration(ctx context.Context, org, id string) (string, error) {
 	it, err := s.integration(ctx, org, id)
 	if err != nil {
@@ -281,7 +325,54 @@ func (s *Service) TestIntegration(ctx context.Context, org, id string) (string, 
 	if err != nil {
 		return "", err
 	}
-	return f.Verify(ctx)
+	who, err := f.Verify(ctx)
+	if err != nil || it.Kind != models.ForgeGitLab {
+		return who, err
+	}
+	if s.RefreshTokenInfo(ctx, it) == nil && it.TokenKind != "" {
+		who += " (" + it.TokenKind + " token"
+		if it.TokenExpiresAt != nil {
+			who += ", expires " + it.TokenExpiresAt.Format("2006-01-02")
+		}
+		who += ")"
+	}
+	return who, nil
+}
+
+// RefreshTokenInfo reads a GitLab token's kind and expiry and stores them on the integration.
+func (s *Service) RefreshTokenInfo(ctx context.Context, it *models.Integration) error {
+	f, err := s.Forge(it)
+	if err != nil {
+		return err
+	}
+	gl, ok := f.(*forge.GitLab)
+	if !ok {
+		return nil
+	}
+	info, err := gl.TokenInfo(ctx)
+	if info == nil {
+		return err
+	}
+	set := map[string]any{"token_kind": info.Kind}
+	// An older GitLab without /personal_access_tokens/self keeps the stored expiry.
+	if err == nil {
+		set["token_expires_at"] = info.ExpiresAt
+		if !sameDay(info.ExpiresAt, it.TokenExpiresAt) {
+			set["token_expiry_notified"] = false
+			it.TokenExpiryNotified = false
+		}
+		it.TokenExpiresAt = info.ExpiresAt
+	}
+	it.TokenKind = info.Kind
+	// UpdateColumns keeps updated_at, which keys the forge client cache.
+	return s.db.WithContext(ctx).Model(&models.Integration{}).Where("id = ?", it.ID).UpdateColumns(set).Error
+}
+
+func sameDay(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.UTC().Format("2006-01-02") == b.UTC().Format("2006-01-02")
 }
 
 // ---- projects ----
@@ -318,21 +409,56 @@ func slugify(s string) string {
 
 var repoNameRE = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
 
+// gitlabMaxDepth is GitLab's limit on nested subgroups.
+const gitlabMaxDepth = 20
+
+// validOwner checks a repository owner. GitLab owners are namespace paths (platform/backend).
+func validOwner(kind, owner string) bool {
+	if kind != models.ForgeGitLab {
+		return repoNameRE.MatchString(owner)
+	}
+	segs := strings.Split(owner, "/")
+	if len(owner) > 255 || len(segs) > gitlabMaxDepth {
+		return false
+	}
+	for _, seg := range segs {
+		if seg == "." || seg == ".." || !repoNameRE.MatchString(seg) {
+			return false
+		}
+	}
+	return true
+}
+
 // CreateProject connects (or creates) a repository and registers it as a project.
 func (s *Service) CreateProject(ctx context.Context, org, userID string, in ProjectInput) (*models.Project, error) {
-	if !repoNameRE.MatchString(in.Owner) || !repoNameRE.MatchString(in.Repo) {
-		return nil, errors.New("owner and repo must be plain names (letters, digits, . _ -)")
+	in.Owner = strings.Trim(strings.TrimSpace(in.Owner), "/")
+	if !repoNameRE.MatchString(in.Repo) {
+		return nil, errors.New("repo must be a plain name (letters, digits, . _ -)")
 	}
 	it, err := s.integration(ctx, org, in.IntegrationID)
 	if err != nil {
 		return nil, errors.New("unknown integration")
 	}
-	if it.Kind != models.ForgeGitea && it.Kind != models.ForgeGitHub {
-		return nil, errors.New("projects need a git forge integration (Gitea or GitHub)")
+	if !models.IsForge(it.Kind) {
+		return nil, errors.New("projects need a git forge integration (Gitea, GitHub or GitLab)")
+	}
+	if !validOwner(it.Kind, in.Owner) {
+		if it.Kind == models.ForgeGitLab {
+			return nil, errors.New("owner must be a group path such as platform/backend (letters, digits, . _ -; no empty, . or .. parts)")
+		}
+		return nil, errors.New("owner must be a plain name (letters, digits, . _ -)")
 	}
 	f, err := s.Forge(it)
 	if err != nil {
 		return nil, err
+	}
+	if in.CreateRepo && it.Kind == models.ForgeGitLab {
+		if it.TokenKind == "" {
+			_ = s.RefreshTokenInfo(ctx, it)
+		}
+		if it.TokenKind == "project" {
+			return nil, forge.ErrProjectToken
+		}
 	}
 	var repo *forge.Repo
 	if in.CreateRepo {
@@ -345,6 +471,9 @@ func (s *Service) CreateProject(ctx context.Context, org, userID string, in Proj
 	}
 	if err != nil {
 		return nil, fmt.Errorf("forge: %w", err)
+	}
+	if err := s.checkGitLabAccess(ctx, it, f, repo); err != nil {
+		return nil, err
 	}
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
@@ -363,6 +492,29 @@ func (s *Service) CreateProject(ctx context.Context, org, userID string, in Proj
 	s.audit.Best(ctx, audit.Entry{OrganizationID: org, ActorType: audit.ActorUser, ActorID: userID, Action: "project.create", TargetType: "project",
 		TargetID: p.ID, Metadata: map[string]any{"repo": p.FullName(), "created_repo": in.CreateRepo, "integration_id": it.ID}})
 	return p, nil
+}
+
+// checkGitLabAccess refuses a project or group token with the Owner role on the repository: Akili
+// needs Developer, and an owner token could change protected branches behind the push guard.
+func (s *Service) checkGitLabAccess(ctx context.Context, it *models.Integration, f forge.Forge, repo *forge.Repo) error {
+	gl, ok := f.(*forge.GitLab)
+	if !ok {
+		return nil
+	}
+	if it.TokenKind == "" {
+		_ = s.RefreshTokenInfo(ctx, it)
+	}
+	if it.TokenKind != "project" && it.TokenKind != "group" {
+		return nil
+	}
+	level, err := gl.AccessLevel(ctx, repo.Owner, repo.Name)
+	if err != nil {
+		return nil
+	}
+	if level >= forge.GitLabOwner {
+		return errors.New("the GitLab token has the Owner role on this project; create a project or group access token with the Developer role")
+	}
+	return nil
 }
 
 // UpdateProject edits a project's settings (the repository itself is fixed).

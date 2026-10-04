@@ -24,6 +24,7 @@ import NewTaskModal from '../components/NewTaskModal.vue'
 import ProjectPlansTab, { type PhaseFocus } from '../components/ProjectPlansTab.vue'
 import PrLink from '../components/PrLink.vue'
 import Icon, { type IconName } from '../components/Icon'
+import { forgeIcon, forgeLabel } from '../lib/forge'
 
 const props = defineProps<{ id: string }>()
 const auth = useAuth()
@@ -343,7 +344,7 @@ onUnmounted(() => {
   <div v-else class="stack loose">
     <PageHeader :title="project.name" :back="{ to: '/projects', label: 'Projects' }" style="margin-bottom: 0">
       <template #badges>
-        <span class="badge outline"><Icon :name="forge === 'github' ? 'github' : 'gitea'" />{{ forge === 'github' ? 'GitHub' : 'Gitea' }}</span>
+        <span class="badge outline"><Icon :name="forgeIcon(forge)" />{{ forgeLabel(forge) }}</span>
       </template>
       <template #subtitle>
         <span class="repo-line">

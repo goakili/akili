@@ -70,9 +70,17 @@ func (s *Service) openPR(ctx context.Context, sess *models.ChatSession, p *model
 		TargetType: "project", TargetID: p.ID, Metadata: map[string]any{"pr": pr.Number, "url": pr.URL, "branch": sess.Branch, "existing": existing}})
 	verb := "Opened"
 	if existing {
-		verb = "A pull request is already open:"
+		verb = "Already open:"
 	}
-	return fmt.Sprintf("%s PR #%d %q (%s → %s)\n%s", verb, pr.Number, pr.Title, pr.Head, pr.Base, pr.URL), nil
+	return fmt.Sprintf("%s %s %q (%s → %s)\n%s", verb, prRef(p, pr.Number), pr.Title, pr.Head, pr.Base, pr.URL), nil
+}
+
+// prRef names a pull request the forge's way: GitLab calls it a merge request, numbered "!12".
+func prRef(p *models.Project, n int) string {
+	if p.Forge == models.ForgeGitLab {
+		return fmt.Sprintf("MR !%d", n)
+	}
+	return fmt.Sprintf("PR #%d", n)
 }
 
 func (s *Service) footer(ctx context.Context, sess *models.ChatSession) string {
@@ -97,7 +105,7 @@ func (s *Service) prStatus(ctx context.Context, sess *models.ChatSession, p *mod
 	pr, err := f.FindOpenPR(ctx, p.Owner, p.Repo, sess.Branch)
 	switch {
 	case err == nil:
-		fmt.Fprintf(&b, "PR #%d %q is %s (%s → %s)\n%s\n", pr.Number, pr.Title, pr.State, pr.Head, pr.Base, pr.URL)
+		fmt.Fprintf(&b, "%s %q is %s (%s → %s)\n%s\n", prRef(p, pr.Number), pr.Title, pr.State, pr.Head, pr.Base, pr.URL)
 	case errors.Is(err, forge.ErrNotFound):
 		b.WriteString("No open pull request for this branch yet.\n")
 	default:

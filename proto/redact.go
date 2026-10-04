@@ -19,7 +19,7 @@ var secretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`),                                                    // AWS access key id
 	regexp.MustCompile(`\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}\b`),                            // GitHub tokens
 	regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9_]{22,}\b`),                                        // GitHub fine-grained
-	regexp.MustCompile(`\bglpat-[A-Za-z0-9_\-]{20,}\b`),                                           // GitLab
+	regexp.MustCompile(`\bgl(?:pat|dt|rt|ptt|cbt|oas)-[A-Za-z0-9_\-]{20,}(?:\.[A-Za-z0-9_\-]+)*`), // GitLab access, deploy, runner, trigger, CI job, OAuth
 	regexp.MustCompile(`\bxox[abprs]-[A-Za-z0-9-]{10,}\b`),                                        // Slack
 	regexp.MustCompile(`\bsk-ant-[A-Za-z0-9_\-]{20,}\b`),                                          // Anthropic
 	regexp.MustCompile(`\bsk-(?:proj-)?[A-Za-z0-9_\-]{32,}\b`),                                    // OpenAI-style

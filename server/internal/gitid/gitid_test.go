@@ -32,6 +32,8 @@ func TestValidateEmail(t *testing.T) {
 	}{
 		{"bot@example.com", nil, true},
 		{"123+akili[bot]@users.noreply.github.com", nil, true},
+		{"123-jdoe@users.noreply.gitlab.com", nil, true},
+		{"project_42_bot_3f2a1b@noreply.gitlab.com", nil, true},
 		{"bot@Example.com", []string{"example.com"}, true},
 		{"bot@other.com", []string{"example.com"}, false},
 		{"bot@sub.example.com", []string{"example.com"}, false},

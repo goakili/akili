@@ -390,7 +390,7 @@ export interface Schedule extends Base {
   created_by: string
 }
 
-export type ForgeKind = 'gitea' | 'github'
+export type ForgeKind = 'gitea' | 'github' | 'gitlab'
 export type IntegrationKind = ForgeKind | 'miabi' | 'posta'
 export type ForgeAuth = 'token' | 'github_app'
 
@@ -416,6 +416,10 @@ export interface Integration extends Base {
   ca_cert?: string
   /** Miabi: the integration tool calls use when they name none. */
   default?: boolean
+  /** GitLab: personal, project or group, read on Test. */
+  token_kind?: string
+  /** GitLab: when the token stops working. */
+  token_expires_at?: ISODate
 }
 
 /** A Miabi workspace an integration's key can see; agents use only the enabled ones. */
