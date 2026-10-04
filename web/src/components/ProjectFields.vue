@@ -68,7 +68,7 @@ const errors = computed(() => (props.showErrors ? projectFormErrors(form.value) 
 
     <div class="field span-all">
       <label :for="`${p}-img`">Sandbox image <span class="opt">(optional)</span></label>
-      <input :id="`${p}-img`" v-model="form.sandbox_image" class="input mono" :class="{ invalid: errors.sandbox }" maxlength="200" :placeholder="sandboxPlaceholder || 'golang:1.26'" />
+      <input :id="`${p}-img`" v-model="form.sandbox_image" class="input mono" :class="{ invalid: errors.sandbox }" maxlength="200" :placeholder="sandboxPlaceholder || 'golang:1.27'" />
       <span v-if="errors.sandbox" class="error-msg"><Icon name="alert" />{{ errors.sandbox }}</span>
       <span v-else class="hint"><Icon name="box" :size="12" style="vertical-align: -1px" /> Builds and tests run in a disposable container from this image (the <code>sandbox_exec</code> tool), with the workspace mounted and no host access. Empty disables the sandbox.</span>
     </div>

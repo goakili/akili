@@ -1,6 +1,6 @@
 module github.com/goakili/akili/server
 
-go 1.26.0
+go 1.27.1
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.76.0

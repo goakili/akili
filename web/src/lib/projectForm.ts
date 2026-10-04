@@ -48,7 +48,7 @@ export function projectFormErrors(f: ProjectForm): Record<string, string> {
   const e: Record<string, string> = {}
   if (f.target === 'agent' && !f.agent_id) e.agent = 'Pick the agent, or choose "Any agent".'
   if (f.target === 'labels' && !splitList(f.selector).length) e.selector = 'Enter at least one label.'
-  if (f.sandbox_image.trim() && /\s/.test(f.sandbox_image.trim())) e.sandbox = 'An image reference has no spaces, e.g. golang:1.26.'
+  if (f.sandbox_image.trim() && /\s/.test(f.sandbox_image.trim())) e.sandbox = 'An image reference has no spaces, e.g. golang:1.27.'
   if (/\s/.test(f.trigger_label.trim())) e.trigger = 'Use a single label without spaces.'
   return e
 }
