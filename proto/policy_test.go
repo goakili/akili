@@ -107,6 +107,7 @@ func TestEveryToolHasADenyCase(t *testing.T) {
 		ToolMiabiRestart:      {"read-only", MiabiInput{Workspace: "prod", App: "api"}},
 		ToolLessonPropose:     {"developer", LessonInput{Lesson: "too short"}},
 		ToolPlanPhaseUpdate:   {"read-only", PlanPhaseInput{Plan: "pln_1", Phase: "phs_1", Status: "done"}},
+		ToolPlanPropose:       {"read-only", PlanProposeInput{Title: "Rewrite the API", Phases: make([]PlanProposalPhase, MaxProposedPhases+1)}},
 	}
 	for _, spec := range Catalog() {
 		c, ok := cases[spec.Name]

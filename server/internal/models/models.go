@@ -822,7 +822,10 @@ type ProjectPlan struct {
 	Description string `gorm:"type:text" json:"description"`
 	Status      string `gorm:"size:20;index;not null" json:"status"`
 	Position    int    `json:"position"`
-	CreatedBy   string `gorm:"size:40" json:"created_by"`
+	// CreatedBy is a user id, or "agent:<id>" for a plan an agent proposed with plan_propose.
+	CreatedBy string `gorm:"size:40" json:"created_by"`
+	// ProposedSessionID is the session an agent proposed the plan in.
+	ProposedSessionID *string `gorm:"size:40" json:"proposed_session_id,omitempty"`
 }
 
 // PlanPhase is one phase of a project plan.

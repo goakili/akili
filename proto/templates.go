@@ -43,8 +43,9 @@ func PolicyTemplates() []Policy {
 	return []Policy{
 		{
 			Name:    "read-only",
-			Version: 5,
-			Tools:   Rule{Allow: []string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolGitStatus, ToolGitDiff, ToolLessonPropose}},
+			Version: 6,
+			// plan_propose only creates a draft a person must activate, so read-only agents can plan work.
+			Tools:   Rule{Allow: []string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolGitStatus, ToolGitDiff, ToolLessonPropose, ToolPlanPropose}},
 			Paths:   Rule{Allow: []string{"$WORKDIR/**", "/var/log/**", "/etc/**"}, Deny: commonDenyPaths},
 			MaxRisk: RiskLow,
 		},

@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Jonas Kaninda
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package plans holds project plans: work on a project written by people as a description and
-// ordered phases. Tasks are linked to plans and receive them in their goal; agents report progress
-// on phases with plan_phase_update, and can't create, edit or delete plans.
+// Package plans holds project plans: work on a project written as a description and ordered phases.
+// Tasks are linked to plans and receive them in their goal. Agents report progress on phases with
+// plan_phase_update and may propose new plans with plan_propose, which arrive as drafts a person
+// activates; they can't edit, activate or delete plans.
 package plans
 
 import (
@@ -31,6 +32,8 @@ const (
 	maxDoneWhen     = 2000
 	EvPlanUpdated   = "plan.updated"
 	agentUpdaterPfx = "agent:"
+	// MaxProposalsPerSession keeps a looping or manipulated agent from flooding the Plans tab.
+	MaxProposalsPerSession = 5
 )
 
 var (
@@ -272,6 +275,11 @@ func (s *Service) Get(ctx context.Context, org, id string) (*Detail, error) {
 
 // Create stores a plan with its phases.
 func (s *Service) Create(ctx context.Context, org, userID, projectID string, in CreateInput) (*Detail, error) {
+	return s.create(ctx, org, projectID, in, userID, nil)
+}
+
+// create stores a plan by a person (createdBy a user id) or an agent ("agent:<id>", with its session).
+func (s *Service) create(ctx context.Context, org, projectID string, in CreateInput, createdBy string, session *string) (*Detail, error) {
 	in.Title, in.Description = clean(in.Title), clean(in.Description)
 	if !validTitle(in.Title, maxTitle) {
 		return nil, fmt.Errorf("%w: a plan needs a one-line title of 1-%d characters", ErrInvalid, maxTitle)
@@ -295,14 +303,19 @@ func (s *Service) Create(ctx context.Context, org, userID, projectID string, in 
 		return nil, ErrNotFound
 	}
 	p := &models.ProjectPlan{Base: models.Base{ID: models.NewID("pln"), OrganizationID: org}, ProjectID: projectID, Title: in.Title,
-		Description: in.Description, Status: in.Status, CreatedBy: userID}
+		Description: in.Description, Status: in.Status, CreatedBy: createdBy, ProposedSessionID: session}
+	// A proposal's phases are not progress by the agent, so they don't carry its "by agent" marker.
+	phaseBy := createdBy
+	if session != nil {
+		phaseBy = ""
+	}
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(p).Error; err != nil {
 			return err
 		}
 		for i, st := range in.Phases {
 			if err := tx.Create(&models.PlanPhase{Base: models.Base{ID: models.NewID("phs"), OrganizationID: org}, PlanID: p.ID, Position: i,
-				Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Status: models.PhaseTodo, UpdatedBy: userID}).Error; err != nil {
+				Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Status: models.PhaseTodo, UpdatedBy: phaseBy}).Error; err != nil {
 				return err
 			}
 		}
@@ -588,9 +601,58 @@ func GoalSection(links []models.TaskPlan) string {
 	return b.String()
 }
 
-// RunRemote executes plan_phase_update for a task session: only on a plan linked to that task.
-func (s *Service) RunRemote(ctx context.Context, sess *models.ChatSession, _ string, input json.RawMessage) proto.RemoteResult {
-	fail := func(msg string) proto.RemoteResult { return proto.RemoteResult{Output: "error: " + msg, IsError: true} }
+// RunRemote executes plan_phase_update and plan_propose for a session.
+func (s *Service) RunRemote(ctx context.Context, sess *models.ChatSession, tool string, input json.RawMessage) proto.RemoteResult {
+	if tool == proto.ToolPlanPropose {
+		return s.propose(ctx, sess, input)
+	}
+	return s.phaseUpdate(ctx, sess, input)
+}
+
+func fail(msg string) proto.RemoteResult { return proto.RemoteResult{Output: "error: " + msg, IsError: true} }
+
+// propose stores an agent's plan for the session's project as a draft. Drafts can't be linked to
+// tasks, so nothing works on it until a person reviews and activates it.
+func (s *Service) propose(ctx context.Context, sess *models.ChatSession, input json.RawMessage) proto.RemoteResult {
+	var in proto.PlanProposeInput
+	if err := json.Unmarshal(input, &in); err != nil {
+		return fail("invalid input")
+	}
+	if sess.ProjectID == nil {
+		return fail("plan_propose works only in a session on a project")
+	}
+	var n int64
+	s.db.WithContext(ctx).Model(&models.ProjectPlan{}).Where("organization_id = ? AND proposed_session_id = ?", sess.OrganizationID, sess.ID).Count(&n)
+	if n >= MaxProposalsPerSession {
+		return fail(fmt.Sprintf("this session already proposed %d plans; ask a person to review them first", MaxProposalsPerSession))
+	}
+	title := clean(in.Title)
+	var existing models.ProjectPlan
+	if s.db.WithContext(ctx).Where("organization_id = ? AND project_id = ? AND status = ? AND created_by = ? AND lower(title) = lower(?)",
+		sess.OrganizationID, *sess.ProjectID, models.PlanDraft, agentUpdaterPfx+sess.AgentID, title).First(&existing).Error == nil {
+		return proto.RemoteResult{Output: fmt.Sprintf("A draft plan with this title is already waiting for review (%s). Ask a person to edit it rather than proposing it again.", existing.ID)}
+	}
+	phases := make([]PhaseInput, len(in.Phases))
+	for i, p := range in.Phases {
+		phases[i] = PhaseInput{Title: p.Title, Detail: p.Detail, DoneWhen: p.DoneWhen}
+	}
+	d, err := s.create(ctx, sess.OrganizationID, *sess.ProjectID, CreateInput{Title: title, Description: in.Description, Status: models.PlanDraft, Phases: phases},
+		agentUpdaterPfx+sess.AgentID, &sess.ID)
+	if err != nil {
+		return fail(strings.TrimPrefix(err.Error(), ErrInvalid.Error()+": "))
+	}
+	meta := map[string]any{"project_id": *sess.ProjectID, "session_id": sess.ID, "phases": len(phases)}
+	if sess.TaskID != nil {
+		meta["task_id"] = *sess.TaskID
+	}
+	s.audit.Best(ctx, audit.Entry{OrganizationID: sess.OrganizationID, ActorType: audit.ActorAgent, ActorID: sess.AgentID, Action: "plan.propose",
+		TargetType: "plan", TargetID: d.Plan.ID, Metadata: meta})
+	return proto.RemoteResult{Output: fmt.Sprintf("Proposed plan %q (%s) with %d phases. It is a draft: a person reviews it in the project's Plans tab, "+
+		"and no task works on it until they activate it.", d.Plan.Title, d.Plan.ID, len(phases))}
+}
+
+// phaseUpdate executes plan_phase_update for a task session: only on a plan linked to that task.
+func (s *Service) phaseUpdate(ctx context.Context, sess *models.ChatSession, input json.RawMessage) proto.RemoteResult {
 	var in proto.PlanPhaseInput
 	if err := json.Unmarshal(input, &in); err != nil {
 		return fail("invalid input")
