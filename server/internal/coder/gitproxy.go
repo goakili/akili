@@ -146,6 +146,23 @@ func (s *Service) GitProxy(agentID string) http.Handler {
 			http.Error(w, "forge unreachable: "+err.Error(), http.StatusBadGateway)
 			return
 		}
+		// The forge itself refusing a push means the integration's credentials can't write. Say so,
+		// or the agent guesses at the cause and tries again from elsewhere.
+		if service == "git-receive-pack" && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
+			said, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+			resp.Body.Close()
+			msg := forgeWriteRefusal(forgeLabel(proj.Forge), s.integrationName(ctx, proj), proj.FullName(), resp.StatusCode, string(said))
+			meta["project_id"], meta["repo"], meta["refused_by"] = proj.ID, proj.FullName(), "forge"
+			if gitPath == "info/refs" {
+				s.recordRefusal(ctx, sess, agentID, meta, msg)
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = io.WriteString(w, "akili: "+msg+"\n")
+				return
+			}
+			s.refusePush(w, r, sess, agentID, meta, errors.New(msg))
+			return
+		}
 		defer resp.Body.Close()
 		for _, h := range []string{"Content-Type", "Cache-Control", "Expires", "Pragma", "Content-Encoding"} {
 			if v := resp.Header.Get(h); v != "" {
@@ -174,11 +191,60 @@ func (s *Service) agentIdentity(ctx context.Context, org, agentID string) (gitid
 }
 
 func (s *Service) refusePush(w http.ResponseWriter, r *http.Request, sess *models.ChatSession, agentID string, meta map[string]any, err error) {
-	meta["refused"] = err.Error()
-	s.audit.Best(r.Context(), audit.Entry{OrganizationID: sess.OrganizationID, ActorType: audit.ActorAgent, ActorID: agentID,
-		Action: "git.push_refused", TargetType: "session", TargetID: sess.ID, Metadata: meta})
-	logger.Warn("git push refused", "agent", agentID, "session", sess.ID, "refs", meta["refs"], "reason", err)
+	s.recordRefusal(r.Context(), sess, agentID, meta, err.Error())
 	writeReceivePackError(w, err.Error())
+}
+
+func (s *Service) recordRefusal(ctx context.Context, sess *models.ChatSession, agentID string, meta map[string]any, reason string) {
+	meta["refused"] = reason
+	s.audit.Best(ctx, audit.Entry{OrganizationID: sess.OrganizationID, ActorType: audit.ActorAgent, ActorID: agentID,
+		Action: "git.push_refused", TargetType: "session", TargetID: sess.ID, Metadata: meta})
+	logger.Warn("git push refused", "agent", agentID, "session", sess.ID, "refs", meta["refs"], "reason", reason)
+}
+
+func (s *Service) integrationName(ctx context.Context, p *models.Project) string {
+	var it models.Integration
+	if s.db.WithContext(ctx).Select("name").First(&it, "id = ? AND organization_id = ?", p.IntegrationID, p.OrganizationID).Error != nil {
+		return ""
+	}
+	return it.Name
+}
+
+func forgeLabel(kind string) string {
+	switch kind {
+	case models.ForgeGitHub:
+		return "GitHub"
+	case models.ForgeGitLab:
+		return "GitLab"
+	}
+	return "Gitea"
+}
+
+// forgeWriteRefusal explains a push the forge refused: an integration permission to fix, which no
+// retry or other session can work around.
+func forgeWriteRefusal(forge, integration, repo string, status int, said string) string {
+	who := "the integration"
+	if integration != "" {
+		who = "the " + strconv.Quote(integration) + " integration"
+	}
+	msg := fmt.Sprintf("%s refused to let %s push to %s (HTTP %d", forge, who, repo, status)
+	if said = strings.TrimRight(strings.Join(strings.Fields(said), " "), "."); said != "" {
+		if len(said) > 200 {
+			said = said[:200]
+		}
+		msg += ": " + said
+	}
+	msg += "). This is the forge's own permission check, not Akili's push guard, and retrying or pushing from another session won't help. " +
+		"An admin must give the integration write access to the repository: "
+	switch forge {
+	case "GitHub":
+		msg += "a fine-grained token needs this repository with Contents and Pull requests set to read and write; a GitHub App must be installed on the repository with those permissions."
+	case "GitLab":
+		msg += "the token needs at least the Developer role on the project, and the api scope."
+	default:
+		msg += "the token's user needs write access to the repository, and the token the repository scope."
+	}
+	return msg
 }
 
 // sessionRepo checks the session and returns its project and forge client.

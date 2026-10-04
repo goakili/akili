@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -34,6 +35,9 @@ type Project struct {
 // PrepareProject creates or refreshes the session's worktree. It only ever appends to the mirror
 // (fetches); a worktree left by an earlier attempt of the same task is reused as is.
 func PrepareProject(ctx context.Context, workdir string, spec proto.ProjectSpec, remote string) (*Project, error) {
+	// Sessions on one project share the mirror; git refuses concurrent writes to its config.
+	unlock := lockMirror(proto.ProjectMirror(workdir, spec.Slug))
+	defer unlock()
 	p := &Project{Spec: spec, Dir: proto.ProjectDir(workdir, spec.Slug, spec.Branch), Mirror: proto.ProjectMirror(workdir, spec.Slug),
 		Cache: filepath.Join(workdir, "projects", spec.Slug, ".cache"), Remote: remote}
 	if err := os.MkdirAll(filepath.Dir(p.Mirror), 0o750); err != nil {
@@ -44,8 +48,10 @@ func PrepareProject(ctx context.Context, workdir string, spec proto.ProjectSpec,
 			return nil, err
 		}
 	}
+	if err := p.perWorktreeConfig(ctx); err != nil {
+		return nil, err
+	}
 	steps := [][]string{
-		{"config", "remote.origin.url", remote},
 		// Remote-tracking refs, so a fetch never collides with a branch checked out in a worktree.
 		{"config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"},
 		{"config", "user.name", spec.GitName},
@@ -53,7 +59,7 @@ func PrepareProject(ctx context.Context, workdir string, spec proto.ProjectSpec,
 		{"config", "core.hooksPath", "/dev/null"},
 		{"config", "submodule.recurse", "false"},
 		{"config", "protocol.file.allow", "never"},
-		{"fetch", "--prune", "origin"},
+		{"fetch", "--prune", remote, "+refs/heads/*:refs/remotes/origin/*"},
 	}
 	for _, args := range steps {
 		if _, err := p.git(ctx, p.Mirror, args...); err != nil {
@@ -61,7 +67,8 @@ func PrepareProject(ctx context.Context, workdir string, spec proto.ProjectSpec,
 		}
 	}
 	if _, err := os.Stat(filepath.Join(p.Dir, ".git")); err == nil {
-		return p, nil // resumed session or retried task: keep the work in progress
+		// Resumed session or retried task: keep the work in progress, push as this session.
+		return p, p.setWorktreeRemote(ctx)
 	}
 	start := ""
 	switch {
@@ -79,7 +86,52 @@ func PrepareProject(ctx context.Context, workdir string, spec proto.ProjectSpec,
 	if _, err := p.git(ctx, p.Mirror, args...); err != nil {
 		return nil, err
 	}
-	return p, nil
+	return p, p.setWorktreeRemote(ctx)
+}
+
+var mirrorLocks sync.Map // mirror path → *sync.Mutex
+
+func lockMirror(path string) func() {
+	m, _ := mirrorLocks.LoadOrStore(path, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
+// perWorktreeConfig lets each worktree carry its own origin URL. The URL names the session the
+// proxy authorizes, and every session on a project shares the mirror: with one URL in the shared
+// config, the last session to open would push for all of them, and the proxy would refuse the
+// others' pushes as another session's. Older mirrors are converted in place.
+func (p *Project) perWorktreeConfig(ctx context.Context) error {
+	if out, _ := p.git(ctx, p.Mirror, "config", "--get", "extensions.worktreeConfig"); strings.TrimSpace(out) != "true" {
+		for _, args := range [][]string{
+			{"config", "core.repositoryformatversion", "1"},
+			{"config", "extensions.worktreeConfig", "true"},
+			// With worktreeConfig, a shared core.bare=true would make every linked worktree bare too.
+			{"config", "--unset", "core.bare"},
+			{"config", "--worktree", "core.bare", "true"},
+		} {
+			if _, err := p.git(ctx, p.Mirror, args...); err != nil && !notSet(err) {
+				return err
+			}
+		}
+	}
+	// A URL left in the shared config would add to each worktree's own, and git pushes to every URL.
+	if _, err := p.git(ctx, p.Mirror, "config", "--unset-all", "remote.origin.url"); err != nil && !notSet(err) {
+		return err
+	}
+	return nil
+}
+
+func (p *Project) setWorktreeRemote(ctx context.Context) error {
+	_, err := p.git(ctx, p.Dir, "config", "--worktree", "remote.origin.url", p.Remote)
+	return err
+}
+
+// notSet reports git config's exit status 5: the key to unset is not set.
+func notSet(err error) bool {
+	var ee *exec.ExitError
+	return errors.As(err, &ee) && ee.ExitCode() == 5
 }
 
 func (p *Project) refExists(ctx context.Context, ref string) bool {
@@ -107,7 +159,7 @@ func (p *Project) git(ctx context.Context, dir string, args ...string) (string, 
 	cmd.Stdout, cmd.Stderr = &out, &out
 	err := cmd.Run()
 	if err != nil {
-		return out.String(), fmt.Errorf("git %s: %v: %s", args[len(args)-min(len(args), 3)], err, strings.TrimSpace(out.String()))
+		return out.String(), fmt.Errorf("git %s: %w: %s", args[len(args)-min(len(args), 3)], err, strings.TrimSpace(out.String()))
 	}
 	return out.String(), nil
 }
