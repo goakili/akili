@@ -267,7 +267,7 @@ var htmlTmpl = template.Must(template.New("mail").Parse(`<!doctype html>
 <table role="presentation" style="border-collapse:collapse;font-size:14px;margin-bottom:20px">
 {{range .Rows}}<tr><td style="padding:4px 16px 4px 0;color:#71717a">{{index . 0}}</td><td style="padding:4px 0">{{index . 1}}</td></tr>
 {{end}}</table>
-<a href="{{.URL}}" style="display:inline-block;background:#c2410c;color:#fff;text-decoration:none;padding:9px 16px;border-radius:6px;font-size:14px">{{.Action}}</a>
+<a href="{{.URL}}" style="display:inline-block;background:#4d7c0f;color:#fff;text-decoration:none;padding:9px 16px;border-radius:6px;font-size:14px">{{.Action}}</a>
 <p style="margin:20px 0 0;font-size:12px;color:#71717a">Details stay in Akili; open the link to see them. Change which email you get in your notification settings.</p>
 </td></tr></table>
 </body></html>`))

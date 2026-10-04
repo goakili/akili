@@ -524,6 +524,7 @@ async function remove() {
 }
 .plan-check {
   margin-top: 3px;
+  accent-color: var(--primary-600);
 }
 .plan-phase-body {
   flex: 1;
