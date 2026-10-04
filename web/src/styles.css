@@ -1,8 +1,4 @@
-/* Akili console. Miabi design tokens with Miabi's Lime accent as primary; light / dark via
-   [data-theme] on <html>. */
-
 :root {
-  /* primary: Miabi Lime, 500+ one step darker than Tailwind so white text on 600 reads */
   --primary-50: #f7fee7;
   --primary-100: #ecfccb;
   --primary-200: #d9f99d;
