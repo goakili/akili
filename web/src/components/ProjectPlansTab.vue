@@ -439,7 +439,7 @@ async function remove() {
   padding: 0;
 }
 .plan-list > li + li {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-primary);
 }
 .plan-row {
   display: flex;
@@ -456,7 +456,7 @@ async function remove() {
 }
 .plan-row:hover,
 .plan-row:focus-visible {
-  background: var(--surface-2, rgba(127, 127, 127, 0.06));
+  background: var(--bg-hover);
 }
 .plan-row-main {
   display: flex;
@@ -483,7 +483,7 @@ async function remove() {
   width: 160px;
   height: 6px;
   border-radius: 3px;
-  background: var(--border);
+  background: var(--border-input);
   overflow: hidden;
 }
 .plan-progress.compact .plan-bar {
@@ -492,7 +492,7 @@ async function remove() {
 .plan-bar > span {
   display: block;
   height: 100%;
-  background: var(--ok, #2e9e5b);
+  background: var(--success-500);
   transition: width 0.2s;
 }
 .plan-filters {
@@ -505,7 +505,7 @@ async function remove() {
   padding: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-primary);
   border-radius: 8px;
 }
 .plan-phase {
@@ -515,11 +515,11 @@ async function remove() {
   padding: 10px 12px;
 }
 .plan-phase + .plan-phase {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-primary);
 }
 .plan-phase.done .plan-phase-title,
 .plan-phase.skipped .plan-phase-title {
-  color: var(--text-3);
+  color: var(--text-tertiary);
   text-decoration: line-through;
 }
 .plan-check {
@@ -539,7 +539,7 @@ async function remove() {
   display: flex;
   gap: 5px;
   align-items: baseline;
-  color: var(--text-2);
+  color: var(--text-secondary);
 }
 .plan-phase-tasks {
   list-style: none;
@@ -560,7 +560,7 @@ async function remove() {
   flex: none;
 }
 .plan-phase-note {
-  color: var(--text-2);
+  color: var(--text-secondary);
 }
 .plan-skip {
   gap: 6px;

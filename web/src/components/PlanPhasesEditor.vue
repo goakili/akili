@@ -88,7 +88,7 @@ function remove(i: number) {
   padding-top: 8px;
   text-align: right;
   font-variant-numeric: tabular-nums;
-  color: var(--text-3);
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 .phases-edit-fields {

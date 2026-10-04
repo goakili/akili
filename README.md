@@ -440,6 +440,7 @@ Settings come from environment variables. On start the server also loads `./.env
 | <img src="docs/screenshots/agents.png" alt="Agents"> **Agents**: status, host and policy of every agent | <img src="docs/screenshots/agent-detail.png" alt="Agent detail"> **Agent**: host facts, guardrails and lifecycle |
 | <img src="docs/screenshots/tasks.png" alt="Tasks"> **Tasks**: work in flight and its outcome | <img src="docs/screenshots/change.png" alt="Change plan"> **Change plan**: why, what runs, and its approval |
 | <img src="docs/screenshots/policies.png" alt="Policies"> **Policies**: what each agent may do | <img src="docs/screenshots/audit.png" alt="Audit log"> **Audit log**: hash-chained, every decision recorded |
+| <img src="docs/screenshots/plan.png" alt="Plan"> **Plan**: phases, when each is done, and what agents finished | <img src="docs/screenshots/project-tasks.png" alt="Project tasks"> **Project tasks**: drafts, linked plans and pull requests |
 
 ## License
 

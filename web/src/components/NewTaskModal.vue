@@ -43,7 +43,7 @@ async function create(draft = false) {
   creating.value = true
   try {
     const t = await api.createTask({ ...taskInput(form.value), ...(draft ? { draft: true } : {}) })
-    toast.success(draft ? `Draft saved: ${t.title || 'untitled'}. Start it from the task list.` : `Task queued: ${t.title || 'untitled'}`)
+    toast.success(draft ? `Draft saved: ${t.title || 'untitled'}. Start it when you are ready.` : `Task queued: ${t.title || 'untitled'}`)
     emit('created', t)
   } catch {
     /* toasted */
