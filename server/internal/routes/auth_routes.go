@@ -6,6 +6,7 @@ package routes
 import (
 	"net/http"
 
+	"github.com/goakili/akili/server/internal/auth"
 	"github.com/goakili/akili/server/internal/dto"
 	"github.com/goakili/akili/server/internal/handlers"
 	"github.com/goakili/akili/server/internal/models"
@@ -22,6 +23,15 @@ func (r *Router) authRoutes() []okapi.RouteDefinition {
 			Handler:  okapi.H(r.h.Login),
 			Summary:  "Log in",
 			Request:  &handlers.LoginRequest{},
+			Response: &dto.Response[handlers.LoginResponse]{},
+		},
+		{
+			Method:   http.MethodPost,
+			Path:     "/login/2fa",
+			Group:    g,
+			Handler:  okapi.H(r.h.LoginMFA),
+			Summary:  "Finish a password sign-in with a TOTP or recovery code",
+			Request:  &handlers.LoginMFARequest{},
 			Response: &dto.Response[handlers.LoginResponse]{},
 		},
 		{
@@ -49,6 +59,54 @@ func (r *Router) authRoutes() []okapi.RouteDefinition {
 			Handler:     okapi.H(r.h.ChangePassword),
 			Summary:     "Change own password",
 			Request:     &handlers.ChangePasswordRequest{},
+		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/2fa",
+			Group:       g,
+			Middlewares: r.guard(models.RoleViewer),
+			Handler:     r.h.GetTwoFactor,
+			Summary:     "Own two-factor authentication status",
+			Response:    &dto.Response[handlers.TwoFactorStatus]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/2fa/setup",
+			Group:       g,
+			Middlewares: r.guard(models.RoleViewer),
+			Handler:     okapi.H(r.h.SetupTwoFactor),
+			Summary:     "Start enrolling an authenticator app (needs the password)",
+			Request:     &handlers.TwoFactorSetupRequest{},
+			Response:    &dto.Response[auth.TOTPSetup]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/2fa/enable",
+			Group:       g,
+			Middlewares: r.guard(models.RoleViewer),
+			Handler:     okapi.H(r.h.EnableTwoFactor),
+			Summary:     "Confirm the authenticator with a code; returns recovery codes once",
+			Request:     &handlers.TwoFactorCodeRequest{},
+			Response:    &dto.Response[handlers.RecoveryCodes]{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/2fa/disable",
+			Group:       g,
+			Middlewares: r.guard(models.RoleViewer),
+			Handler:     okapi.H(r.h.DisableTwoFactor),
+			Summary:     "Turn off two-factor authentication (needs a code or recovery code)",
+			Request:     &handlers.TwoFactorCodeRequest{},
+		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/2fa/recovery-codes",
+			Group:       g,
+			Middlewares: r.guard(models.RoleViewer),
+			Handler:     okapi.H(r.h.RegenerateRecoveryCodes),
+			Summary:     "Replace the recovery codes (needs a code)",
+			Request:     &handlers.TwoFactorCodeRequest{},
+			Response:    &dto.Response[handlers.RecoveryCodes]{},
 		},
 		{
 			Method:      http.MethodGet,

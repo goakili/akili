@@ -6,6 +6,7 @@ import { api, type GitIdentitySettings, type NotificationSettings } from '../../
 import { useAuth } from '../../stores/auth'
 import { useToast } from '../../stores/toast'
 import { fmtDate } from '../../lib/format'
+import TwoFactorCard from './TwoFactorCard.vue'
 
 const auth = useAuth()
 const toast = useToast()
@@ -100,6 +101,7 @@ async function submit() {
         </dl>
       </div>
     </section>
+    <TwoFactorCard />
     <section class="card">
       <div class="card-head"><h2>Email notifications</h2></div>
       <div v-if="notif" class="card-body stack">

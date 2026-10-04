@@ -21,6 +21,11 @@ function account() {
   router.push({ path: '/settings', query: { tab: 'account' } })
 }
 
+function about() {
+  close()
+  router.push({ name: 'about' })
+}
+
 async function logout() {
   close()
   await auth.logout().catch(() => {})
@@ -49,6 +54,7 @@ async function logout() {
       </div>
       <div class="menu-sep" />
       <button type="button" role="menuitem" class="menu-item" @click="account"><Icon name="user" />Account</button>
+      <button type="button" role="menuitem" class="menu-item" @click="about"><Icon name="info" />About</button>
       <button type="button" role="menuitem" class="menu-item danger" @click="logout"><Icon name="logout" />Log out</button>
     </div>
   </div>

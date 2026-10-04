@@ -32,8 +32,16 @@ export const useAuth = defineStore('auth', () => {
     }
   }
 
-  async function login(email: string, password: string) {
-    await api.login(email, password)
+  /** Signs in with a password; returns a challenge token when a second factor is still needed. */
+  async function login(email: string, password: string): Promise<string | null> {
+    const res = await api.login(email, password)
+    if (res.mfa_required && res.mfa_token) return res.mfa_token
+    await load()
+    return null
+  }
+
+  async function loginMFA(mfaToken: string, code: string) {
+    await api.loginMFA(mfaToken, code)
     await load()
   }
 
@@ -49,5 +57,5 @@ export const useAuth = defineStore('auth', () => {
     me.value = null
   }
 
-  return { me, loaded, user, role, isOperator, isAdmin, can, load, login, logout, clear }
+  return { me, loaded, user, role, isOperator, isAdmin, can, load, login, loginMFA, logout, clear }
 })

@@ -319,6 +319,40 @@ step "Usage and overview"
 [ "$(api GET /overview | json "d['data']['tasks']['succeeded_24h']")" -ge 3 ] || fail "overview counts"
 api GET /usage | json "d['data'][0]['calls']" >/dev/null || fail "usage"
 
+step "Two-factor sign-in: TOTP enrolment, single-use codes, recovery codes, admin reset"
+totp() { python3 -c "import hmac,hashlib,base64,struct,time,sys; k=base64.b32decode(sys.argv[1]+'='*(-len(sys.argv[1])%8)); c=int(time.time())//30+int(sys.argv[2]); h=hmac.new(k,struct.pack('>Q',c),hashlib.sha1).digest(); o=h[-1]&15; print('%06d'%((struct.unpack('>I',h[o:o+4])[0]&0x7fffffff)%1000000))" "$1" "${2:-0}"; }
+MFA_PASS=mfa-e2e-password-123
+MFA_USER=$(api POST /users "{\"email\":\"mfa@e2e.local\",\"role\":\"viewer\",\"password\":\"$MFA_PASS\"}" | json "d['data']['id']")
+MJAR="$WORK/mfa.jar"
+mapi() { JAR="$MJAR" api "$@"; }
+mlogin() { mapi POST /auth/login "{\"email\":\"mfa@e2e.local\",\"password\":\"$MFA_PASS\"}"; }
+mlogin | json "d['data']['mfa_required'] if 'mfa_required' in d['data'] else False" | grep >/dev/null False || fail "a user without 2FA got a challenge"
+mapi POST /auth/2fa/setup '{"password":"wrong-password-xx"}' | grep >/dev/null '"success":false' || fail "2FA setup accepted a wrong password"
+SETUP=$(mapi POST /auth/2fa/setup "{\"password\":\"$MFA_PASS\"}")
+SECRET=$(echo "$SETUP" | json "d['data']['secret']")
+echo "$SETUP" | json "d['data']['qr_code']" | grep >/dev/null '^data:image/png;base64,' || fail "no QR code in the setup"
+mapi POST /auth/2fa/enable '{"code":"000000"}' | grep >/dev/null '"success":false' || fail "a wrong code enabled 2FA"
+USED=$(totp "$SECRET")
+RECOVERY=$(mapi POST /auth/2fa/enable "{\"code\":\"$USED\"}" | json "d['data']['recovery_codes'][0]")
+[ -n "$RECOVERY" ] || fail "no recovery codes"
+[ "$(mapi GET /auth/2fa | json "d['data']['recovery_codes_left']")" = "10" ] || fail "2FA status"
+CH=$(mlogin)
+[ "$(echo "$CH" | json "d['data']['mfa_required']")" = "True" ] && ! echo "$CH" | grep -q '"token"' || fail "the password alone started a session: $CH"
+MTOK=$(echo "$CH" | json "d['data']['mfa_token']")
+mapi POST /auth/login/2fa "{\"mfa_token\":\"$MTOK\",\"code\":\"$USED\"}" | grep >/dev/null '"success":false' || fail "a TOTP code was accepted twice"
+mapi POST /auth/login/2fa "{\"mfa_token\":\"$MTOK\",\"code\":\"$(totp "$SECRET" 1)\"}" | json "d['data']['user']['email']" | grep >/dev/null mfa@e2e.local || fail "a fresh TOTP code was refused"
+mapi POST /auth/login/2fa "{\"mfa_token\":\"$MTOK\",\"code\":\"$(totp "$SECRET" 1)\"}" | grep >/dev/null '"success":false' || fail "a challenge was used twice"
+MTOK=$(mlogin | json "d['data']['mfa_token']")
+mapi POST /auth/login/2fa "{\"mfa_token\":\"$MTOK\",\"code\":\"$RECOVERY\"}" | grep >/dev/null '"success":true' || fail "the recovery code was refused"
+MTOK=$(mlogin | json "d['data']['mfa_token']")
+mapi POST /auth/login/2fa "{\"mfa_token\":\"$MTOK\",\"code\":\"$RECOVERY\"}" | grep >/dev/null '"success":false' || fail "a recovery code was accepted twice"
+[ "$(mapi GET /auth/2fa | json "d['data']['recovery_codes_left']")" = "9" ] || fail "the recovery code was not consumed"
+api GET /users | json "[u['totp_enabled'] for u in d['data'] if u['email']=='mfa@e2e.local'][0]" | grep >/dev/null True || fail "users list does not show 2FA"
+api DELETE "/users/$MFA_USER/2fa" | grep >/dev/null '"success":true' || fail "admin 2FA reset"
+mlogin | grep >/dev/null '"mfa_required":true' && fail "2FA still required after the reset"
+api GET '/audit?action=user.2fa_reset' | grep >/dev/null "$MFA_USER" || fail "2FA reset not audited"
+api GET '/audit?action=auth.mfa_failed' | grep >/dev/null "$MFA_USER" || fail "failed codes not audited"
+
 step "Audit chain verifies"
 v=$(api GET /audit/verify)
 [ "$(echo "$v" | json "d['data']['valid']")" = "True" ] || fail "audit chain invalid: $v"

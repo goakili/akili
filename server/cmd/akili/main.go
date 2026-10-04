@@ -139,7 +139,7 @@ func runServer(cli *okapicli.CLI) error {
 	tunnels := fleet.NewManager(db, b, auditLog, hub, gw)
 	elector := leader.New(rdb, "control-plane")
 	taskSvc := tasks.New(db, b, auditLog, hub, notifier, elector)
-	authSvc := auth.New(db, rdb, cfg.JWTSecret, cfg.SessionTTL)
+	authSvc := auth.New(db, rdb, box, cfg.JWTSecret, cfg.SessionTTL)
 	var sso *auth.OIDC
 	if cfg.OIDC.Enabled() {
 		sso = auth.NewOIDC(cfg.OIDC, cfg.PublicURL, db, rdb, authSvc)

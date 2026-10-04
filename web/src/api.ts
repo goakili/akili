@@ -57,6 +57,7 @@ export interface User extends Base {
   role: Role
   active: boolean
   last_login_at: ISODate | null
+  totp_enabled: boolean
 }
 
 export interface APIKey extends Base {
@@ -538,10 +539,25 @@ export interface TestResult {
   latency_ms: number
 }
 
+/** Either a session, or (mfa_required) a challenge to finish with /auth/login/2fa. */
 export interface LoginResponse {
-  user: User
-  token: string
+  user?: User
+  token?: string
   expires_at: ISODate
+  mfa_required?: boolean
+  mfa_token?: string
+}
+
+export interface TwoFactorStatus {
+  enabled: boolean
+  recovery_codes_left: number
+}
+
+export interface TOTPSetup {
+  secret: string
+  otpauth_uri: string
+  /** PNG data URL of otpauth_uri. */
+  qr_code: string
 }
 
 export interface MeResponse {
@@ -1258,6 +1274,8 @@ export const api = {
   // auth
   login: (email: string, password: string) =>
     post<LoginResponse>('/auth/login', { email, password }, { noAuthRedirect: true, quiet: true }),
+  loginMFA: (mfa_token: string, code: string) =>
+    post<LoginResponse>('/auth/login/2fa', { mfa_token, code }, { noAuthRedirect: true, quiet: true }),
   logout: () => post<MessageResponse>('/auth/logout', {}, { noAuthRedirect: true, quiet: true }),
   me: (o?: RequestOptions) => get<MeResponse>('/auth/me', o),
   authProviders: () => get<AuthProviders>('/auth/providers', { noAuthRedirect: true, quiet: true }),
@@ -1268,11 +1286,17 @@ export const api = {
   gitIdentity: () => get<GitIdentitySettings>('/auth/git-identity'),
   updateGitIdentity: (b: Partial<GitIdentitySettings>) => put<GitIdentitySettings>('/auth/git-identity', b),
   testNotification: () => post<MessageResponse>('/auth/notifications/test', {}),
+  twoFactor: () => get<TwoFactorStatus>('/auth/2fa'),
+  setupTwoFactor: (password: string) => post<TOTPSetup>('/auth/2fa/setup', { password }, { quiet: true }),
+  enableTwoFactor: (code: string) => post<{ recovery_codes: string[] }>('/auth/2fa/enable', { code }, { quiet: true }),
+  disableTwoFactor: (code: string) => post<MessageResponse>('/auth/2fa/disable', { code }, { quiet: true }),
+  regenerateRecoveryCodes: (code: string) => post<{ recovery_codes: string[] }>('/auth/2fa/recovery-codes', { code }, { quiet: true }),
 
   // users & keys
   listUsers: () => get<User[] | null>('/users'),
   createUser: (b: UserInput) => post<User>('/users', b),
   updateUser: (id: string, b: UserInput) => patch<User>(`/users/${enc(id)}`, b),
+  resetUserTwoFactor: (id: string) => del<MessageResponse>(`/users/${enc(id)}/2fa`),
   listAPIKeys: () => get<APIKey[] | null>('/api-keys'),
   createAPIKey: (b: { name: string; scopes: string[]; expires_in_days: number }) => post<APIKeyCreated>('/api-keys', b),
   revokeAPIKey: (id: string) => del<MessageResponse>(`/api-keys/${enc(id)}`),
