@@ -305,7 +305,7 @@ type Project struct {
 	WebURL        string   `gorm:"size:500" json:"web_url"`
 	AgentID       *string  `gorm:"size:40" json:"agent_id"` // preferred agent for its tasks
 	Selector      []string `gorm:"type:jsonb;serializer:json" json:"selector"`
-	// SandboxImage enables sandbox_exec (tests run in a disposable container), e.g. golang:1.26.
+	// SandboxImage enables sandbox_exec (tests run in a disposable container), e.g. golang:1.27.
 	SandboxImage string `gorm:"size:200" json:"sandbox_image"`
 	// Instructions are project conventions added to every session's system prompt.
 	Instructions string `gorm:"type:text" json:"instructions"`

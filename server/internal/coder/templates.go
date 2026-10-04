@@ -19,11 +19,11 @@ var Templates = []Template{
 		ID:           "okapi-service",
 		Name:         "Go service (Okapi)",
 		Description:  "A Go HTTP API on github.com/jkaninda/okapi with route definitions, OpenAPI docs, health checks, tests, a Dockerfile and CI.",
-		SandboxImage: "golang:1.26",
+		SandboxImage: "golang:1.27",
 		Goal: `Scaffold a production-ready Go HTTP service in this repository using github.com/jkaninda/okapi v1.0.0.
 
 Requirements:
-- go.mod with module path matching the repository; Go 1.26.
+- go.mod with module path matching the repository; Go 1.27.
 - cmd/server/main.go starting Okapi with OpenAPI docs (okapi.OpenAPI, Scalar UI), graceful shutdown, config from environment variables (PORT, LOG_LEVEL) with github.com/jkaninda/go-utils (goutils.Env) and logging with github.com/jkaninda/logger.
 - internal/routes: routes declared as data ([]okapi.RouteDefinition) grouped under /api/v1, with Summary, Request and Response types for OpenAPI.
 - internal/handlers: GET /healthz and GET /readyz, plus an example resource (items: list, get, create) backed by an in-memory store, with typed handlers (okapi.H) and validation tags.
