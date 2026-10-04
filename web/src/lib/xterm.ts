@@ -9,9 +9,9 @@ import '@xterm/xterm/css/xterm.css'
 const DARK: ITheme = {
   background: '#0d0d1a',
   foreground: '#e5e7eb',
-  cursor: '#fb923c',
+  cursor: '#51b395',
   cursorAccent: '#0d0d1a',
-  selectionBackground: 'rgba(251, 146, 60, 0.32)',
+  selectionBackground: 'rgba(81, 179, 149, 0.32)',
   black: '#1e1e36',
   red: '#f87171',
   green: '#4ade80',
@@ -34,9 +34,9 @@ const DARK: ITheme = {
 const LIGHT: ITheme = {
   background: '#ffffff',
   foreground: '#111827',
-  cursor: '#c2410c',
+  cursor: '#1b6152',
   cursorAccent: '#ffffff',
-  selectionBackground: 'rgba(234, 88, 12, 0.22)',
+  selectionBackground: 'rgba(32, 122, 99, 0.22)',
   black: '#111827',
   red: '#b91c1c',
   green: '#15803d',
