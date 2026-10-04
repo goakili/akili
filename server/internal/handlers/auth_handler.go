@@ -25,29 +25,81 @@ type LoginRequest struct {
 	} `json:"body"`
 }
 
-// LoginResponse returns the session.
+// LoginResponse returns the session, or a second-factor challenge when MFARequired is set.
 type LoginResponse struct {
-	User      *models.User `json:"user"`
-	Token     string       `json:"token"`
+	User      *models.User `json:"user,omitempty"`
+	Token     string       `json:"token,omitempty"`
 	ExpiresAt time.Time    `json:"expires_at"`
+	// MFARequired means the password was right and MFAToken must be sent with a code to /auth/login/2fa.
+	MFARequired bool   `json:"mfa_required,omitempty"`
+	MFAToken    string `json:"mfa_token,omitempty"`
 }
 
-// Login authenticates an operator and sets the session cookie.
+// Login authenticates an operator and sets the session cookie, or asks for the second factor.
 func (h *Handlers) Login(c *okapi.Context, req *LoginRequest) error {
 	ctx := c.Request().Context()
 	ip := c.RealIP()
 	if !auth.RateLimit(ctx, h.Bus.Redis(), "login:"+ip, 10, time.Minute, true) {
 		return c.AbortTooManyRequests("too many login attempts; try again in a minute")
 	}
-	u, token, exp, err := h.Auth.Login(ctx, req.Body.Email, req.Body.Password)
+	u, err := h.Auth.CheckPassword(ctx, req.Body.Email, req.Body.Password)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
 			return c.AbortUnauthorized("invalid email or password")
 		}
 		return c.AbortInternalServerError("login failed", err)
 	}
+	if u.TOTPEnabled {
+		token, exp, err := h.Auth.StartMFA(ctx, u)
+		if err != nil {
+			return c.AbortInternalServerError("login failed", err)
+		}
+		return ok(c, LoginResponse{MFARequired: true, MFAToken: token, ExpiresAt: exp})
+	}
+	return h.startSession(c, u, "password")
+}
+
+// LoginMFARequest completes a password sign-in with a TOTP or recovery code.
+type LoginMFARequest struct {
+	Body struct {
+		MFAToken string `json:"mfa_token" required:"true"`
+		Code     string `json:"code" required:"true"`
+	} `json:"body"`
+}
+
+// LoginMFA checks the second factor of a pending sign-in and sets the session cookie.
+func (h *Handlers) LoginMFA(c *okapi.Context, req *LoginMFARequest) error {
+	ctx := c.Request().Context()
+	ip := c.RealIP()
+	if !auth.RateLimit(ctx, h.Bus.Redis(), "login:"+ip, 10, time.Minute, true) {
+		return c.AbortTooManyRequests("too many login attempts; try again in a minute")
+	}
+	u, method, err := h.Auth.CompleteMFA(ctx, req.Body.MFAToken, req.Body.Code)
+	if err != nil {
+		if u != nil {
+			h.Audit.Best(ctx, audit.Entry{OrganizationID: u.OrganizationID, ActorType: audit.ActorUser, ActorID: u.ID, Action: "auth.mfa_failed", IP: ip,
+				Metadata: map[string]any{"method": method}})
+		}
+		switch {
+		case errors.Is(err, auth.ErrMFALocked):
+			return c.AbortTooManyRequests(err.Error())
+		case errors.Is(err, auth.ErrInvalidCode), errors.Is(err, auth.ErrMFAChallenge):
+			return c.AbortUnauthorized(err.Error())
+		}
+		return c.AbortInternalServerError("login failed", err)
+	}
+	return h.startSession(c, u, method)
+}
+
+func (h *Handlers) startSession(c *okapi.Context, u *models.User, method string) error {
+	ctx := c.Request().Context()
+	token, exp, err := h.Auth.Issue(ctx, u)
+	if err != nil {
+		return c.AbortInternalServerError("login failed", err)
+	}
 	middlewares.SetSessionCookie(c, token, int(time.Until(exp).Seconds()), h.Cfg.CookieSecure)
-	h.Audit.Best(ctx, audit.Entry{OrganizationID: u.OrganizationID, ActorType: audit.ActorUser, ActorID: u.ID, Action: "auth.login", IP: ip})
+	h.Audit.Best(ctx, audit.Entry{OrganizationID: u.OrganizationID, ActorType: audit.ActorUser, ActorID: u.ID, Action: "auth.login", IP: c.RealIP(),
+		Metadata: map[string]any{"method": method}})
 	return ok(c, LoginResponse{User: u, Token: token, ExpiresAt: exp})
 }
 
@@ -93,7 +145,7 @@ func (h *Handlers) ChangePassword(c *okapi.Context, req *ChangePasswordRequest) 
 	if err != nil {
 		return mapErr(c, err)
 	}
-	if _, _, _, err := h.Auth.Login(ctx, u.Email, req.Body.Current); err != nil {
+	if _, err := h.Auth.CheckPassword(ctx, u.Email, req.Body.Current); err != nil {
 		return c.AbortUnauthorized("current password is incorrect")
 	}
 	hash, err := auth.HashPassword(req.Body.New)

@@ -5,6 +5,7 @@ import { onMounted, ref } from 'vue'
 import { api, ROLES, roleRank, type Role, type User } from '../../api'
 import { useAuth } from '../../stores/auth'
 import { useToast } from '../../stores/toast'
+import { useConfirm } from '../../stores/confirm'
 import { relTime } from '../../lib/format'
 import { useNow } from '../../lib/now'
 import Modal from '../../components/Modal.vue'
@@ -14,6 +15,7 @@ import SkeletonRows from '../../components/SkeletonRows.vue'
 
 const auth = useAuth()
 const toast = useToast()
+const confirm = useConfirm()
 const now = useNow()
 const users = ref<User[]>([])
 const loading = ref(true)
@@ -74,6 +76,22 @@ async function resetPassword() {
   }
 }
 
+async function resetTwoFactor(u: User) {
+  const ok = await confirm.ask({
+    title: `Reset two-factor authentication for ${u.email}?`,
+    message: 'Use this when they lost their authenticator. They can sign in with only their password until they set it up again.',
+    confirmText: 'Reset 2FA',
+    danger: true,
+  })
+  if (!ok) return
+  try {
+    toast.success((await api.resetUserTwoFactor(u.id)).message)
+    u.totp_enabled = false
+  } catch {
+    /* toasted */
+  }
+}
+
 function openNew() {
   nf.value = { email: '', name: '', role: 'operator', password: '' }
   showNew.value = true
@@ -98,7 +116,10 @@ onMounted(load)
                 <div class="row" style="gap: 10px">
                   <Avatar :name="u.name" :email="u.email" small />
                   <div style="min-width: 0">
-                    <div class="cell-title">{{ u.email }} <span v-if="u.id === auth.user?.id" class="badge outline">you</span></div>
+                    <div class="cell-title">
+                      {{ u.email }} <span v-if="u.id === auth.user?.id" class="badge outline">you</span>
+                      <span v-if="u.totp_enabled" class="badge ok" title="Two-factor authentication is on"><Icon name="lock" />2FA</span>
+                    </div>
                     <div v-if="u.name" class="cell-sub">{{ u.name }}</div>
                   </div>
                 </div>
@@ -121,7 +142,16 @@ onMounted(load)
                 </label>
               </td>
               <td class="nowrap hide-mobile">{{ relTime(u.last_login_at, now) }}</td>
-              <td class="right">
+              <td class="right nowrap">
+                <button
+                  v-if="u.totp_enabled && editable(u)"
+                  type="button"
+                  class="btn btn-sm"
+                  style="margin-right: 6px"
+                  @click="resetTwoFactor(u)"
+                >
+                  <Icon name="lock" />Reset 2FA
+                </button>
                 <button type="button" class="btn btn-sm" :disabled="roleRank(u.role) > roleRank(auth.role)" @click="(resetFor = u), (newPassword = '')"><Icon name="key" />Reset password</button>
               </td>
             </tr>

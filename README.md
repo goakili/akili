@@ -359,6 +359,12 @@ Admins can also write lessons directly. Proposals are capped per session and ded
 - Roles follow the groups claim through `AKILI_OIDC_ROLE_MAP`, for example `akili-admins=admin`. SSO never grants or removes the owner role.
 - `AKILI_OIDC_DISABLE_PASSWORD=true` leaves password sign-in to the owner only, as a break-glass.
 
+**Two-factor authentication.** Each user can turn on TOTP in Settings → Account with any authenticator app.
+- After the password, sign-in asks for a 6-digit code. Each code works once, and failed codes are limited per user and audited.
+- Ten single-use recovery codes are shown once at setup; they can be replaced with a current code.
+- An admin can reset 2FA for a user who lost their device (Settings → Users).
+- SSO sign-ins rely on the identity provider's MFA, and API keys are not affected.
+
 **SIEM.** The audit trail streams to any combination of three sinks:
 - a webhook (`AKILI_SIEM_WEBHOOK_URL`), JSON or NDJSON, signed with HMAC, and able to send an `Authorization` header such as a Splunk HEC token;
 - syslog (`AKILI_SIEM_SYSLOG`, RFC 5424 over `udp://`, `tcp://` or `tls://`);

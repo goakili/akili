@@ -26,15 +26,16 @@ const Audience = "akili"
 type Service struct {
 	db     *gorm.DB
 	rdb    *redis.Client
+	box    *crypto.Box
 	secret []byte
 	ttl    time.Duration
 	// PasswordOwnerOnly limits password login to the owner (break-glass) when SSO is mandatory.
 	PasswordOwnerOnly bool
 }
 
-// New returns the auth service.
-func New(db *gorm.DB, rdb *redis.Client, secret string, ttl time.Duration) *Service {
-	return &Service{db: db, rdb: rdb, secret: []byte(secret), ttl: ttl}
+// New returns the auth service. box seals TOTP secrets.
+func New(db *gorm.DB, rdb *redis.Client, box *crypto.Box, secret string, ttl time.Duration) *Service {
+	return &Service{db: db, rdb: rdb, box: box, secret: []byte(secret), ttl: ttl}
 }
 
 // Errors.
@@ -46,25 +47,22 @@ var (
 // dummyHash keeps login timing equal for unknown and known emails.
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("akili-timing-equaliser"), bcrypt.DefaultCost)
 
-// Login verifies credentials and issues a session token.
-func (s *Service) Login(ctx context.Context, email, password string) (*models.User, string, time.Time, error) {
+// CheckPassword verifies credentials without starting a session; a user with two-factor
+// authentication still needs StartMFA and CompleteMFA.
+func (s *Service) CheckPassword(ctx context.Context, email, password string) (*models.User, error) {
 	var u models.User
 	err := s.db.WithContext(ctx).First(&u, "lower(email) = ?", strings.ToLower(strings.TrimSpace(email))).Error
 	if err != nil {
 		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
-		return nil, "", time.Time{}, ErrInvalidCredentials
+		return nil, ErrInvalidCredentials
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil || !u.Active {
-		return nil, "", time.Time{}, ErrInvalidCredentials
+		return nil, ErrInvalidCredentials
 	}
 	if s.PasswordOwnerOnly && u.Role != models.RoleOwner {
-		return nil, "", time.Time{}, ErrInvalidCredentials
+		return nil, ErrInvalidCredentials
 	}
-	token, exp, err := s.Issue(ctx, &u)
-	if err != nil {
-		return nil, "", time.Time{}, err
-	}
-	return &u, token, exp, nil
+	return &u, nil
 }
 
 // Issue starts a session for an authenticated user (password or SSO).

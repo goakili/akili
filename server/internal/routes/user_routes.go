@@ -43,6 +43,14 @@ func (r *Router) userRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.UserRequest{},
 		},
 		{
+			Method:      http.MethodDelete,
+			Path:        "/users/{id}/2fa",
+			Group:       g,
+			Middlewares: r.guard(models.RoleAdmin),
+			Handler:     r.h.ResetUserTwoFactor,
+			Summary:     "Reset a user's two-factor authentication (lost device)",
+		},
+		{
 			Method:      http.MethodGet,
 			Path:        "/api-keys",
 			Group:       g,

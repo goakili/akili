@@ -18,6 +18,10 @@ const busy = ref(false)
 const show = ref(false)
 const providers = ref<AuthProviders | null>(null)
 const redirecting = ref(false)
+// Set once the password is accepted and an authenticator code is still needed.
+const mfaToken = ref('')
+const code = ref('')
+const useRecovery = ref(false)
 const ssoError = ref(typeof route.query.sso_error === 'string' ? route.query.sso_error.slice(0, 500) : '')
 
 const ssoHref = computed(() => (providers.value?.sso ? safeNavUrl(providers.value.sso_login_url) : undefined))
@@ -45,18 +49,49 @@ onMounted(async () => {
   }
 })
 
+function done() {
+  const next = typeof route.query.next === 'string' && route.query.next.startsWith('/') && !route.query.next.startsWith('//') ? route.query.next : '/'
+  router.replace(next)
+}
+
 async function submit() {
   error.value = ''
   busy.value = true
   try {
-    await auth.login(email.value.trim(), password.value)
-    const next = typeof route.query.next === 'string' && route.query.next.startsWith('/') && !route.query.next.startsWith('//') ? route.query.next : '/'
-    router.replace(next)
+    const challenge = await auth.login(email.value.trim(), password.value)
+    if (challenge) {
+      mfaToken.value = challenge
+      code.value = ''
+      password.value = ''
+      return
+    }
+    done()
   } catch (e) {
     error.value = e instanceof ApiError ? e.message : 'Sign-in failed.'
   } finally {
     busy.value = false
   }
+}
+
+async function submitCode() {
+  error.value = ''
+  busy.value = true
+  try {
+    await auth.loginMFA(mfaToken.value, code.value)
+    done()
+  } catch (e) {
+    error.value = e instanceof ApiError ? e.message : 'Sign-in failed.'
+    // An expired or exhausted challenge can't be retried; start over from the password.
+    if (e instanceof ApiError && /expired|too many/i.test(e.message)) restart()
+  } finally {
+    busy.value = false
+  }
+}
+
+function restart() {
+  mfaToken.value = ''
+  code.value = ''
+  useRecovery.value = false
 }
 </script>
 
@@ -68,7 +103,39 @@ async function submit() {
         <h1>akili</h1>
         <p>Security-first control plane for autonomous agents</p>
       </div>
-      <form class="card login-form stack" aria-labelledby="signin-title" @submit.prevent="submit">
+      <form v-if="mfaToken" class="card login-form stack" aria-labelledby="mfa-title" @submit.prevent="submitCode">
+        <div>
+          <h2 id="mfa-title" style="font-size: 17px">Two-factor authentication</h2>
+          <p class="small muted" style="margin: 4px 0 0">
+            {{ useRecovery ? 'Enter one of your recovery codes. Each code works once.' : 'Enter the 6-digit code from your authenticator app.' }}
+          </p>
+        </div>
+        <div class="field">
+          <label for="mfa-code">{{ useRecovery ? 'Recovery code' : 'Authentication code' }}</label>
+          <input
+            id="mfa-code"
+            v-model="code"
+            class="input mono"
+            :inputmode="useRecovery ? 'text' : 'numeric'"
+            autocomplete="one-time-code"
+            :maxlength="useRecovery ? 16 : 7"
+            :placeholder="useRecovery ? 'xxxxx-xxxxx' : '123456'"
+            required
+            autofocus
+          />
+        </div>
+        <div v-if="error" class="form-error" role="alert"><Icon name="alert" />{{ error }}</div>
+        <button class="btn btn-primary btn-lg btn-block" type="submit" :disabled="busy || !code.trim()">
+          <span v-if="busy" class="spinner" aria-hidden="true" />{{ busy ? 'Verifying…' : 'Verify' }}
+        </button>
+        <div class="row" style="justify-content: space-between">
+          <button type="button" class="btn btn-ghost btn-sm" @click="(useRecovery = !useRecovery), (code = ''), (error = '')">
+            {{ useRecovery ? 'Use authenticator code' : 'Use a recovery code' }}
+          </button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="(error = ''), restart()">Back</button>
+        </div>
+      </form>
+      <form v-else class="card login-form stack" aria-labelledby="signin-title" @submit.prevent="submit">
         <div>
           <h2 id="signin-title" style="font-size: 17px">Sign in</h2>
           <p class="small muted" style="margin: 4px 0 0">{{ ssoHref ? `Use ${ssoName}, or your operator account.` : 'Use your operator account.' }}</p>

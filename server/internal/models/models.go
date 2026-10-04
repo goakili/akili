@@ -80,6 +80,13 @@ type User struct {
 	// requests of the agent sessions they start.
 	ForgeLogin    string `gorm:"size:64" json:"forge_login"`
 	CoAuthorEmail string `gorm:"size:254" json:"co_author_email"`
+	// TOTPSecret is sealed by the crypto box; it is set but not yet enabled while setup is pending.
+	TOTPSecret  string `gorm:"size:255" json:"-"`
+	TOTPEnabled bool   `gorm:"not null;default:false" json:"totp_enabled"`
+	// TOTPLastStep is the last accepted time step, so a code works only once.
+	TOTPLastStep int64 `gorm:"not null;default:0" json:"-"`
+	// RecoveryCodes are SHA-256 hashes of the unused single-use recovery codes.
+	RecoveryCodes []string `gorm:"type:jsonb;serializer:json" json:"-"`
 }
 
 // APIKey authenticates non-browser clients. Only the SHA-256 hash is stored.
