@@ -429,8 +429,8 @@ Settings come from environment variables. On start the server also loads `./.env
 
 | Variable | Default | Notes |
 |---|---|---|
-| `AKILI_PORT` | `9000` | the API, UI and agent tunnels; it was `8080` up to 0.1.0 |
-| `AKILI_ENV` | `development` | `production` enforces secret lengths and forbids `*` CORS |
+| `AKILI_PORT` | `9000` | the API, UI and agent tunnels; it was `8080` up to 0.0.5 |
+| `AKILI_ENV` | `production` | `production` enforces secret lengths and forbids `*` CORS; set `development` for local dev |
 | `AKILI_DATABASE_URL` | local Postgres | |
 | `AKILI_REDIS_ADDR` / `_PASSWORD` / `_DB` | `localhost:6379` | |
 | `AKILI_JWT_SECRET` | dev default | ≥ 32 chars in production |
@@ -439,8 +439,6 @@ Settings come from environment variables. On start the server also loads `./.env
 | `AKILI_COOKIE_SECURE` | `false` | set `true` behind HTTPS |
 | `AKILI_ADMIN_EMAIL` / `_PASSWORD` | `admin@akili.local` / generated | first owner, created once |
 | `ANTHROPIC_API_KEY` | – | seeds the default provider on first start |
-
-**Upgrading from 0.1.0 or earlier:** the default port moved from `8080` to `9000`, matching Miabi, Posta and Goma Admin. Agents and forge webhooks keep the URL they were given. If those URLs include `:8080` and you don't put the port behind a proxy, set `AKILI_PORT=8080` to keep the old port. For Helm, set `config.port` and `service.port` to `8080`. Otherwise, re-point each agent and webhook to `:9000`.
 | `AKILI_DEFAULT_MODEL` | `claude-opus-5-5` | model for the seeded provider |
 | `AKILI_NOTIFY_WEBHOOK_URL` | – | Slack-compatible webhook for approvals and task results |
 | `AKILI_WEB_DIR` | – | serve the UI from disk instead of the embedded build |
@@ -450,6 +448,8 @@ Settings come from environment variables. On start the server also loads `./.env
 | `AKILI_GIT_EMAIL_TEMPLATE` | `agent@goakili.dev` | commit email of agents without their own; `{agent_id}` and `{agent_name}` expand |
 | `AKILI_GIT_EMAIL_DOMAINS` | – | comma-separated domains allowed for per-agent commit emails; empty allows any |
 | `AKILI_LICENSE` / `_FILE` | – | Akili Enterprise license token, installed on start when none is stored |
+
+**Upgrading from 0.0.5 or earlier:** the default port moved from `8080` to `9000`, matching Miabi, Posta and Goma Admin. Agents and forge webhooks keep the URL they were given. If those URLs include `:8080` and you don't put the port behind a proxy, set `AKILI_PORT=8080` to keep the old port. For Helm, set `config.port` and `service.port` to `8080`. Otherwise, re-point each agent and webhook to `:9000`.
 
 ## Screenshots
 
@@ -463,7 +463,5 @@ Settings come from environment variables. On start the server also loads `./.env
 ## License
 
 Akili is free software, published under the [GNU Affero General Public License v3.0 or later](LICENSE) (`AGPL-3.0-or-later`). The wire contract in [`proto`](proto) is under the [Apache License 2.0](proto/LICENSE), so other clients can implement it.
-
-**Akili Enterprise** adds licensed features for large organizations on top of the complete Community edition. Official releases include them, inactive until an owner installs a license under **Settings → License** (or sets `AKILI_LICENSE`). See [LICENSING.md](LICENSING.md).
 
 Copyright © 2026 [Jonas Kaninda](https://jkaninda.dev/)
