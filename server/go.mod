@@ -3,10 +3,10 @@ module github.com/goakili/akili/server
 go 1.27.1
 
 require (
-	github.com/anthropics/anthropic-sdk-go v1.76.0
+	github.com/anthropics/anthropic-sdk-go v1.78.0
 	github.com/boombuler/barcode v1.1.0
 	github.com/coreos/go-oidc/v3 v3.21.0
-	github.com/go-jose/go-jose/v4 v4.1.4
+	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/goakili/akili/proto v0.0.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/goposta/posta-go v0.1.0
