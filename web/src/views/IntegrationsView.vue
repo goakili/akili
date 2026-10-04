@@ -35,6 +35,9 @@ const formError = ref('')
 
 const GITHUB_API = 'https://api.github.com'
 const GITHUB_WEB = 'https://github.com'
+const GITLAB_URL = 'https://gitlab.com'
+// Warn this long before a GitLab token expires (the server emails admins at the same point).
+const EXPIRY_WARN_MS = 14 * 24 * 3600 * 1000
 
 const blank = (): IntegrationInput => ({
   name: '',
@@ -102,12 +105,14 @@ function openEdit(it: Integration) {
 const KINDS: { kind: IntegrationKind; label: string; icon: IconName }[] = [
   { kind: 'gitea', label: 'Gitea', icon: 'gitea' },
   { kind: 'github', label: 'GitHub', icon: 'github' },
+  { kind: 'gitlab', label: 'GitLab', icon: 'gitlab' },
   { kind: 'miabi', label: 'Miabi', icon: 'layers' },
   { kind: 'posta', label: 'Posta', icon: 'mail' },
 ]
 // Kinds with a default: Miabi tool calls and Posta email use it when nothing names one.
 const hasDefault = (k: IntegrationKind) => k === 'miabi' || k === 'posta'
-const hasCA = hasDefault
+const hasCA = (k: IntegrationKind) => hasDefault(k) || k === 'gitlab'
+const expiresSoon = (it: Integration) => !!it.token_expires_at && new Date(it.token_expires_at).getTime() - now.value < EXPIRY_WARN_MS
 const kindOf = (k: IntegrationKind) => KINDS.find((x) => x.kind === k) ?? KINDS[0]
 const MIABI_EVENTS = ['deploy.succeeded', 'deploy.failed', 'container.died', 'container.oom']
 
@@ -118,8 +123,9 @@ function setKind(k: IntegrationKind) {
     if (!form.value.web_url) form.value.web_url = GITHUB_WEB
   } else {
     form.value.auth_type = 'token'
-    if (form.value.base_url === GITHUB_API) form.value.base_url = ''
+    if (form.value.base_url === GITHUB_API || form.value.base_url === GITLAB_URL) form.value.base_url = ''
     if (form.value.web_url === GITHUB_WEB) form.value.web_url = ''
+    if (k === 'gitlab' && !form.value.base_url) form.value.base_url = GITLAB_URL
   }
 }
 function setAuth(a: ForgeAuth) {
@@ -162,7 +168,7 @@ async function save() {
     ...f,
     name: f.name.trim(),
     base_url: f.base_url.trim(),
-    web_url: f.kind === 'github' ? f.web_url.trim() : '',
+    web_url: f.kind === 'github' || f.kind === 'gitlab' ? f.web_url.trim() : '',
     username: f.kind === 'gitea' || f.kind === 'github' ? f.username.trim() : '',
     workspace: f.kind === 'miabi' ? f.workspace.trim() : '',
     ca_cert: hasCA(f.kind) ? f.ca_cert.trim() : '',
@@ -332,7 +338,7 @@ onMounted(load)
             <tr v-else-if="!list.length">
               <td colspan="7">
                 <EmptyState title="No integrations yet" icon="plug">
-                  Connect Gitea or GitHub so agents can work on repositories (branches, commits and pull requests), Miabi so they can verify deploys and roll back, or Posta to send notification email. The credentials stay here.
+                  Connect Gitea, GitHub or GitLab so agents can work on repositories (branches, commits and pull requests), Miabi so they can verify deploys and roll back, or Posta to send notification email. The credentials stay here.
                   <template #actions><button type="button" class="btn btn-primary" @click="openNew"><Icon name="plus" />Add integration</button></template>
                 </EmptyState>
               </td>
@@ -353,6 +359,12 @@ onMounted(load)
               <td class="mono small hide-mobile">
                 <template v-if="it.kind === 'miabi'"><template v-if="it.workspace"><span class="muted">default</span> {{ it.workspace }}</template><span v-else class="muted" title="Every workspace the key reaches; Test shows whether it is bound to one">any workspace</span></template>
                 <template v-else-if="it.kind === 'posta'">{{ it.sender }}</template>
+                <template v-else-if="it.kind === 'gitlab'">
+                  {{ it.token_kind ? `${it.token_kind} token` : '—' }}
+                  <div v-if="it.token_expires_at" class="cell-sub" :class="{ 'danger-text': expiresSoon(it) }" :title="expiresSoon(it) ? 'Replace the token before it expires: GitLab disables it without warning' : undefined">
+                    <Icon v-if="expiresSoon(it)" name="alert" :size="12" style="vertical-align: -1px" /> expires {{ fmtDate(it.token_expires_at) }}
+                  </div>
+                </template>
                 <template v-else>{{ it.username || '—' }}</template>
               </td>
               <td>
@@ -407,6 +419,9 @@ onMounted(load)
           <template v-for="(ev, i) in MIABI_EVENTS" :key="ev"><code>{{ ev }}</code>{{ i < MIABI_EVENTS.length - 1 ? ', ' : '' }}</template>.
           {{ savedSecret ? '' : 'If Miabi generates the signing secret, edit this integration and paste it. ' }}Then watch an app on the Miabi page.
         </p>
+        <p v-else-if="saved.kind === 'gitlab'" class="small muted" style="margin: 0">
+          In the GitLab project (or group) under <strong>Settings → Webhooks</strong>, add this URL{{ savedSecret ? ', paste the secret as the Secret token' : ' with the Secret token' }}, and tick <strong>Issues events</strong>. GitLab sends the token back rather than signing the body, so use an <strong>https</strong> URL. Then label an issue with the project's trigger label and Akili turns it into a coding task.
+        </p>
         <p v-else class="small muted" style="margin: 0">
           In the repository settings, add a webhook for <strong>Issue</strong> events with this URL{{ savedSecret ? ' and secret' : '' }} (content type JSON). Then label an issue with the project's trigger label and Akili turns it into a coding task.
         </p>
@@ -435,6 +450,25 @@ onMounted(load)
             <input id="it-url" v-model="form.base_url" class="input mono" :class="{ invalid: err('base_url') }" required placeholder="https://gitea.example.com" />
             <span v-if="err('base_url')" class="error-msg"><Icon name="alert" />{{ err('base_url') }}</span>
           </div>
+          <template v-if="form.kind === 'gitlab'">
+            <div class="field">
+              <label for="it-url">GitLab URL</label>
+              <input id="it-url" v-model="form.base_url" class="input mono" :class="{ invalid: err('base_url') }" :placeholder="GITLAB_URL" />
+              <span v-if="err('base_url')" class="error-msg"><Icon name="alert" />{{ err('base_url') }}</span>
+              <span v-else class="hint">gitlab.com, or your self-managed instance (CE or EE).</span>
+            </div>
+            <div class="field">
+              <label for="it-web">Web URL <span class="opt">(optional)</span></label>
+              <input id="it-web" v-model="form.web_url" class="input mono" placeholder="Same as the GitLab URL" />
+              <span class="hint">Only when git and the web UI are served from another address than the API.</span>
+            </div>
+            <div class="field span-all">
+              <label for="it-ca">CA certificate <span class="opt">(optional)</span></label>
+              <textarea id="it-ca" v-model="form.ca_cert" class="input mono" rows="4" spellcheck="false" placeholder="-----BEGIN CERTIFICATE-----"></textarea>
+              <span class="hint">Only for a self-managed GitLab on a self-signed or private-CA certificate: paste the CA (PEM). It is trusted for this integration only (API calls and git).</span>
+              <span v-if="form.ca_cert && !form.ca_cert.includes('BEGIN CERTIFICATE')" class="error-msg"><Icon name="alert" />Paste a PEM certificate (-----BEGIN CERTIFICATE-----).</span>
+            </div>
+          </template>
           <template v-if="form.kind === 'miabi'">
             <div class="field">
               <label for="it-url">Miabi URL <span class="req">*</span></label>
@@ -518,6 +552,9 @@ onMounted(load)
               <template v-if="form.kind === 'miabi'">A Miabi <code>mb_</code> API key with the <strong>write</strong> and <strong>deploy</strong> scopes.</template>
               <template v-else-if="form.kind === 'posta'">A Posta API key bound to one workspace, allowed to send email.</template>
               <template v-else-if="form.kind === 'gitea'">Needs repository and issue read/write (and organization, to create repos in one).</template>
+              <template v-else-if="form.kind === 'gitlab'">
+                A <strong>project or group access token</strong> with the <strong>Developer</strong> role and the <code>api</code> scope: GitLab itself then refuses pushes to protected branches. Use a group token with <strong>Maintainer</strong> to let Akili create repositories. Personal tokens work but act as a person; prefer a bot token. If the project has the “Reject unverified users” push rule, use the bot's own noreply address as the agents' commit email, or turn the rule off for the bot.
+              </template>
               <template v-else>A fine-grained token with Contents, Pull requests, Issues and Commit statuses (read/write), or a classic token with <code>repo</code>.</template>
             </span>
           </div>
@@ -577,6 +614,7 @@ onMounted(load)
             Not needed for live events. To use one anyway, add an <strong>outbound webhook</strong> in Miabi with this URL and the secret, subscribed to
             <template v-for="(ev, i) in MIABI_EVENTS" :key="ev"><code>{{ ev }}</code>{{ i < MIABI_EVENTS.length - 1 ? ', ' : '' }}</template>.
           </p>
+          <p v-else-if="webhookFor.kind === 'gitlab'" class="small muted" style="margin: 0">Under <strong>Settings → Webhooks</strong>, add this URL with the secret as the <strong>Secret token</strong> and tick <strong>Issues events</strong> (use an https URL).</p>
           <p v-else class="small muted" style="margin: 0">Add a webhook for <strong>Issue</strong> events with this URL and the secret; label issues with the project's trigger label to turn them into tasks.</p>
         </template>
       </form>

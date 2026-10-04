@@ -30,6 +30,7 @@ const (
 	EmailApproval = "approval"
 	EmailTask     = "task"
 	EmailTest     = "test"
+	EmailToken    = "token_expiry"
 )
 
 // approvalEvery limits approval email per person: a burst of requests sends one, and the email
@@ -133,6 +134,26 @@ func (m *Mailer) TaskFinished(org string, t *models.Task) {
 			Rows:    append([][2]string{{"Task", t.Title}}, rows...),
 			Link:    "/tasks/" + t.ID, Action: "Open the task",
 		})
+	})
+}
+
+// TokenExpiring emails the organization's admins that a forge token expires soon.
+func (m *Mailer) TokenExpiring(org string, it *models.Integration) {
+	if m == nil || it.TokenExpiresAt == nil {
+		return
+	}
+	go m.safely(func(ctx context.Context) {
+		var users []models.User
+		m.db.WithContext(ctx).Where("organization_id = ? AND active AND role IN ?", org, []string{models.RoleAdmin, models.RoleOwner}).Find(&users)
+		msg := Message{
+			Subject: fmt.Sprintf("The %s token expires on %s", it.Name, it.TokenExpiresAt.Format("2006-01-02")),
+			Heading: "A forge token expires soon",
+			Rows:    [][2]string{{"Integration", it.Name}, {"Token", it.TokenKind}, {"Expires", it.TokenExpiresAt.Format("2006-01-02")}},
+			Link:    "/integrations", Action: "Replace the token in Akili",
+		}
+		for i := range users {
+			_, _ = m.send(ctx, org, &users[i], EmailToken, msg)
+		}
 	})
 }
 

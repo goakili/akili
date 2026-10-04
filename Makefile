@@ -25,7 +25,7 @@ AKILI_URL       ?= $(or $(AKILI_PUBLIC_URL),http://localhost:8080)
 AGENT_STATE_DIR ?= .agent/state
 AGENT_WORKDIR   ?= .agent/work
 
-.PHONY: all build-ui web vscode vscode-test vscode-package server agent run run-agent e2e-coder e2e-ops e2e-miabi e2e-ha e2e-hardening e2e-chat e2e-all loadtest docker-build docker-build-server docker-build-agent docker-builder docker-push docker-push-server docker-push-agent test vet dev up down e2e clean
+.PHONY: all build-ui web vscode vscode-test vscode-package server agent run run-agent e2e-coder e2e-gitlab e2e-ops e2e-miabi e2e-ha e2e-hardening e2e-chat e2e-all loadtest docker-build docker-build-server docker-build-agent docker-builder docker-push docker-push-server docker-push-agent test vet dev up down e2e clean
 
 all: build-ui server agent
 
@@ -129,6 +129,11 @@ e2e:
 # Coding flow against a real Gitea in Docker (integration, project, PR, push guard, webhooks).
 e2e-coder:
 	./scripts/e2e-coder.sh
+
+# The coding flow against a real GitLab CE (about 4 GB of memory, a few minutes to boot). Opt-in:
+# not part of e2e-all.
+e2e-gitlab:
+	./scripts/e2e-gitlab.sh
 
 # Operations: alert → triage → approved change plan → verify / rollback, recorded terminal.
 e2e-ops:

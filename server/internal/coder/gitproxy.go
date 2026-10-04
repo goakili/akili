@@ -132,7 +132,7 @@ func (s *Service) GitProxy(agentID string) http.Handler {
 		}
 		req.SetBasicAuth(user, pass)
 		req.Header.Set("User-Agent", "git/akili-proxy")
-		resp, err := s.gitHTTP.Do(req)
+		resp, err := s.gitClient(fg).Do(req)
 		if pack != nil {
 			if perr := pack.Refused(); perr != nil {
 				if err == nil {
@@ -299,3 +299,11 @@ func (f flushWriter) Write(p []byte) (int, error) {
 }
 
 var gitClientTimeout = 30 * time.Minute
+
+// gitClient is the upstream client for a forge: one with its own transport (a private CA) gets it.
+func (s *Service) gitClient(fg forgeClient) *http.Client {
+	if t, ok := fg.(interface{ GitTransport() http.RoundTripper }); ok && t.GitTransport() != nil {
+		return &http.Client{Timeout: s.gitHTTP.Timeout, Transport: t.GitTransport()}
+	}
+	return s.gitHTTP
+}

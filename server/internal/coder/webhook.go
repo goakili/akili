@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -71,6 +72,9 @@ func (s *Service) ParseIssueWebhook(ctx context.Context, integrationID string, h
 	if err != nil {
 		return nil, err
 	}
+	if it.Kind == models.ForgeGitLab {
+		return s.parseGitLabIssue(ctx, &it, secret, h, body)
+	}
 	sig, event := h.Get("X-Hub-Signature-256"), h.Get("X-GitHub-Event")
 	if it.Kind == models.ForgeGitea {
 		sig, event = h.Get("X-Gitea-Signature"), h.Get("X-Gitea-Event")
@@ -119,6 +123,96 @@ func labelled(ev issueEvent, label string) bool {
 		}
 	}
 	return false
+}
+
+// gitlabIssueEvent is the part of a GitLab "Issue Hook" Akili reads.
+type gitlabIssueEvent struct {
+	ObjectKind       string `json:"object_kind"`
+	ObjectAttributes struct {
+		IID         int    `json:"iid"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		URL         string `json:"url"`
+		State       string `json:"state"`
+		Action      string `json:"action"`
+	} `json:"object_attributes"`
+	Labels  []gitlabLabel `json:"labels"`
+	Changes struct {
+		Labels *struct {
+			Previous []gitlabLabel `json:"previous"`
+			Current  []gitlabLabel `json:"current"`
+		} `json:"labels"`
+	} `json:"changes"`
+	Project struct {
+		PathWithNamespace string `json:"path_with_namespace"`
+	} `json:"project"`
+}
+
+type gitlabLabel struct {
+	Title string `json:"title"`
+}
+
+func hasLabel(list []gitlabLabel, label string) bool {
+	for _, l := range list {
+		if strings.EqualFold(l.Title, label) {
+			return true
+		}
+	}
+	return false
+}
+
+// gitlabLabelled reports whether the event adds label: present when the issue opens, or new in an update.
+func gitlabLabelled(ev *gitlabIssueEvent, label string) bool {
+	switch ev.ObjectAttributes.Action {
+	case "open", "reopen":
+		return hasLabel(ev.Labels, label)
+	case "update":
+		ch := ev.Changes.Labels
+		return ch != nil && hasLabel(ch.Current, label) && !hasLabel(ch.Previous, label)
+	}
+	return false
+}
+
+// parseGitLabIssue handles a GitLab webhook. GitLab sends the webhook's secret token back in
+// X-Gitlab-Token instead of signing the body, so the token is compared in constant time.
+func (s *Service) parseGitLabIssue(ctx context.Context, it *models.Integration, secret string, h http.Header, body []byte) (*IssueTrigger, error) {
+	if !validToken(secret, h.Get("X-Gitlab-Token")) {
+		return nil, ErrBadSignature
+	}
+	if h.Get("X-Gitlab-Event") != "Issue Hook" {
+		return nil, ErrIgnored
+	}
+	var ev gitlabIssueEvent
+	if err := json.Unmarshal(body, &ev); err != nil {
+		return nil, fmt.Errorf("bad payload: %w", err)
+	}
+	if ev.ObjectKind != "issue" || ev.ObjectAttributes.State != "opened" {
+		return nil, ErrIgnored
+	}
+	full := ev.Project.PathWithNamespace
+	i := strings.LastIndex(full, "/")
+	if i <= 0 {
+		return nil, ErrIgnored
+	}
+	var p models.Project
+	if err := s.db.WithContext(ctx).First(&p, "integration_id = ? AND lower(owner) = lower(?) AND lower(repo) = lower(?)", it.ID, full[:i], full[i+1:]).Error; err != nil {
+		return nil, ErrIgnored
+	}
+	if p.TriggerLabel == "" || !gitlabLabelled(&ev, p.TriggerLabel) {
+		return nil, ErrIgnored
+	}
+	a := ev.ObjectAttributes
+	return &IssueTrigger{Project: &p, Number: a.IID, Title: a.Title, Body: a.Description, URL: a.URL,
+		Ref: fmt.Sprintf("issue:%s#%d", p.FullName(), a.IID)}, nil
+}
+
+// validToken compares a shared webhook token without leaking where it differs.
+func validToken(secret, got string) bool {
+	if got == "" {
+		return false
+	}
+	want, have := sha256.Sum256([]byte(secret)), sha256.Sum256([]byte(got))
+	return subtle.ConstantTimeCompare(want[:], have[:]) == 1
 }
 
 func validSignature(secret string, body []byte, sigHex string) bool {

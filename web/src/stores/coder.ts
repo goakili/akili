@@ -4,6 +4,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { api, type ForgeKind, type Integration, type Project, type ProjectTemplates } from '../api'
+import { forgeFromUrl, isForge } from '../lib/forge'
 import { useAuth } from './auth'
 
 /** Caches for coding work: projects (every role), integrations (admins) and the built-in templates. */
@@ -12,7 +13,7 @@ export const useCoder = defineStore('coder', () => {
   const projectsLoaded = ref(false)
   const integrations = ref<Integration[]>([])
   /** Git forges only: what a project can live on. */
-  const forges = computed(() => integrations.value.filter((i) => i.kind === 'gitea' || i.kind === 'github'))
+  const forges = computed(() => integrations.value.filter((i) => isForge(i.kind)))
   const templates = ref<ProjectTemplates | null>(null)
   let projectsAt = 0
   let inflight: Promise<void> | null = null
@@ -77,12 +78,8 @@ export const useCoder = defineStore('coder', () => {
     if (!p) return 'gitea'
     if (p.forge) return p.forge
     const it = integrations.value.find((i) => i.id === p.integration_id)
-    if (it && (it.kind === 'gitea' || it.kind === 'github')) return it.kind
-    try {
-      return new URL(p.web_url).hostname.endsWith('github.com') ? 'github' : 'gitea'
-    } catch {
-      return 'gitea'
-    }
+    if (it && isForge(it.kind)) return it.kind
+    return forgeFromUrl(p.web_url)
   }
 
   return { projects, projectsLoaded, integrations, forges, templates, loadProjects, loadIntegrations, loadTemplates, project, upsertProject, removeProject, forgeOf }

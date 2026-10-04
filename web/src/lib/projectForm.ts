@@ -55,3 +55,9 @@ export function projectFormErrors(f: ProjectForm): Record<string, string> {
 
 /** Same repository-name rule as the server: letters, digits, dot, underscore, dash. */
 export const REPO_NAME_RE = /^[A-Za-z0-9._-]{1,100}$/
+
+/** A GitLab namespace path: up to 20 nested groups, no empty, . or .. parts (mirrors the server). */
+export function validGitLabOwner(owner: string): boolean {
+  const segs = owner.split('/')
+  return owner.length <= 255 && segs.length <= 20 && segs.every((s) => s !== '.' && s !== '..' && REPO_NAME_RE.test(s))
+}

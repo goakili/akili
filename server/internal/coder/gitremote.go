@@ -17,6 +17,8 @@ type GitRemote struct {
 	Host  string // without port: the SSH and HTTPS ports of one forge differ
 	Owner string
 	Repo  string
+	// Path is every path segment before Repo, so a nested GitLab owner (a/b/c) can match.
+	Path string
 }
 
 // ParseGitRemote reads https://, ssh:// and scp-like (git@host:owner/repo) remotes. Owner and repo
@@ -40,25 +42,37 @@ func ParseGitRemote(raw string) (GitRemote, error) {
 	if host == "" || len(parts) < 2 {
 		return GitRemote{}, errors.New("git remote has no owner/repository")
 	}
-	return GitRemote{Host: strings.ToLower(host), Owner: parts[len(parts)-2], Repo: parts[len(parts)-1]}, nil
+	return GitRemote{Host: strings.ToLower(host), Owner: parts[len(parts)-2], Repo: parts[len(parts)-1], Path: strings.Join(parts[:len(parts)-1], "/")}, nil
 }
 
-// ResolveRemote finds the organization's project for a git remote: same owner and repository, and,
-// when the project knows its web URL, the same host.
+// ResolveRemote finds the organization's project for a git remote: the remote path ends with the
+// project's owner (which may be a nested GitLab group) and repository, and, when the project knows
+// its web URL, the host matches.
 func (s *Service) ResolveRemote(ctx context.Context, org, remote string) (*models.Project, error) {
 	r, err := ParseGitRemote(remote)
 	if err != nil {
 		return nil, err
 	}
 	var candidates []models.Project
-	s.db.WithContext(ctx).Where("organization_id = ? AND lower(owner) = lower(?) AND lower(repo) = lower(?)", org, r.Owner, r.Repo).
-		Find(&candidates)
+	s.db.WithContext(ctx).Where("organization_id = ? AND lower(repo) = lower(?)", org, r.Repo).Find(&candidates)
+	var best *models.Project
 	for i := range candidates {
 		p := &candidates[i]
+		owner, path := strings.ToLower(p.Owner), strings.ToLower(r.Path)
+		if path != owner && !strings.HasSuffix(path, "/"+owner) {
+			continue
+		}
 		u, err := url.Parse(p.WebURL)
-		if p.WebURL == "" || (err == nil && strings.EqualFold(u.Hostname(), r.Host)) {
-			return p, nil
+		if p.WebURL != "" && (err != nil || !strings.EqualFold(u.Hostname(), r.Host)) {
+			continue
+		}
+		// The longest owner wins: a/b/c is a better match for a/b/c/repo than c.
+		if best == nil || len(p.Owner) > len(best.Owner) {
+			best = p
 		}
 	}
-	return nil, ErrNotFound
+	if best == nil {
+		return nil, ErrNotFound
+	}
+	return best, nil
 }

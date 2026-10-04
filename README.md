@@ -51,7 +51,7 @@ Akili lets AI agents write code, operate servers and drive deployments, without 
 ## Core features
 
 - **Policy before every action**: allow, deny or approve, decided by the agent and the control plane independently, with risk from a shared catalog. Autonomy levels L0 to L3; critical actions always need a human. [How a tool call is decided](#how-a-tool-call-is-decided)
-- **Coding agents**: projects on GitHub or Gitea, a branch per task, pull requests, sandboxed tests, and a git proxy that keeps forge credentials off the agent. [Coding](#coding-projects-branches-and-pull-requests)
+- **Coding agents**: projects on GitHub, GitLab or Gitea, a branch per task, pull requests, sandboxed tests, and a git proxy that keeps forge credentials off the agent. [Coding](#coding-projects-branches-and-pull-requests)
 - **Operations**: alerts become triage tasks; fixes are change plans approved once, run step by step and rolled back automatically if a check fails. A recorded browser terminal. [Operations](#operations-alerts-change-plans-and-a-recorded-terminal)
 - **Miabi**: deploys, rollbacks, databases and workspaces, scoped by policy, with every deploy verified on real traffic. [Miabi](#miabi-workspaces-deploys-databases-and-more)
 - **Chat anywhere**: in the web UI (with images), or from Slack, Telegram and Signal with approval buttons. [Images in chat](#images-in-chat) · [Chat gateways](#chat-slack-telegram-and-signal)
@@ -87,7 +87,7 @@ flowchart TB
     subgraph ext["External services, credentials held by the control plane"]
         direction LR
         llm["Model providers"]
-        forge["GitHub or Gitea"]
+        forge["GitHub, GitLab or Gitea"]
         miabi["Miabi"]
         mcpsrv["MCP servers"]
     end
@@ -212,7 +212,7 @@ Autonomy levels are L0 (every call needs approval), L1 (auto-run low risk), L2 (
 
 ## Coding: projects, branches and pull requests
 
-Connect a forge under **Integrations**: Gitea with a token, or GitHub with a token or a GitHub App. Installation tokens from an App are short-lived. Then add a **project**, either by connecting an existing repository or by creating a new one, optionally from a template such as *Go service (Okapi)*.
+Connect a forge under **Integrations**: Gitea with a token, GitHub with a token or a GitHub App, or GitLab (gitlab.com or self-managed) with an access token. Installation tokens from an App are short-lived. Then add a **project**, either by connecting an existing repository or by creating a new one, optionally from a template such as *Go service (Okapi)*.
 
 For each coding task or chat on a project:
 
@@ -226,7 +226,16 @@ For each coding task or chat on a project:
 
 **Sandbox on agent hosts:** `sandbox_exec` needs a Docker daemon the agent's user can reach. Adding the `akili` user to the `docker` group makes that user root-equivalent on the host, so prefer **rootless Docker** or a dedicated build host for coding agents. Without Docker, the tool reports that it is unavailable, and tests can still run through `shell` (High risk, needs approval below L3).
 
-`make e2e-coder` runs the whole flow against a real Gitea in Docker.
+**GitLab.** Use a **project or group access token** with the **Developer** role and the `api` scope. GitLab itself then refuses pushes to protected branches, behind Akili's own push guard.
+- A project or group token with the **Owner** role on the repository is refused.
+- A project token can't create repositories. To let Akili create them, use a group token with **Maintainer**.
+- Owners can be nested groups (`platform/backend`), and merge requests show as `!12`.
+- **Test** reads the token's kind and expiry. Admins get an email and a webhook notification 14 days before it expires, because GitLab disables expired tokens without warning.
+- For a self-managed instance on a private CA, paste the CA on the integration. It is trusted for API calls and git.
+- Issue webhooks use GitLab's secret token (`X-Gitlab-Token`), compared in constant time. GitLab doesn't sign the body, so give it an `https` URL.
+- If a project has the "Reject unverified users" push rule, set the agents' commit email to the bot's own noreply address, or turn the rule off for the bot.
+
+`make e2e-coder` runs the whole flow against a real Gitea in Docker. `make e2e-gitlab` runs it against GitLab CE. It is opt-in and not part of `e2e-all`: GitLab needs about 4 GB of memory and a few minutes to boot.
 
 ## Operations: alerts, change plans and a recorded terminal
 

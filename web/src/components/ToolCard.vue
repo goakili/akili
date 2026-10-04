@@ -51,7 +51,9 @@ const prUrl = computed(() => {
   return safeUrl(m?.[0])
 })
 const miabi = computed(() => (props.name.startsWith('miabi_') && props.result && !props.result.is_error ? miabiState(props.result.output) : null))
-const prNumber = computed(() => props.result?.output.match(/PR #(\d+)/)?.[1])
+const prMatch = computed(() => props.result?.output.match(/(PR #|MR !)(\d+)/))
+const prNumber = computed(() => prMatch.value?.[2])
+const prLabel = computed(() => (prMatch.value?.[1] === 'MR !' ? `merge request !${prNumber.value}` : prNumber.value ? `pull request #${prNumber.value}` : 'pull request'))
 const hasInput = computed(() => props.input !== null && props.input !== undefined && !(typeof props.input === 'object' && Object.keys(props.input as object).length === 0))
 </script>
 
@@ -108,7 +110,7 @@ const hasInput = computed(() => props.input !== null && props.input !== undefine
           <span class="section-title">Output<span v-if="result.truncated" class="muted" style="text-transform: none; font-weight: 400; letter-spacing: 0"> (truncated)</span></span>
         </div>
         <a v-if="prUrl" :href="prUrl" target="_blank" rel="noopener noreferrer" class="btn btn-sm tc-pr">
-          <Icon name="gitPR" />Open pull request{{ prNumber ? ` #${prNumber}` : '' }}<Icon name="external" />
+          <Icon name="gitPR" />Open {{ prLabel }}<Icon name="external" />
         </a>
         <div v-if="miabi" class="row wrap tc-miabi">
           <span v-if="miabi.status" class="badge outline"><Icon name="layers" />{{ miabi.status }}</span>

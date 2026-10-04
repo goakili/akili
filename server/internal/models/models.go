@@ -232,6 +232,7 @@ func (p *ModelProvider) AfterFind(*gorm.DB) error {
 const (
 	ForgeGitea  = "gitea"
 	ForgeGitHub = "github"
+	ForgeGitLab = "gitlab"
 	KindMiabi   = "miabi"
 	KindPosta   = "posta"
 )
@@ -270,7 +271,17 @@ type Integration struct {
 	HasSecret      bool   `gorm:"-" json:"has_secret"`
 	// WebhookSecretEnc verifies forge webhooks (issue triggers).
 	WebhookSecretEnc string `gorm:"type:text" json:"-"`
-	CreatedBy        string `gorm:"size:40" json:"created_by"`
+	// TokenKind (personal, project, group) and TokenExpiresAt are read from GitLab on verify.
+	TokenKind      string     `gorm:"size:20" json:"token_kind,omitempty"`
+	TokenExpiresAt *time.Time `json:"token_expires_at,omitempty"`
+	// TokenExpiryNotified is set once the expiry warning went out for the current TokenExpiresAt.
+	TokenExpiryNotified bool   `gorm:"not null;default:false" json:"-"`
+	CreatedBy           string `gorm:"size:40" json:"created_by"`
+}
+
+// IsForge reports whether kind is a git forge.
+func IsForge(kind string) bool {
+	return kind == ForgeGitea || kind == ForgeGitHub || kind == ForgeGitLab
 }
 
 // AfterFind fills HasSecret.
@@ -282,12 +293,13 @@ func (i *Integration) AfterFind(*gorm.DB) error {
 // Project is a repository agents work on.
 type Project struct {
 	Base
-	Name          string   `gorm:"size:120;not null" json:"name"`
-	Slug          string   `gorm:"size:120;not null" json:"slug"`
-	Description   string   `gorm:"size:500" json:"description"`
-	IntegrationID string   `gorm:"size:40;index;not null" json:"integration_id"`
-	Forge         string   `gorm:"size:20" json:"forge"` // gitea | github, copied from the integration
-	Owner         string   `gorm:"size:120;not null" json:"owner"`
+	Name          string `gorm:"size:120;not null" json:"name"`
+	Slug          string `gorm:"size:120;not null" json:"slug"`
+	Description   string `gorm:"size:500" json:"description"`
+	IntegrationID string `gorm:"size:40;index;not null" json:"integration_id"`
+	Forge         string `gorm:"size:20" json:"forge"` // gitea | github | gitlab, copied from the integration
+	// Owner is a user or organization, or a GitLab namespace path that may nest (platform/backend).
+	Owner         string   `gorm:"size:255;not null" json:"owner"`
 	Repo          string   `gorm:"size:120;not null" json:"repo"`
 	DefaultBranch string   `gorm:"size:120;not null" json:"default_branch"`
 	WebURL        string   `gorm:"size:500" json:"web_url"`

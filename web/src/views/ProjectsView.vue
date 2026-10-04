@@ -9,6 +9,7 @@ import { useCatalog } from '../stores/catalog'
 import { useCoder } from '../stores/coder'
 import { useLive } from '../stores/live'
 import { safeUrl } from '../lib/format'
+import { forgeIcon } from '../lib/forge'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import NewProjectDialog from '../components/NewProjectDialog.vue'
@@ -123,7 +124,7 @@ onUnmounted(() => {
     <div v-else class="proj-grid">
       <article v-for="p in projects" :key="p.id" class="card proj-card stretch-card">
         <div class="pc-top">
-          <span class="pc-forge" aria-hidden="true"><Icon :name="coder.forgeOf(p) === 'github' ? 'github' : 'gitea'" /></span>
+          <span class="pc-forge" aria-hidden="true"><Icon :name="forgeIcon(coder.forgeOf(p))" /></span>
           <div class="grow" style="min-width: 0">
             <RouterLink :to="`/projects/${p.id}`" class="pc-name stretch-link truncate">{{ p.name }}</RouterLink>
             <a v-if="safeUrl(p.web_url)" :href="safeUrl(p.web_url)" target="_blank" rel="noopener noreferrer" class="pc-repo mono" :title="`Open ${p.owner}/${p.repo} on the forge`">

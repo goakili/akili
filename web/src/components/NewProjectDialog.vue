@@ -7,7 +7,8 @@ import { useRouter } from 'vue-router'
 import { api, ApiError, AUTONOMY_LEVELS, type Autonomy, type Integration, type ProjectInput, type ProjectTemplate } from '../api'
 import { useCoder } from '../stores/coder'
 import { useToast } from '../stores/toast'
-import { projectFormErrors, projectFormFrom, projectInput, REPO_NAME_RE } from '../lib/projectForm'
+import { projectFormErrors, projectFormFrom, projectInput, REPO_NAME_RE, validGitLabOwner } from '../lib/projectForm'
+import { forgeLabel } from '../lib/forge'
 import Modal from './Modal.vue'
 import ProjectFields from './ProjectFields.vue'
 import Icon from './Icon'
@@ -34,6 +35,12 @@ const loadingData = ref(false)
 
 const integrations = computed<Integration[]>(() => coder.forges)
 const integration = computed(() => integrations.value.find((i) => i.id === integrationId.value))
+const isGitLab = computed(() => integration.value?.kind === 'gitlab')
+// A GitLab project access token can't create projects; GitLab would refuse with a 403.
+const canCreate = computed(() => !(isGitLab.value && integration.value?.token_kind === 'project'))
+watch(canCreate, (c) => {
+  if (!c) mode.value = 'connect'
+})
 const templates = computed<ProjectTemplate[]>(() => coder.templates?.templates ?? [])
 const template = computed(() => (mode.value === 'create' ? templates.value.find((t) => t.id === templateId.value) : undefined))
 
@@ -68,7 +75,10 @@ watch([integration, mode], ([it, m], [prevIt]) => {
 const errors = computed(() => {
   const e: Record<string, string> = { ...projectFormErrors(form.value) }
   if (!integrationId.value) e.integration = 'Pick an integration.'
-  if (!REPO_NAME_RE.test(owner.value.trim())) e.owner = owner.value.trim() ? 'Letters, digits, dot, dash and underscore only.' : 'Enter the owner (user or organization).'
+  const o = owner.value.trim().replace(/^\/+|\/+$/g, '')
+  if (isGitLab.value) {
+    if (!validGitLabOwner(o)) e.owner = o ? 'A group path such as platform/backend: letters, digits, dot, dash and underscore, separated by /.' : 'Enter the group or user (group/subgroup).'
+  } else if (!REPO_NAME_RE.test(o)) e.owner = o ? 'Letters, digits, dot, dash and underscore only.' : 'Enter the owner (user or organization).'
   if (!REPO_NAME_RE.test(repo.value.trim())) e.repo = repo.value.trim() ? 'Letters, digits, dot, dash and underscore only.' : 'Enter the repository name.'
   return e
 })
@@ -82,7 +92,7 @@ async function submit() {
   const body: ProjectInput = {
     ...projectInput(form.value),
     integration_id: integrationId.value,
-    owner: owner.value.trim(),
+    owner: owner.value.trim().replace(/^\/+|\/+$/g, ''),
     repo: repo.value.trim(),
   }
   if (mode.value === 'create') {
@@ -118,7 +128,7 @@ const TEMPLATE_ICON = (t: ProjectTemplate) => (t.goal ? 'sparkles' : 'file')
     <div v-else-if="!integrations.length" class="stack">
       <div class="banner info">
         <Icon name="plug" />
-        <div class="banner-body">A project lives on a git forge. <strong>Add an integration first</strong> (Gitea or GitHub), then come back to connect or create a repository.</div>
+        <div class="banner-body">A project lives on a git forge. <strong>Add an integration first</strong> (Gitea, GitHub or GitLab), then come back to connect or create a repository.</div>
       </div>
     </div>
     <form v-else id="new-project" class="stack loose" novalidate @submit.prevent="submit">
@@ -126,20 +136,30 @@ const TEMPLATE_ICON = (t: ProjectTemplate) => (t.goal ? 'sparkles' : 'file')
 
       <div class="segmented" role="radiogroup" aria-label="Repository" style="align-self: flex-start">
         <button type="button" role="radio" :aria-checked="mode === 'connect'" :class="{ on: mode === 'connect' }" @click="mode = 'connect'"><Icon name="link" />Connect existing repository</button>
-        <button type="button" role="radio" :aria-checked="mode === 'create'" :class="{ on: mode === 'create' }" @click="mode = 'create'"><Icon name="plus" />Create new repository</button>
+        <button
+          type="button"
+          role="radio"
+          :aria-checked="mode === 'create'"
+          :class="{ on: mode === 'create' }"
+          :disabled="!canCreate"
+          :title="canCreate ? undefined : 'A GitLab project access token cannot create projects. Use a group token with the Maintainer role, or a personal token.'"
+          @click="mode = 'create'"
+        >
+          <Icon name="plus" />Create new repository
+        </button>
       </div>
 
       <div class="grid-3 repo-grid">
         <div class="field">
           <label for="np-int">Integration <span class="req">*</span></label>
           <select id="np-int" v-model="integrationId" class="select" :class="{ invalid: err('integration') }">
-            <option v-for="i in integrations" :key="i.id" :value="i.id">{{ i.name }} · {{ i.kind === 'github' ? 'GitHub' : 'Gitea' }}</option>
+            <option v-for="i in integrations" :key="i.id" :value="i.id">{{ i.name }} · {{ forgeLabel(i.kind) }}</option>
           </select>
           <span v-if="err('integration')" class="error-msg"><Icon name="alert" />{{ err('integration') }}</span>
         </div>
         <div class="field">
           <label for="np-owner">Owner <span class="req">*</span></label>
-          <input id="np-owner" v-model="owner" class="input mono" :class="{ invalid: err('owner') }" autocomplete="off" :placeholder="integration?.username || 'user or org'" />
+          <input id="np-owner" v-model="owner" class="input mono" :class="{ invalid: err('owner') }" autocomplete="off" :placeholder="integration?.username || (isGitLab ? 'group/subgroup' : 'user or org')" />
           <span v-if="err('owner')" class="error-msg"><Icon name="alert" />{{ err('owner') }}</span>
         </div>
         <div class="field">
