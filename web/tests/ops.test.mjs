@@ -77,6 +77,13 @@ test('MCP tools get a server group and a summary of their first arguments', () =
   assert.equal(callSummary({ filter: { a: 1 }, limit: 5 }, 'mcp__x__q'), '5')
 })
 
+test('plan_propose shows the plan title and its phase count', () => {
+  assert.equal(toolIcon('plan_propose'), 'list')
+  assert.equal(callSummary({ title: 'Version  endpoint', phases: [{ title: 'a' }, { title: 'b' }] }, 'plan_propose'), 'Version endpoint · 2 phases')
+  assert.equal(callSummary({ title: 'One', phases: [{ title: 'a' }] }, 'plan_propose'), 'One · 1 phase')
+  assert.equal(callSummary({}, 'plan_propose'), '')
+})
+
 test('lesson_propose shows the lesson text, truncated', () => {
   assert.equal(toolIcon('lesson_propose'), 'lightbulb')
   assert.equal(callSummary({ lesson: 'Deploys  to prod\nneed a tag.' }, 'lesson_propose'), 'Deploys to prod need a tag.')

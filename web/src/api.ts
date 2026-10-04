@@ -983,7 +983,10 @@ export interface ProjectPlan extends Base {
   description: string
   status: PlanStatus
   position: number
+  /** A user id, or "agent:<id>" for a plan an agent proposed with plan_propose. */
   created_by: string
+  /** The session an agent proposed the plan in. */
+  proposed_session_id?: string
 }
 
 export interface PlanPhase extends Base {

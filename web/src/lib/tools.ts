@@ -64,6 +64,8 @@ export const TOOL_ICONS: Record<string, IconName> = {
   miabi_pipelines: 'gitBranch',
   miabi_pipeline_run: 'play',
   lesson_propose: 'lightbulb',
+  plan_propose: 'list',
+  plan_phase_update: 'check',
 }
 
 /** Splits an MCP gateway tool name (mcp__<server>__<tool>); null for any other tool. */
@@ -148,6 +150,10 @@ export function callSummary(input: unknown, tool?: string): string {
   const i = input as Record<string, unknown> | null
   if (!i || typeof i !== 'object' || Array.isArray(i)) return ''
   if (tool === 'lesson_propose') return truncate(scalar(i.lesson), 80)
+  if (tool === 'plan_propose') {
+    const n = Array.isArray(i.phases) ? i.phases.length : 0
+    return truncate(scalar(i.title), 70) + (n ? ` · ${n} phase${n === 1 ? '' : 's'}` : '')
+  }
   if (mcpTool(tool)) return mcpSummary(i)
   if (tool?.startsWith('miabi_') || (!tool && typeof i.app === 'string')) {
     const m = miabiSummary(i, tool)

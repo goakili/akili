@@ -131,7 +131,7 @@ func runServer(cli *okapicli.CLI) error {
 	hub.AddRemoteRunner([]string{proto.ToolLessonPropose}, lessonSvc.RunRemote)
 	hub.SetLessons(lessonSvc.ForPrompt)
 	planSvc := plans.New(db, auditLog, b)
-	hub.AddRemoteRunner([]string{proto.ToolPlanPhaseUpdate}, planSvc.RunRemote)
+	hub.AddRemoteRunner([]string{proto.ToolPlanPhaseUpdate, proto.ToolPlanPropose}, planSvc.RunRemote)
 	mcpSvc := mcp.New(db, box, auditLog, cfg.MCPCommands, cfg.MCPBinDir)
 	hub.SetMCP(mcpSvc.Tools, mcpSvc.RunRemote)
 	gw.Mount(func(agentID string, mux *http.ServeMux) {

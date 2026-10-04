@@ -174,6 +174,7 @@ const (
 	ToolMiabiRestart      = "miabi_restart"
 	ToolLessonPropose     = "lesson_propose"
 	ToolPlanPhaseUpdate   = "plan_phase_update"
+	ToolPlanPropose       = "plan_propose"
 	// ToolChangeRun executes an approved change plan: steps, verification, automatic rollback.
 	ToolChangeRun = "change_run"
 )
@@ -268,6 +269,20 @@ type (
 		Phase  string `json:"phase"`
 		Status string `json:"status"`
 		Note   string `json:"note,omitempty"`
+	}
+
+	// PlanProposeInput proposes a project plan; it is stored as a draft until a person activates it.
+	PlanProposeInput struct {
+		Title       string              `json:"title"`
+		Description string              `json:"description,omitempty"`
+		Phases      []PlanProposalPhase `json:"phases"`
+	}
+
+	// PlanProposalPhase is one phase of a proposed plan.
+	PlanProposalPhase struct {
+		Title    string `json:"title"`
+		Detail   string `json:"detail,omitempty"`
+		DoneWhen string `json:"done_when,omitempty"`
 	}
 
 	// LessonInput proposes a lesson for future sessions; it is used only after an operator approves it.
@@ -1093,6 +1108,52 @@ var catalog = map[string]ToolSpec{
 			`"required":["plan","phase","status"],"additionalProperties":false}`),
 		resources: planPhaseResources,
 	},
+	ToolPlanPropose: {
+		Name: ToolPlanPropose, Risk: RiskLow, Remote: true, Project: true,
+		Description: "Propose a plan for work on this project: a one-line title, a description of the goal and approach, and ordered phases " +
+			"(each a small, reviewable step, with what done means). It is saved as a draft: a person reviews, edits and activates it before any task works on it.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"title":{"type":"string","minLength":1,"maxLength":200},` +
+			`"description":{"type":"string","maxLength":8000},"phases":{"type":"array","minItems":1,"maxItems":30,"items":{"type":"object","properties":{` +
+			`"title":{"type":"string","minLength":1,"maxLength":300},"detail":{"type":"string","maxLength":2000},"done_when":{"type":"string","maxLength":1000}},` +
+			`"required":["title"],"additionalProperties":false}}},"required":["title","phases"],"additionalProperties":false}`),
+		resources: planProposeResources,
+	},
+}
+
+// Bounds of a proposed plan. They are tighter than what people can write: an agent's proposal is a
+// starting point for review, and every linked plan ends up in a task's goal.
+const (
+	MaxProposedPhases      = 30
+	MaxProposedTitle       = 200
+	MaxProposedPhaseTitle  = 300
+	MaxProposedDescription = 8000
+	MaxProposedDetail      = 2000
+	MaxProposedDoneWhen    = 1000
+)
+
+func planProposeResources(in json.RawMessage) (Resources, error) {
+	v, err := decode[PlanProposeInput](in)
+	if err != nil {
+		return Resources{}, err
+	}
+	if t := strings.TrimSpace(v.Title); t == "" || len([]rune(t)) > MaxProposedTitle || strings.ContainsAny(t, "\r\n") {
+		return Resources{}, fmt.Errorf("a plan needs a one-line title of 1-%d characters", MaxProposedTitle)
+	}
+	if len([]rune(v.Description)) > MaxProposedDescription {
+		return Resources{}, fmt.Errorf("the description is at most %d characters", MaxProposedDescription)
+	}
+	if len(v.Phases) == 0 || len(v.Phases) > MaxProposedPhases {
+		return Resources{}, fmt.Errorf("a plan has 1-%d phases", MaxProposedPhases)
+	}
+	for i, p := range v.Phases {
+		if t := strings.TrimSpace(p.Title); t == "" || len([]rune(t)) > MaxProposedPhaseTitle || strings.ContainsAny(t, "\r\n") {
+			return Resources{}, fmt.Errorf("phase %d needs a one-line title of 1-%d characters", i+1, MaxProposedPhaseTitle)
+		}
+		if len([]rune(p.Detail)) > MaxProposedDetail || len([]rune(p.DoneWhen)) > MaxProposedDoneWhen {
+			return Resources{}, fmt.Errorf("phase %d: detail is at most %d characters and done_when at most %d", i+1, MaxProposedDetail, MaxProposedDoneWhen)
+		}
+	}
+	return Resources{}, nil
 }
 
 // MaxPlanNote bounds the note an agent leaves on a plan phase.

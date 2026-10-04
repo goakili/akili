@@ -1,11 +1,13 @@
 <!-- SPDX-FileCopyrightText: 2026 Jonas Kaninda -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-// The project page's Plans tab: plans as people write them (description + phases), their progress,
-// and the tasks that work on them. Agents only report progress on phases (plan_phase_update).
+// The project page's Plans tab: plans (description + phases), their progress, and the tasks that
+// work on them. Agents report progress on phases (plan_phase_update) and propose new plans
+// (plan_propose), which arrive as drafts a person reviews and activates.
 import { computed, ref, watch } from 'vue'
-import { api, type PlanDetail, type PlanPhase, type PlanPhaseInput, type PlanSummary, type PhaseStatus } from '../api'
+import { api, type PlanDetail, type PlanPhase, type PlanPhaseInput, type PlanSummary, type PhaseStatus, type ProjectPlan } from '../api'
 import { useAuth } from '../stores/auth'
+import { useCatalog } from '../stores/catalog'
 import { useConfirm } from '../stores/confirm'
 import { useToast } from '../stores/toast'
 import { relTime, shortId } from '../lib/format'
@@ -25,6 +27,8 @@ export interface PhaseFocus {
 }
 const emit = defineEmits<{ (e: 'changed'): void; (e: 'createTask', planIds: string[], goal: string, focus: PhaseFocus | null): void }>()
 const auth = useAuth()
+const catalog = useCatalog()
+catalog.loadAgents().catch(() => {})
 const confirm = useConfirm()
 const toast = useToast()
 
@@ -134,6 +138,8 @@ async function setPhase(st: PlanPhase, status: PhaseStatus, note = st.note) {
 }
 
 const byAgent = (st: PlanPhase) => st.updated_by.startsWith('agent:')
+/** The agent that proposed a plan, or '' for one a person wrote. */
+const proposer = (p: ProjectPlan) => (p.created_by.startsWith('agent:') ? catalog.agentName(p.created_by.slice(6)) : '')
 
 // ---- create / edit ----------------------------------------------------------------------------------
 const formOpen = ref(false)
@@ -273,7 +279,16 @@ async function remove() {
           <div class="plan-bar"><span :style="{ width: pct(detailClosed, detailPhases.length) + '%' }" /></div>
           <span class="small muted">{{ detailClosed }}/{{ detailPhases.length }} phases</span>
         </div>
-        <p v-if="detail.plan.status === 'draft'" class="hint" style="margin: 0">A draft can't be linked to tasks. Activate it when it is ready.</p>
+        <div v-if="proposer(detail.plan)" class="banner info">
+          <Icon name="sparkles" />
+          <div class="banner-body">
+            Proposed by agent <strong>{{ proposer(detail.plan) }}</strong>
+            <template v-if="detail.plan.proposed_session_id">
+              in <RouterLink :to="`/sessions/${detail.plan.proposed_session_id}`">its session</RouterLink></template>.
+            <template v-if="detail.plan.status === 'draft'"> Review it, edit what needs changing, then activate it. Until then no task works on it.</template>
+          </div>
+        </div>
+        <p v-else-if="detail.plan.status === 'draft'" class="hint" style="margin: 0">A draft can't be linked to tasks. Activate it when it is ready.</p>
       </div>
 
       <SafeMarkdown v-if="detail.plan.description" :text="detail.plan.description" />
@@ -386,7 +401,10 @@ async function remove() {
       <li v-for="p in shown" :key="p.id">
         <button type="button" class="plan-row" @click="openPlan(p.id)">
           <span class="plan-row-main">
-            <span class="plan-row-title">{{ p.title }}</span>
+            <span class="plan-row-title">
+              {{ p.title }}
+              <span v-if="proposer(p)" class="badge outline square" :title="`Proposed by agent ${proposer(p)}`"><Icon name="sparkles" />proposed</span>
+            </span>
             <span v-if="p.description" class="small muted truncate">{{ excerpt(p.description) }}</span>
           </span>
           <span class="plan-row-side">
