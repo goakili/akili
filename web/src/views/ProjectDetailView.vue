@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, ApiError, AUTONOMY_LEVELS, type Autonomy, type ChatSession, type MaintenancePreset, type Project, type Schedule, type Task } from '../api'
+import { api, ApiError, AUTONOMY_LEVELS, type Autonomy, type ChatSession, type MaintenancePreset, type PlanSummary, type Project, type Schedule, type Task } from '../api'
 import { useAuth } from '../stores/auth'
 import { useCatalog } from '../stores/catalog'
 import { useCoder } from '../stores/coder'
@@ -21,6 +21,7 @@ import EmptyState from '../components/EmptyState.vue'
 import SkeletonRows from '../components/SkeletonRows.vue'
 import ProjectFields from '../components/ProjectFields.vue'
 import NewTaskModal from '../components/NewTaskModal.vue'
+import ProjectPlansTab, { type PhaseFocus } from '../components/ProjectPlansTab.vue'
 import PrLink from '../components/PrLink.vue'
 import Icon, { type IconName } from '../components/Icon'
 
@@ -42,12 +43,15 @@ const tasks = ref<Task[] | null>(null)
 const schedules = ref<Schedule[] | null>(null)
 const sessions = ref<ChatSession[] | null>(null)
 const presets = ref<MaintenancePreset[]>([])
+const plans = ref<PlanSummary[] | null>(null)
+const planTitle = (id: string) => plans.value?.find((p) => p.id === id)?.title ?? id
 
 // ---- tabs ----------------------------------------------------------------------------------------
-type TabId = 'overview' | 'tasks' | 'maintenance' | 'chat'
+type TabId = 'overview' | 'plans' | 'tasks' | 'maintenance' | 'chat'
 const TABS = computed(() => {
   const t: { id: TabId; label: string; icon: IconName; count?: number }[] = [
     { id: 'overview', label: 'Overview', icon: 'overview' },
+    { id: 'plans', label: 'Plans', icon: 'list', count: plans.value?.filter((p) => p.status !== 'done' && p.status !== 'archived').length },
     { id: 'tasks', label: 'Tasks', icon: 'tasks', count: tasks.value?.length },
     { id: 'maintenance', label: 'Maintenance', icon: 'schedules', count: schedules.value?.length },
     { id: 'chat', label: 'Chat', icon: 'chat', count: sessions.value?.length },
@@ -76,6 +80,15 @@ async function load() {
   loadTasks()
   loadSchedules()
   loadSessions()
+  loadPlans()
+}
+
+async function loadPlans() {
+  try {
+    plans.value = (await api.listPlans(props.id, { quiet: true })) ?? []
+  } catch {
+    plans.value = plans.value ?? []
+  }
 }
 
 async function loadTasks() {
@@ -165,7 +178,26 @@ async function remove() {
 
 // ---- new coding task -----------------------------------------------------------------------------
 const showTask = ref(false)
-const taskInitial = computed(() => ({ project_id: props.id }))
+const taskGoal = ref('')
+const taskInitial = computed(() => ({ project_id: props.id, goal: taskGoal.value }))
+const taskPlans = ref<string[]>([])
+const taskFocus = ref<PhaseFocus | null>(null)
+function newTask(planIds: string[] = [], goal = '', focus: PhaseFocus | null = null) {
+  taskPlans.value = planIds
+  taskGoal.value = goal
+  taskFocus.value = focus
+  showTask.value = true
+}
+async function startDraft(t: Task) {
+  try {
+    const started = await api.startTask(t.id)
+    const i = tasks.value?.findIndex((x) => x.id === t.id) ?? -1
+    if (tasks.value && i >= 0) tasks.value[i] = { ...started, plan_ids: t.plan_ids }
+    toast.success(`Task queued: ${t.title || 'untitled'}`)
+  } catch {
+    /* toasted */
+  }
+}
 function onTaskCreated(t: Task) {
   showTask.value = false
   router.push(`/tasks/${t.id}`)
@@ -284,9 +316,11 @@ onMounted(async () => {
       const t = ev.data as Task
       if (t.project_id !== props.id || !tasks.value) return
       const i = tasks.value.findIndex((x) => x.id === t.id)
-      if (i >= 0) tasks.value[i] = t
+      // task.updated carries the task without its plans: keep the ones we know.
+      if (i >= 0) tasks.value[i] = { ...t, plan_ids: tasks.value[i].plan_ids }
       else tasks.value.unshift(t)
     }
+    if (ev.type === 'plan.updated' && (ev.data as { project_id?: string } | undefined)?.project_id === props.id) loadPlans()
     if (ev.type === 'session.created' || ev.type === 'session.closed') loadSessions()
   })
   offRe = live.onReconnect(load)
@@ -321,7 +355,7 @@ onUnmounted(() => {
       </template>
       <template v-if="auth.isOperator">
         <button type="button" class="btn" @click="openChatTab"><Icon name="chat" />Chat</button>
-        <button type="button" class="btn btn-primary" @click="showTask = true"><Icon name="plus" />New coding task</button>
+        <button type="button" class="btn btn-primary" @click="newTask()"><Icon name="plus" />New coding task</button>
       </template>
     </PageHeader>
 
@@ -342,8 +376,11 @@ onUnmounted(() => {
         </button>
       </div>
 
+      <!-- plans -->
+      <ProjectPlansTab v-if="tab === 'plans'" id="ppanel-plans" role="tabpanel" aria-labelledby="ptab-plans" :project-id="props.id" :plans="plans" @changed="loadPlans" @create-task="newTask" />
+
       <!-- overview -->
-      <div v-if="tab === 'overview'" id="ppanel-overview" role="tabpanel" aria-labelledby="ptab-overview" class="detail-grid">
+      <div v-else-if="tab === 'overview'" id="ppanel-overview" role="tabpanel" aria-labelledby="ptab-overview" class="detail-grid">
         <form v-if="auth.isAdmin" class="card" novalidate @submit.prevent="save">
           <div class="card-head"><h2><Icon name="settings" />Settings</h2><span v-if="dirty" class="badge warn"><Icon name="edit" />unsaved</span></div>
           <div class="card-body"><ProjectFields v-model="form" id-prefix="pe" :show-errors="tried" name-placeholder="Project name" /></div>
@@ -396,7 +433,7 @@ onUnmounted(() => {
       <section v-else-if="tab === 'tasks'" id="ppanel-tasks" role="tabpanel" aria-labelledby="ptab-tasks" class="card">
         <div class="card-head">
           <h2><Icon name="tasks" />Coding tasks</h2>
-          <button v-if="auth.isOperator" type="button" class="btn btn-sm btn-primary" @click="showTask = true"><Icon name="plus" />New coding task</button>
+          <button v-if="auth.isOperator" type="button" class="btn btn-sm btn-primary" @click="newTask()"><Icon name="plus" />New coding task</button>
         </div>
         <div class="table-wrap">
           <table class="table">
@@ -409,7 +446,7 @@ onUnmounted(() => {
                 <td colspan="6">
                   <EmptyState title="No coding tasks yet" icon="gitPR" compact>
                     Describe a change; an agent makes it on its own branch and opens a pull request.
-                    <template v-if="auth.isOperator" #actions><button type="button" class="btn btn-primary btn-sm" @click="showTask = true"><Icon name="plus" />New coding task</button></template>
+                    <template v-if="auth.isOperator" #actions><button type="button" class="btn btn-primary btn-sm" @click="newTask()"><Icon name="plus" />New coding task</button></template>
                   </EmptyState>
                 </td>
               </tr>
@@ -417,8 +454,16 @@ onUnmounted(() => {
                 <td style="max-width: 380px">
                   <RouterLink :to="`/tasks/${t.id}`" class="cell-title truncate" style="display: block" @click.stop>{{ t.title || t.goal }}</RouterLink>
                   <div v-if="t.status_reason" class="cell-sub truncate">{{ t.status_reason }}</div>
+                  <div v-if="t.plan_ids?.length" class="cell-sub plan-chips">
+                    <span v-for="pid in t.plan_ids" :key="pid" class="badge outline square"><Icon name="list" :size="11" />{{ planTitle(pid) }}</span>
+                  </div>
                 </td>
-                <td><Badge :value="t.status" /></td>
+                <td>
+                  <Badge :value="t.status" />
+                  <button v-if="t.status === 'draft' && auth.isOperator" type="button" class="btn btn-sm btn-primary" style="margin-left: 6px" @click.stop="startDraft(t)">
+                    <Icon name="play" />Start
+                  </button>
+                </td>
                 <td><PrLink v-if="t.pr_url" :url="t.pr_url" :number="t.pr_number" /><span v-else class="small muted">—</span></td>
                 <td class="hide-mobile"><span v-if="t.branch" class="mono small">{{ t.branch }}</span></td>
                 <td class="hide-mobile"><span class="badge outline square">{{ t.trigger || 'manual' }}</span></td>
@@ -533,7 +578,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <NewTaskModal :open="showTask" :initial="taskInitial" lock-project :title="`New coding task · ${project.name}`" @close="showTask = false" @created="onTaskCreated" />
+    <NewTaskModal :open="showTask" :initial="taskInitial" :plan-ids="taskPlans" :focus="taskFocus" lock-project :title="`New coding task · ${project.name}`" @close="showTask = false" @created="onTaskCreated" />
 
     <Modal :open="!!presetFor" :title="presetFor ? `Schedule: ${presetFor.name}` : ''" :dismissable="!scheduling" @close="presetFor = null">
       <form v-if="presetFor" id="preset-form" class="stack" @submit.prevent="schedulePreset">
@@ -561,6 +606,12 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.plan-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
 .repo-line {
   display: inline-flex;
   align-items: center;

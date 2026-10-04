@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { api, ApiError, AUTONOMY_LEVELS, type Change, type Task } from '../api'
+import { api, ApiError, AUTONOMY_LEVELS, type Change, type Task, type TaskPlan } from '../api'
 import { useAuth } from '../stores/auth'
 import { useCatalog } from '../stores/catalog'
 import { useCoder } from '../stores/coder'
@@ -51,7 +51,26 @@ function setTask(t: Task) {
   ui.crumb = t.title || 'Task'
 }
 
+// The plans as the agent received them (snapshots taken when the task was created).
+const linkedPlans = ref<TaskPlan[]>([])
+function loadPlans() {
+  api.taskPlans(props.id, { quiet: true }).then((p) => (linkedPlans.value = p ?? [])).catch(() => {})
+}
+
+async function start() {
+  busy.value = true
+  try {
+    setTask(await api.startTask(props.id))
+    toast.success('Task queued')
+  } catch {
+    /* toasted */
+  } finally {
+    busy.value = false
+  }
+}
+
 async function load() {
+  loadPlans()
   try {
     setTask(await api.getTask(props.id, { quiet: true }))
   } catch (e) {
@@ -227,7 +246,8 @@ onUnmounted(() => {
     <PageHeader :title="task.title || 'Task'" :back="{ to: '/tasks', label: 'Tasks' }" :subtitle="task.status_reason || undefined" style="margin-bottom: 0">
       <template #badges><Badge :value="task.status" /><TriggerChip :task="task" /></template>
       <template v-if="auth.isOperator">
-        <button v-if="!terminal" type="button" class="btn btn-danger-ghost" :disabled="busy" @click="cancel"><Icon name="stop" />Cancel task</button>
+        <button v-if="task.status === 'draft'" type="button" class="btn btn-primary" :disabled="busy" @click="start"><Icon name="play" />Start task</button>
+        <button v-if="!terminal" type="button" class="btn btn-danger-ghost" :disabled="busy" @click="cancel"><Icon name="stop" />{{ task.status === 'draft' ? 'Discard draft' : 'Cancel task' }}</button>
         <button v-if="terminal" type="button" class="btn btn-primary" :disabled="busy" @click="retry"><Icon name="refresh" />Retry</button>
       </template>
     </PageHeader>
@@ -304,6 +324,24 @@ onUnmounted(() => {
         <div class="card-head"><h2><Icon name="sparkles" />Goal</h2></div>
         <div class="card-body stack">
           <div class="pre-wrap">{{ task.goal }}</div>
+          <div v-if="task.status === 'draft'" class="banner info" role="note">
+            <Icon name="info" />
+            <div class="banner-body">This task is a <strong>draft</strong>: no agent works on it until you start it.</div>
+          </div>
+          <div v-if="linkedPlans.length">
+            <div class="section-title" style="margin-bottom: 8px">Plans</div>
+            <ul class="linked-plans">
+              <li v-for="lp in linkedPlans" :key="lp.plan_id">
+                <RouterLink :to="{ path: `/projects/${task.project_id}`, query: { tab: 'plans' } }"><Icon name="list" :size="13" />{{ lp.snapshot.title }}</RouterLink>
+                <span v-if="lp.phase_id" class="small">
+                  phase: <strong>{{ (lp.snapshot.phases ?? []).find((p) => p.id === lp.phase_id)?.title ?? lp.phase_id }}</strong>
+                </span>
+                <span class="small muted">
+                  {{ (lp.snapshot.phases ?? []).filter((s) => s.status === 'done' || s.status === 'skipped').length }}/{{ (lp.snapshot.phases ?? []).length }} phases done when the task was created
+                </span>
+              </li>
+            </ul>
+          </div>
           <div v-if="task.result">
             <div class="section-title" style="margin-bottom: 8px">Result</div>
             <div class="banner ok" style="display: block"><SafeMarkdown :text="task.result" /></div>
@@ -360,6 +398,25 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.linked-plans {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.linked-plans a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.linked-plans li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
 .task-frame {
   height: 680px;
   max-height: calc(100vh - 120px);

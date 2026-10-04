@@ -618,8 +618,9 @@ type Approval struct {
 	ChangeID  *string         `gorm:"size:40" json:"change_id"` // set for change_run approvals
 }
 
-// Task statuses.
+// Task statuses. A draft is saved but not queued: the dispatcher picks up only queued tasks.
 const (
+	TaskDraft     = "draft"
 	TaskQueued    = "queued"
 	TaskAssigned  = "assigned"
 	TaskRunning   = "running"
@@ -668,6 +669,8 @@ type Task struct {
 	// Trigger records what created the task (manual, schedule, issue).
 	Trigger    string `gorm:"size:40" json:"trigger"`
 	TriggerRef string `gorm:"size:300" json:"trigger_ref"`
+	// PlanIDs are the project plans linked to the task (TaskPlan), filled in by the API.
+	PlanIDs []string `gorm:"-" json:"plan_ids,omitempty"`
 }
 
 // TaskTemplate is what a schedule creates.
@@ -769,5 +772,82 @@ func All() []any {
 		&ChatSession{}, &SessionMessage{}, &SessionEvent{}, &Attachment{}, &Approval{}, &Task{}, &Schedule{}, &Usage{},
 		&AuditLog{}, &Setting{}, &UpgradeStep{}, &Integration{}, &Project{}, &Change{}, &AlertRoute{}, &TerminalSession{}, &MiabiWatch{},
 		&MiabiWorkspace{}, &MCPServer{}, &MCPTool{}, &Lesson{}, &ChatChannel{}, &ChatIdentity{}, &ChatLinkCode{}, &ChatConversation{}, &License{},
+		&ProjectPlan{}, &PlanPhase{}, &TaskPlan{},
 	}
+}
+
+// Project plan statuses. in_progress and done follow the phases; people set the others.
+const (
+	PlanDraft      = "draft"
+	PlanActive     = "active"
+	PlanInProgress = "in_progress"
+	PlanDone       = "done"
+	PlanArchived   = "archived"
+)
+
+// Plan phase statuses.
+const (
+	PhaseTodo       = "todo"
+	PhaseInProgress = "in_progress"
+	PhaseDone       = "done"
+	PhaseSkipped    = "skipped"
+)
+
+// ProjectPlan is a piece of work on a project, written by a person: a description and ordered
+// phases. Tasks are linked to plans and report progress on the phases. (Not a change plan: those are
+// approved tool calls, see Change.)
+type ProjectPlan struct {
+	Base
+	ProjectID   string `gorm:"size:40;index;not null" json:"project_id"`
+	Title       string `gorm:"size:200;not null" json:"title"`
+	Description string `gorm:"type:text" json:"description"`
+	Status      string `gorm:"size:20;index;not null" json:"status"`
+	Position    int    `json:"position"`
+	CreatedBy   string `gorm:"size:40" json:"created_by"`
+}
+
+// PlanPhase is one phase of a project plan.
+type PlanPhase struct {
+	Base
+	PlanID   string `gorm:"size:40;index;not null" json:"plan_id"`
+	Position int    `json:"position"`
+	Title    string `gorm:"size:300;not null" json:"title"`
+	Detail   string `gorm:"type:text" json:"detail"`
+	// DoneWhen says what finished means for this phase; the agent and its reviewer judge by it.
+	DoneWhen string `gorm:"type:text" json:"done_when"`
+	Status   string `gorm:"size:20;not null" json:"status"`
+	Note     string `gorm:"size:1000" json:"note"`
+	// DoneByTask is the task whose agent last changed the phase; nil when a person did.
+	DoneByTask *string `gorm:"size:40" json:"done_by_task"`
+	// UpdatedBy is a user id, or "agent:<id>" for a change reported through plan_phase_update.
+	UpdatedBy string `gorm:"size:60" json:"updated_by"`
+}
+
+// TaskPlan links a task to a plan, with the plan as it was when the task was created: the agent
+// works from that snapshot, and the audit shows exactly what it was given.
+type TaskPlan struct {
+	OrganizationID string `gorm:"size:40;index;not null" json:"organization_id"`
+	TaskID         string `gorm:"primaryKey;size:40" json:"task_id"`
+	PlanID         string `gorm:"primaryKey;size:40;index" json:"plan_id"`
+	// PhaseID focuses the task on one phase: the rest of the plan is context, and the agent may
+	// report progress on that phase only.
+	PhaseID   *string      `gorm:"size:40;index" json:"phase_id"`
+	Snapshot  PlanSnapshot `gorm:"type:jsonb;serializer:json" json:"snapshot"`
+	CreatedAt time.Time    `json:"created_at"`
+}
+
+// PlanSnapshot is a plan's content at one moment.
+type PlanSnapshot struct {
+	Title       string              `json:"title"`
+	Description string              `json:"description"`
+	Phases      []PlanSnapshotPhase `json:"phases"`
+}
+
+// PlanSnapshotPhase is one phase in a PlanSnapshot.
+type PlanSnapshotPhase struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Detail   string `json:"detail,omitempty"`
+	DoneWhen string `json:"done_when,omitempty"`
+	Status   string `json:"status"`
 }

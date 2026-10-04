@@ -88,7 +88,7 @@ const filtered = computed(() => {
 })
 
 function column(t: Task): ColKey {
-  if (t.status === 'queued') return 'queued'
+  if (t.status === 'queued' || t.status === 'draft') return 'queued'
   if (t.status === 'succeeded') return 'done'
   if (t.status === 'failed' || t.status === 'cancelled' || t.status === 'timed_out') return 'failed'
   return waiting.value.has(t.id) ? 'approval' : 'running'

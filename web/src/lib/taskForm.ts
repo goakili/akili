@@ -21,6 +21,10 @@ export interface TaskForm {
   priority: number
   /** Coding task on a project's repository ('' = none). */
   project_id: string
+  /** Project plans to link (new tasks on a project only). */
+  plan_ids: string[]
+  /** One phase of a plan to focus the task on ('' = whole plans). */
+  plan_phase_id: string
 }
 
 export function taskFormFrom(t?: Partial<TaskTemplate> | null): TaskForm {
@@ -39,6 +43,8 @@ export function taskFormFrom(t?: Partial<TaskTemplate> | null): TaskForm {
     max_attempts: t?.max_attempts ?? 2,
     priority: t?.priority ?? 0,
     project_id: t?.project_id ?? '',
+    plan_ids: [],
+    plan_phase_id: '',
   }
 }
 
@@ -56,6 +62,8 @@ export function taskInput(f: TaskForm): TaskInput & TaskTemplate {
     max_attempts: Math.round(n(f.max_attempts)),
     priority: Math.round(n(f.priority)),
     project_id: f.project_id || null,
+    ...(f.project_id && f.plan_ids.length ? { plan_ids: f.plan_ids } : {}),
+    ...(f.project_id && f.plan_phase_id ? { plan_phase_id: f.plan_phase_id } : {}),
   }
 }
 

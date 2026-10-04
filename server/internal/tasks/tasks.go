@@ -19,6 +19,7 @@ import (
 	"github.com/goakili/akili/server/internal/leader"
 	"github.com/goakili/akili/server/internal/models"
 	"github.com/goakili/akili/server/internal/notify"
+	"github.com/goakili/akili/server/internal/plans"
 	"github.com/goakili/akili/server/internal/sessions"
 	"github.com/jkaninda/logger"
 	"github.com/robfig/cron/v3"
@@ -67,6 +68,12 @@ type Input struct {
 	ProjectID   *string
 	Trigger     string
 	TriggerRef  string
+	// PlanIDs links project plans; the agent receives them in its goal.
+	PlanIDs []string
+	// PlanPhaseID focuses the task on one phase of a plan (that plan is linked too).
+	PlanPhaseID string
+	// Draft saves the task without queueing it; Start queues it later.
+	Draft bool
 }
 
 // DefaultAutonomy is used when a task does not set one. Project tasks run at L2: file edits, commits,
@@ -134,23 +141,72 @@ func (s *Service) Create(ctx context.Context, org, userID string, in Input) (*mo
 	if in.Selector == nil {
 		in.Selector = []string{}
 	}
+	status := models.TaskQueued
+	if in.Draft {
+		status = models.TaskDraft
+	}
 	t := &models.Task{Base: models.Base{ID: models.NewID("tsk"), OrganizationID: org}, Title: in.Title, Goal: in.Goal,
-		AgentID: in.AgentID, Selector: in.Selector, Status: models.TaskQueued, Priority: in.Priority, Autonomy: in.Autonomy,
+		AgentID: in.AgentID, Selector: in.Selector, Status: status, Priority: in.Priority, Autonomy: in.Autonomy,
 		BudgetUSD: in.BudgetUSD, MaxTurns: in.MaxTurns, TimeoutSec: in.TimeoutSec, MaxAttempts: in.MaxAttempts,
 		ScheduleID: in.ScheduleID, CreatedBy: userID, ProjectID: in.ProjectID, Trigger: in.Trigger, TriggerRef: in.TriggerRef}
 	if t.ProjectID != nil {
 		t.Branch = "akili/" + t.ID
 	}
-	if err := s.db.WithContext(ctx).Create(t).Error; err != nil {
+	projectID := ""
+	if t.ProjectID != nil {
+		projectID = *t.ProjectID
+	}
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(t).Error; err != nil {
+			return err
+		}
+		return plans.Attach(ctx, tx, org, projectID, t.ID, in.PlanIDs, in.PlanPhaseID)
+	})
+	if err != nil {
+		if errors.Is(err, plans.ErrInvalid) {
+			return nil, ErrInvalidPlans{err}
+		}
 		return nil, err
 	}
+	t.PlanIDs = in.PlanIDs
 	actorType := audit.ActorUser
 	if userID == "" {
 		actorType = audit.ActorSystem
 	}
 	s.audit.Best(ctx, audit.Entry{OrganizationID: org, ActorType: actorType, ActorID: userID, Action: "task.create", TargetType: "task", TargetID: t.ID,
 		Metadata: map[string]any{"title": t.Title, "agent_id": t.AgentID, "selector": t.Selector, "autonomy": int(t.Autonomy), "budget_usd": t.BudgetUSD,
-			"project_id": t.ProjectID, "trigger": t.Trigger}})
+			"project_id": t.ProjectID, "trigger": t.Trigger, "plan_ids": in.PlanIDs, "plan_phase_id": in.PlanPhaseID, "draft": in.Draft}})
+	s.emit(ctx, t)
+	if !in.Draft {
+		s.bus.Wake(ctx)
+	}
+	return t, nil
+}
+
+// ErrInvalidPlans wraps a refused plan link, so handlers can answer 400.
+type ErrInvalidPlans struct{ Err error }
+
+func (e ErrInvalidPlans) Error() string { return e.Err.Error() }
+func (e ErrInvalidPlans) Unwrap() error { return e.Err }
+
+// ErrNotDraft is returned when Start is called on a task that is not a draft.
+var ErrNotDraft = errors.New("only a draft task can be started")
+
+// Start queues a draft task.
+func (s *Service) Start(ctx context.Context, org, userID, id string) (*models.Task, error) {
+	res := s.db.WithContext(ctx).Model(&models.Task{}).Where("id = ? AND organization_id = ? AND status = ?", id, org, models.TaskDraft).
+		Update("status", models.TaskQueued)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	t, err := s.Get(ctx, org, id)
+	if err != nil {
+		return nil, err
+	}
+	if res.RowsAffected == 0 {
+		return nil, ErrNotDraft
+	}
+	s.audit.Best(ctx, audit.Entry{OrganizationID: org, ActorType: audit.ActorUser, ActorID: userID, Action: "task.run", TargetType: "task", TargetID: t.ID})
 	s.emit(ctx, t)
 	s.bus.Wake(ctx)
 	return t, nil
