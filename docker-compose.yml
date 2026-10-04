@@ -1,5 +1,5 @@
 # Local development stack: Postgres, Redis and the control plane.
-#   docker compose up -d --build            # UI on http://localhost:8080
+#   docker compose up -d --build            # UI on http://localhost:9000
 #   docker compose --profile agent up -d    # also run a local agent (set AKILI_JOIN_TOKEN first)
 services:
   postgres:
@@ -29,12 +29,12 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-    ports: ["8080:8080"]
+    ports: ["9000:9000"]
     environment:
       AKILI_ENV: development
       AKILI_DATABASE_URL: postgres://akili:akili@postgres:5432/akili?sslmode=disable
       AKILI_REDIS_ADDR: redis:6379
-      AKILI_PUBLIC_URL: http://localhost:8080
+      AKILI_PUBLIC_URL: http://localhost:9000
       AKILI_ADMIN_EMAIL: ${AKILI_ADMIN_EMAIL:-admin@akili.local}
       AKILI_ADMIN_PASSWORD: ${AKILI_ADMIN_PASSWORD:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -45,7 +45,7 @@ services:
     image: jkaninda/akili-agent:dev
     depends_on: [akili]
     environment:
-      AKILI_URL: http://akili:8080
+      AKILI_URL: http://akili:9000
       AKILI_JOIN_TOKEN: ${AKILI_JOIN_TOKEN:-}
       AKILI_CA_CERT_PEM: ${AKILI_CA_CERT_PEM:-}
       AKILI_LOG_FORMAT: text

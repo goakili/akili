@@ -20,7 +20,7 @@ docker compose logs akili | grep password   # the generated owner password, if y
 Open `AKILI_PUBLIC_URL`, sign in, then add an agent under **Agents → Add agent**. The control plane
 serves the agent binary, so the install command it shows always installs a matching agent.
 
-For a quick local test over plain HTTP, set `AKILI_PUBLIC_URL=http://localhost:8080` and
+For a quick local test over plain HTTP, set `AKILI_PUBLIC_URL=http://localhost:9000` and
 `AKILI_COOKIE_SECURE=false`.
 
 ## Production notes

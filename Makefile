@@ -21,7 +21,7 @@ BUILDER     ?= akili-builder
 SERVER_IMAGE = $(REGISTRY)/akili
 AGENT_IMAGE  = $(REGISTRY)/akili-agent
 
-AKILI_URL       ?= $(or $(AKILI_PUBLIC_URL),http://localhost:8080)
+AKILI_URL       ?= $(or $(AKILI_PUBLIC_URL),http://localhost:9000)
 AGENT_STATE_DIR ?= .agent/state
 AGENT_WORKDIR   ?= .agent/work
 
@@ -92,7 +92,7 @@ vet:
 	@for m in $(MODULES); do (cd $$m && go vet ./...) || exit 1; done
 	cd server && go vet -tags enterprise ./...
 
-# Build the UI and the server, then run the built binary (embedded UI on :8080) against the compose
+# Build the UI and the server, then run the built binary (embedded UI on :9000) against the compose
 # Postgres/Redis. Settings come from .env.
 run: server
 	@test -f .env || cp .env.example .env
