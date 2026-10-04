@@ -1,18 +1,18 @@
-/* Akili console. Miabi design tokens with the brand's forest green as primary; light / dark via
+/* Akili console. Miabi design tokens with Miabi's Lime accent as primary; light / dark via
    [data-theme] on <html>. */
 
 :root {
-  /* primary: forest, ending at the logo's #0F2A24 (500+ dark enough that white text on 500/600 reads) */
-  --primary-50: #effaf5;
-  --primary-100: #d9f2e7;
-  --primary-200: #b5e4d2;
-  --primary-300: #84cfb6;
-  --primary-400: #51b395;
-  --primary-500: #207a63;
-  --primary-600: #1b6152;
-  --primary-700: #184e43;
-  --primary-800: #15403a;
-  --primary-900: #0f2a24;
+  /* primary: Miabi Lime, 500+ one step darker than Tailwind so white text on 600 reads */
+  --primary-50: #f7fee7;
+  --primary-100: #ecfccb;
+  --primary-200: #d9f99d;
+  --primary-300: #bef264;
+  --primary-400: #a3e635;
+  --primary-500: #65a30d;
+  --primary-600: #4d7c0f;
+  --primary-700: #3f6212;
+  --primary-800: #365314;
+  --primary-900: #1a2e05;
 
   --success-50: #f0fdf4;
   --success-500: #22c55e;
@@ -89,7 +89,7 @@
 }
 
 [data-theme='dark'] {
-  --primary-50: #10302a;
+  --primary-50: #17250a;
   --success-50: #0d2818;
   --warning-50: #2d1f0a;
   --danger-50: #2d0f0f;

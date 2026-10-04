@@ -34,9 +34,9 @@ const DARK: ITheme = {
 const LIGHT: ITheme = {
   background: '#ffffff',
   foreground: '#111827',
-  cursor: '#1b6152',
+  cursor: '#4d7c0f',
   cursorAccent: '#ffffff',
-  selectionBackground: 'rgba(32, 122, 99, 0.22)',
+  selectionBackground: 'rgba(101, 163, 13, 0.22)',
   black: '#111827',
   red: '#b91c1c',
   green: '#15803d',
