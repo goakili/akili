@@ -1,0 +1,106 @@
+{
+  "name": "akili",
+  "displayName": "Akili",
+  "description": "Chat with Akili agents, run coding tasks, approve actions and review their changes from VS Code.",
+  "version": "0.1.0",
+  "publisher": "goakili",
+  "license": "AGPL-3.0-or-later",
+  "homepage": "https://goakili.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/goakili/akili.git",
+    "directory": "vscode"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "akili",
+    "agents",
+    "ai",
+    "coding agent",
+    "approvals"
+  ],
+  "icon": "media/icon.png",
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onUri"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In an untrusted folder Akili does not link the project or run git; sign-in and chat still work."
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "akili",
+          "title": "Akili",
+          "icon": "media/akili.svg"
+        }
+      ]
+    },
+    "views": {
+      "akili": [
+        {
+          "type": "webview",
+          "id": "akili.sidebar",
+          "name": "Akili"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "akili.signIn", "title": "Sign in", "category": "Akili" },
+      { "command": "akili.signInWithKey", "title": "Sign in with an API key", "category": "Akili" },
+      { "command": "akili.signOut", "title": "Sign out", "category": "Akili" },
+      { "command": "akili.linkProject", "title": "Link this folder to a project", "category": "Akili" },
+      { "command": "akili.unlinkProject", "title": "Unlink this folder", "category": "Akili" },
+      { "command": "akili.openWeb", "title": "Open in the browser", "category": "Akili" }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "akili.signOut", "when": "akili.signedIn" },
+        { "command": "akili.linkProject", "when": "akili.signedIn" },
+        { "command": "akili.unlinkProject", "when": "akili.signedIn" },
+        { "command": "akili.openWeb", "when": "akili.signedIn" }
+      ],
+      "view/title": [
+        { "command": "akili.linkProject", "when": "view == akili.sidebar && akili.signedIn" },
+        { "command": "akili.openWeb", "when": "view == akili.sidebar && akili.signedIn" }
+      ]
+    },
+    "configuration": {
+      "title": "Akili",
+      "properties": {
+        "akili.url": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "markdownDescription": "URL of your Akili control plane, e.g. `https://akili.example.com`. Read from user settings only: a repository's workspace settings can't change it."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "webview": "npm --prefix ../web run build:vscode",
+    "build": "npm run webview && npm run compile",
+    "test": "tsc -p ./ && node --test \"out/test/*.test.js\"",
+    "package": "npm run build && npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.0"
+  }
+}

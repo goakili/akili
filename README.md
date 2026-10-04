@@ -137,6 +137,7 @@ Releases are cut from `v*` tags and publish:
 | **Container images** | `linux/amd64` and `linux/arm64`, tagged with the version and `latest`. Control plane: `jkaninda/akili` (Docker Hub) and `ghcr.io/goakili/akili`. Agent: `jkaninda/akili-agent` (Docker Hub) and `ghcr.io/goakili/akili-agent` |
 | **Binaries** | `akili` (the web UI is embedded) and `akili-agent` on [GitHub Releases](https://github.com/goakili/akili/releases), for Linux and macOS on amd64 and arm64 |
 | **Homebrew** | The agent on macOS and Linux: `brew install goakili/tap/akili-agent`, then enroll and `brew services start akili-agent`. See [goakili/homebrew-tap](https://github.com/goakili/homebrew-tap) |
+| **VS Code** | The extension in [`vscode/`](vscode): chat with agents, run tasks, approve and review their changes from the editor (`make vscode-package`) |
 | **Miabi marketplace** | Templates for Akili (the control plane with its PostgreSQL, Redis and route) and the Akili Agent |
 
 **Docker Compose:** [`examples/`](examples) runs the published images in production mode: the control plane with PostgreSQL and Redis ([`compose.yml`](examples/compose.yml)), and an agent on another host ([`compose-agent.yml`](examples/compose-agent.yml)).

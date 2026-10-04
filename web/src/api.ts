@@ -1209,6 +1209,7 @@ export const api = {
   listAPIKeys: () => get<APIKey[] | null>('/api-keys'),
   createAPIKey: (b: { name: string; scopes: string[]; expires_in_days: number }) => post<APIKeyCreated>('/api-keys', b),
   revokeAPIKey: (id: string) => del<MessageResponse>(`/api-keys/${enc(id)}`),
+  vscodeAuthorize: (b: { challenge: string; state: string; client: string; editor: string; window: string }) => post<{ redirect: string }>('/auth/vscode/authorize', b),
 
   // agents
   listAgents: (o?: RequestOptions) => get<Agent[] | null>('/agents', o),

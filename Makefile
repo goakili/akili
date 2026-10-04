@@ -25,7 +25,7 @@ AKILI_URL       ?= $(or $(AKILI_PUBLIC_URL),http://localhost:8080)
 AGENT_STATE_DIR ?= .agent/state
 AGENT_WORKDIR   ?= .agent/work
 
-.PHONY: all build-ui web server agent run run-agent e2e-coder e2e-ops e2e-miabi e2e-ha e2e-hardening e2e-chat e2e-all loadtest docker-build docker-build-server docker-build-agent docker-builder docker-push docker-push-server docker-push-agent test vet dev up down e2e clean
+.PHONY: all build-ui web vscode vscode-test vscode-package server agent run run-agent e2e-coder e2e-ops e2e-miabi e2e-ha e2e-hardening e2e-chat e2e-all loadtest docker-build docker-build-server docker-build-agent docker-builder docker-push docker-push-server docker-push-agent test vet dev up down e2e clean
 
 all: build-ui server agent
 
@@ -38,6 +38,19 @@ web/node_modules/.package-lock.json: web/package-lock.json
 	cd web && npm ci
 
 web: build-ui
+
+# The VS Code extension (vscode/): the sidebar webview is built from web/src/vscode.
+vscode: web/node_modules/.package-lock.json vscode/node_modules/.package-lock.json
+	cd vscode && npm run build
+
+vscode-test: vscode/node_modules/.package-lock.json
+	cd vscode && npm test
+
+vscode-package: vscode
+	cd vscode && npx @vscode/vsce package
+
+vscode/node_modules/.package-lock.json: vscode/package-lock.json
+	cd vscode && npm ci
 
 server:
 	cd server && CGO_ENABLED=0 go build -trimpath -tags "$(GO_TAGS)" -ldflags "$(LDFLAGS_SERVER)" -o $(CURDIR)/bin/akili ./cmd/akili

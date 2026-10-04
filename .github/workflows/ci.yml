@@ -43,6 +43,13 @@ jobs:
           npm test
           npm run build
 
+      - name: VS Code extension
+        working-directory: vscode
+        run: |
+          npm ci
+          npm run webview
+          npm test
+
   e2e:
     name: ${{ matrix.suite }}
     needs: test

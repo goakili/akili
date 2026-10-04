@@ -106,6 +106,31 @@ bad=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: applicati
 [ "$bad" = "401" ] || fail "wrong password returned $bad"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$API/agents")" = "401" ] || fail "unauthenticated request was allowed"
 
+step "Editor sign-in: the browser approves, the editor redeems the code with its PKCE verifier"
+VERIFIER=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')
+CHALLENGE=$(printf %s "$VERIFIER" | openssl dgst -sha256 -binary | base64 | tr '+/' '-_' | tr -d '=\n')
+VSC_STATE=e2e-state-0123456789
+authz() { api POST /auth/vscode/authorize "{\"challenge\":\"$CHALLENGE\",\"state\":\"$VSC_STATE\",\"client\":\"VS Code on e2e\",\"editor\":\"$1\",\"window\":\"${2:-}\"}"; }
+authz "https" | grep >/dev/null '"success":false' || fail "a web scheme was accepted for an editor sign-in"
+authz "vscode" "1&code=forged" | grep >/dev/null '"success":false' || fail "a malformed window id was accepted"
+# VS Code's windowId sends the callback back to the window that asked.
+REDIRECT=$(authz "vscode" "1" | json "d['data']['redirect']")
+case "$REDIRECT" in "vscode://goakili.akili/callback?code=akc_"*"&state=$VSC_STATE&windowId=1") ;; *) fail "unexpected editor redirect: $REDIRECT" ;; esac
+CODE=$(echo "$REDIRECT" | sed 's/.*code=\([^&]*\).*/\1/')
+redeem() { curl -sS -o "$WORK/vsc.json" -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d "{\"code\":\"$1\",\"verifier\":\"$2\"}" "$API/auth/vscode/token"; }
+[ "$(redeem "$CODE" "$VERIFIER")" = "201" ] || fail "redeeming the editor code: $(cat "$WORK/vsc.json")"
+VSC_KEY=$(json "d['data']['secret']" <"$WORK/vsc.json")
+[ "$(json "d['data']['key']['name']" <"$WORK/vsc.json")" = "VS Code on e2e" ] || fail "editor key name: $(cat "$WORK/vsc.json")"
+[ "$(curl -sS -H "Authorization: Bearer $VSC_KEY" "$API/auth/me" | json "d['data']['user']['email']")" = "admin@e2e.local" ] || fail "the editor key does not act as the user"
+[ "$(redeem "$CODE" "$VERIFIER")" = "401" ] || fail "an editor code was redeemed twice"
+CODE2=$(authz "vscode" | json "d['data']['redirect']" | sed 's/.*code=\([^&]*\).*/\1/')
+[ "$(redeem "$CODE2" "$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')")" = "401" ] || fail "an editor code was redeemed with the wrong verifier"
+[ "$(redeem "$CODE2" "$VERIFIER")" = "401" ] || fail "an editor code survived a wrong verifier"
+chained=$(curl -sS -o "$WORK/vsc-chain.json" -w '%{http_code}' -X POST -H "Authorization: Bearer $VSC_KEY" -H 'Content-Type: application/json' \
+  -d "{\"challenge\":\"$CHALLENGE\",\"state\":\"$VSC_STATE\",\"client\":\"chained\",\"editor\":\"vscode\"}" "$API/auth/vscode/authorize")
+[ "$chained" = "403" ] || fail "an API key approved an editor sign-in: $chained $(cat "$WORK/vsc-chain.json")"
+api GET "/audit?action=api_key.create" | grep >/dev/null '"source":"vscode"' || fail "editor key creation not audited"
+
 step "Enterprise license: Community until installed; forged and foreign licenses refused"
 put_license() { curl -sS -b "$JAR" -o "$WORK/license.json" -w '%{http_code}' -X PUT -H 'Content-Type: application/json' -d "{\"token\":\"$1\"}" "$API/license"; }
 [ "$(api GET /license | json "(d['data']['edition'], d['data']['state'], d['data']['licensable'], len(d['data']['features']))")" = "('community', 'none', True, 15)" ] || fail "unlicensed edition: $(api GET /license)"
