@@ -299,6 +299,11 @@ const terminalIdle = 15 * time.Minute
 func (h *Handlers) Terminal(c *okapi.Context) error {
 	ctx := c.Request().Context()
 	org, userID := middlewares.OrgID(c), middlewares.UserID(c)
+	// A root shell is too powerful for an API key of any scope: the same-origin check only stops
+	// browsers, so require an interactive browser session.
+	if c.GetString(middlewares.CtxAuthMethod) != "session" {
+		return c.AbortForbidden("open a terminal from the web UI with a browser session")
+	}
 	agent, err := h.Fleet.Get(ctx, org, c.Param("id"))
 	if err != nil {
 		return c.AbortNotFound("agent not found")
