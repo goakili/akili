@@ -15,14 +15,22 @@ function secretKey(server: string): string {
   return `akili.apiKey:${server}`
 }
 
+export type AuthState = 'signedOut' | 'signingIn' | 'signedIn'
+
 export class Auth implements vscode.UriHandler {
   private pending: (SignInRequest & { server: string; resolve: (code: string) => void; reject: (e: Error) => void }) | null = null
   private readonly changed = new vscode.EventEmitter<void>()
   readonly onDidChange = this.changed.event
   client: Client | null = null
   user: User | null = null
+  /** Why the stored key could not be used (server unreachable), shown on the welcome screen. */
+  problem = ''
 
   constructor(private readonly ctx: vscode.ExtensionContext) {}
+
+  get state(): AuthState {
+    return this.client ? 'signedIn' : this.pending ? 'signingIn' : 'signedOut'
+  }
 
   /** The control plane from user settings. Never from workspace settings: a repository must not choose it. */
   server(): string | undefined {
@@ -39,6 +47,7 @@ export class Auth implements vscode.UriHandler {
   private async use(server: string | undefined, key: string | undefined): Promise<void> {
     this.client = null
     this.user = null
+    this.problem = ''
     if (server && key) {
       const client = new Client(server, key)
       try {
@@ -46,29 +55,38 @@ export class Auth implements vscode.UriHandler {
         this.client = client
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) await this.ctx.secrets.delete(secretKey(server))
-        else void vscode.window.showWarningMessage(`Akili: cannot reach ${server}: ${(e as Error).message}`)
+        else this.problem = `Cannot reach ${server}: ${(e as Error).message}`
       }
     }
     this.changed.fire()
   }
 
-  private async askServer(): Promise<string | undefined> {
-    let server = this.server()
-    if (server) return server
+  private async askServer(force = false): Promise<string | undefined> {
+    const current = this.server()
+    if (current && !force) return current
     const raw = await vscode.window.showInputBox({
       title: 'Akili control plane',
       prompt: 'The URL of your Akili control plane',
       placeHolder: 'https://akili.example.com',
+      value: current ?? '',
       ignoreFocusOut: true,
-      validateInput: (v) => (normalizeServerUrl(v) ? undefined : 'Use https:// (http:// only for localhost), without a path query or credentials'),
+      validateInput: (v) => (normalizeServerUrl(v) ? undefined : 'Use https:// (http:// only for localhost), without a query or credentials'),
     })
-    server = raw ? normalizeServerUrl(raw) : undefined
-    if (server) await vscode.workspace.getConfiguration('akili').update('url', server, vscode.ConfigurationTarget.Global)
+    const server = raw ? normalizeServerUrl(raw) : undefined
+    if (server && server !== current) await vscode.workspace.getConfiguration('akili').update('url', server, vscode.ConfigurationTarget.Global)
     return server
+  }
+
+  /** Points the extension at another control plane. Keys are per server, so the old one is kept. */
+  async changeServer(): Promise<void> {
+    const before = this.server()
+    const after = await this.askServer(true)
+    if (after && after !== before) await this.restore()
   }
 
   /** Signs in through the browser: Akili approves, then hands a one-time code back to this editor. */
   async signIn(): Promise<void> {
+    if (this.pending) return
     const server = await this.askServer()
     if (!server) return
     const req = newSignInRequest()
@@ -85,16 +103,12 @@ export class Auth implements vscode.UriHandler {
       this.pending = { ...req, server, resolve, reject }
       setTimeout(() => reject(new Error('the sign-in timed out')), SIGN_IN_TIMEOUT_MS)
     })
-    await vscode.env.openExternal(vscode.Uri.parse(url))
+    this.changed.fire()
+    // A string, not a Uri: Uri.toString() percent-encodes "=" and "&" in the query, which turns it
+    // into one long parameter name. VS Code opens a string target unchanged.
+    await vscode.env.openExternal(url as unknown as vscode.Uri)
     try {
-      const got = await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: 'Akili: approve the sign-in in your browser…', cancellable: true },
-        (_p, token) =>
-          new Promise<string>((resolve, reject) => {
-            token.onCancellationRequested(() => reject(new Error('cancelled')))
-            code.then(resolve, reject)
-          }),
-      )
+      const got = await code
       const res = await fetch(server + '/api/v1/auth/vscode/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -104,13 +118,19 @@ export class Auth implements vscode.UriHandler {
       const body = (await res.json().catch(() => null)) as { data?: { secret?: string }; error?: { message?: string } } | null
       if (!res.ok || !body?.data?.secret) throw new Error(body?.error?.message || `HTTP ${res.status}`)
       await this.ctx.secrets.store(secretKey(server), body.data.secret)
+      this.pending = null
       await this.use(server, body.data.secret)
       if (this.user) void vscode.window.showInformationMessage(`Akili: signed in as ${this.user.email}.`)
     } catch (e) {
       if ((e as Error).message !== 'cancelled') void vscode.window.showErrorMessage(`Akili: sign-in failed: ${(e as Error).message}`)
     } finally {
       this.pending = null
+      this.changed.fire()
     }
+  }
+
+  cancelSignIn(): void {
+    this.pending?.reject(new Error('cancelled'))
   }
 
   /** For editors without a working URI handler: paste an API key created in Settings → API keys. */
@@ -132,11 +152,35 @@ export class Auth implements vscode.UriHandler {
     }
   }
 
+  /** Signs out and revokes this editor's key on the server, so no live key is left behind. */
   async signOut(): Promise<void> {
     const server = this.server()
+    const client = this.client
+    if (client) {
+      const pick = await vscode.window.showWarningMessage(
+        `Sign out of Akili (${this.user?.email ?? server})?`,
+        { modal: true, detail: "This editor's API key is revoked on the server." },
+        'Sign out',
+      )
+      if (pick !== 'Sign out') return
+      const revoked = await this.revoke(client, server ? await this.ctx.secrets.get(secretKey(server)) : undefined)
+      if (!revoked) void vscode.window.showWarningMessage('Akili: signed out, but the key could not be revoked. Revoke it under Settings → API keys.')
+    }
     if (server) await this.ctx.secrets.delete(secretKey(server))
     await this.use(undefined, undefined)
-    void vscode.window.showInformationMessage('Akili: signed out. Revoke the key under Settings → API keys if you no longer need it.')
+  }
+
+  private async revoke(client: Client, secret: string | undefined): Promise<boolean> {
+    if (!secret) return false
+    try {
+      const keys = (await client.json<{ id: string; prefix: string; revoked_at: string | null }[] | null>('GET', '/api-keys')) ?? []
+      const mine = keys.find((k) => !k.revoked_at && k.prefix === secret.slice(0, k.prefix.length))
+      if (!mine) return false
+      await client.json('DELETE', `/api-keys/${encodeURIComponent(mine.id)}`)
+      return true
+    } catch {
+      return false
+    }
   }
 
   /** The URI handler: the browser hands back the code with the state it was given. */
