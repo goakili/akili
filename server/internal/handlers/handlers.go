@@ -26,6 +26,7 @@ import (
 	"github.com/goakili/akili/server/internal/miabi"
 	"github.com/goakili/akili/server/internal/middlewares"
 	"github.com/goakili/akili/server/internal/notify"
+	"github.com/goakili/akili/server/internal/plans"
 	"github.com/goakili/akili/server/internal/sessions"
 	"github.com/goakili/akili/server/internal/siem"
 	"github.com/goakili/akili/server/internal/tasks"
@@ -51,6 +52,7 @@ type Handlers struct {
 	SIEM     *siem.Forwarder
 	Chat     *chat.Service
 	Lessons  *lessons.Service
+	Plans    *plans.Service
 	MCP      *mcp.Service
 	Mail     *notify.Mailer
 	EE       enterprise.EE
@@ -81,8 +83,10 @@ func (h *Handlers) record(c *okapi.Context, action, targetType, targetID string,
 func mapErr(c *okapi.Context, err error) error {
 	switch {
 	case errors.Is(err, fleet.ErrNotFound), errors.Is(err, sessions.ErrNotFound), errors.Is(err, tasks.ErrNotFound), errors.Is(err, coder.ErrNotFound),
-		errors.Is(err, auth.ErrNotFound), errors.Is(err, gorm.ErrRecordNotFound):
+		errors.Is(err, auth.ErrNotFound), errors.Is(err, plans.ErrNotFound), errors.Is(err, gorm.ErrRecordNotFound):
 		return c.AbortNotFound("not found")
+	case errors.Is(err, plans.ErrInUse), errors.Is(err, tasks.ErrNotDraft):
+		return c.AbortConflict(err.Error())
 	case errors.Is(err, bus.ErrAgentOffline):
 		return c.AbortConflict("the agent is not connected")
 	case errors.Is(err, sessions.ErrApprovalClosed):

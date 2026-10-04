@@ -222,6 +222,7 @@ For each coding task or chat on a project:
 - The agent's tools are `git_status`, `git_diff`, `git_commit`, `git_push`, and `sandbox_exec`. `sandbox_exec` runs tests in a disposable container built from the project's sandbox image: capabilities dropped, running as the agent's user, with only the worktree and a build cache mounted. It needs Docker on the agent host.
 - `pr_open` and `pr_status` run on the control plane, which holds the credentials. The task records the pull request, and the UI shows its diff.
 - **Triggers:** labelling an issue with the project's trigger label (for example `akili`) creates a task. This needs a webhook signed with the integration's secret. **Maintenance presets** schedule dependency updates, vulnerability scans, test-health checks and docs-drift checks.
+- **Plans:** a project's **Plans** tab holds work written as a description and ordered phases. Link one or more active plans to a task (or start one with **Create task** on the plan): the agent receives them with its goal, as they were when the task was created, works on the open phases and reports progress with `plan_phase_update`. It can't create, edit or delete plans, or touch plans not linked to its task. Phases it changes are marked "by agent" with the task. A plan's status follows its phases (in progress, done); people set draft, active and archived. Tasks can also be saved as **drafts** and started later. Each phase can say when it is **done** ("done when…"), and **Task** on a phase creates a task focused on it: the agent sees the whole plan but finishes and reports on that phase only.
 
 **Sandbox on agent hosts:** `sandbox_exec` needs a Docker daemon the agent's user can reach. Adding the `akili` user to the `docker` group makes that user root-equivalent on the host, so prefer **rootless Docker** or a dedicated build host for coding agents. Without Docker, the tool reports that it is unavailable, and tests can still run through `shell` (High risk, needs approval below L3).
 
@@ -439,6 +440,7 @@ Settings come from environment variables. On start the server also loads `./.env
 | <img src="docs/screenshots/agents.png" alt="Agents"> **Agents**: status, host and policy of every agent | <img src="docs/screenshots/agent-detail.png" alt="Agent detail"> **Agent**: host facts, guardrails and lifecycle |
 | <img src="docs/screenshots/tasks.png" alt="Tasks"> **Tasks**: work in flight and its outcome | <img src="docs/screenshots/change.png" alt="Change plan"> **Change plan**: why, what runs, and its approval |
 | <img src="docs/screenshots/policies.png" alt="Policies"> **Policies**: what each agent may do | <img src="docs/screenshots/audit.png" alt="Audit log"> **Audit log**: hash-chained, every decision recorded |
+| <img src="docs/screenshots/plan.png" alt="Plan"> **Plan**: phases, when each is done, and what agents finished | <img src="docs/screenshots/project-tasks.png" alt="Project tasks"> **Project tasks**: drafts, linked plans and pull requests |
 
 ## License
 

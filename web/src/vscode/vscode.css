@@ -39,7 +39,7 @@ body {
 }
 
 .vsc-head {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-primary);
 }
 .vsc-project {
   display: flex;
@@ -66,10 +66,10 @@ body {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--text-3, #888);
+  background: var(--text-tertiary);
 }
 .dot.online {
-  background: var(--ok, #2e9e5b);
+  background: var(--success-500);
 }
 .vsc-tabs {
   display: flex;
@@ -91,7 +91,7 @@ body {
 }
 .vsc-tabs button.on {
   opacity: 1;
-  border-bottom-color: var(--accent, var(--vscode-focusBorder));
+  border-bottom-color: var(--primary-500);
   font-weight: 600;
 }
 .count {
@@ -127,7 +127,7 @@ body {
   align-items: center;
   gap: 4px;
   padding: 4px 6px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-primary);
 }
 .vsc-bar-title {
   flex: 1;
@@ -161,7 +161,7 @@ body {
 }
 .vsc-filters button {
   background: none;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-primary);
   border-radius: 12px;
   padding: 2px 10px;
   font-size: 12px;
@@ -216,11 +216,11 @@ body {
 }
 .vsc-state {
   font-size: 11px;
-  color: var(--accent, var(--vscode-textLink-foreground));
+  color: var(--primary-500);
   white-space: nowrap;
 }
 .vsc-task {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-primary);
   border-radius: 6px;
   padding: 6px 8px;
   display: flex;
@@ -267,7 +267,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-primary);
 }
 .vsc-avatar {
   flex: none;

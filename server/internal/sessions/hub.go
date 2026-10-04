@@ -20,6 +20,7 @@ import (
 	"github.com/goakili/akili/server/internal/crypto"
 	"github.com/goakili/akili/server/internal/models"
 	"github.com/goakili/akili/server/internal/notify"
+	"github.com/goakili/akili/server/internal/plans"
 	"github.com/jkaninda/logger"
 	"gorm.io/gorm"
 )
@@ -209,6 +210,9 @@ func (h *Hub) BuildOpen(ctx context.Context, sessionID, agentID string) (proto.S
 		}
 		if len(history) == 0 {
 			open.Goal = t.Goal
+			var links []models.TaskPlan
+			h.db.WithContext(ctx).Where("organization_id = ? AND task_id = ?", t.OrganizationID, t.ID).Order("created_at, plan_id").Find(&links)
+			open.Goal += plans.GoalSection(links)
 		}
 		if t.TimeoutSec > 0 && t.StartedAt != nil {
 			d := t.StartedAt.Add(time.Duration(t.TimeoutSec) * time.Second)

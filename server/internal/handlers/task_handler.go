@@ -31,14 +31,26 @@ type TaskRequest struct {
 		TimeoutSec  int             `json:"timeout_sec"`
 		MaxAttempts int             `json:"max_attempts"`
 		ProjectID   *string         `json:"project_id" description:"work on a project's repository (branch, commits, pull request)"`
+		PlanIDs     []string        `json:"plan_ids" maxItems:"10" description:"project plans the task works on; they must be active and in the task's project"`
+		PlanPhaseID string          `json:"plan_phase_id" description:"focus the task on one phase of a plan; the plan is linked too"`
+		Draft       bool            `json:"draft" description:"save without queueing; POST /tasks/{id}/start queues it"`
 	} `json:"body"`
 }
 
 // ListTasks lists tasks.
 func (h *Handlers) ListTasks(c *okapi.Context) error {
-	out, err := h.Tasks.List(c.Request().Context(), middlewares.OrgID(c), c.Query("status"), queryInt(c, "limit", 200), c.Query("project_id"))
+	ctx := c.Request().Context()
+	out, err := h.Tasks.List(ctx, middlewares.OrgID(c), c.Query("status"), queryInt(c, "limit", 200), c.Query("project_id"))
 	if err != nil {
 		return c.AbortInternalServerError("list failed", err)
+	}
+	ids := make([]string, len(out))
+	for i := range out {
+		ids[i] = out[i].ID
+	}
+	links := h.Plans.PlanIDs(ctx, middlewares.OrgID(c), ids)
+	for i := range out {
+		out[i].PlanIDs = links[out[i].ID]
 	}
 	return ok(c, out)
 }
@@ -52,7 +64,8 @@ func (h *Handlers) CreateTask(c *okapi.Context, req *TaskRequest) error {
 	}
 	t, err := h.Tasks.Create(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), tasks.Input{
 		Title: strings.TrimSpace(b.Title), Goal: b.Goal, AgentID: b.AgentID, Selector: b.Selector, Priority: b.Priority,
-		Autonomy: autonomy, BudgetUSD: b.BudgetUSD, MaxTurns: b.MaxTurns, TimeoutSec: b.TimeoutSec, MaxAttempts: b.MaxAttempts, ProjectID: b.ProjectID})
+		Autonomy: autonomy, BudgetUSD: b.BudgetUSD, MaxTurns: b.MaxTurns, TimeoutSec: b.TimeoutSec, MaxAttempts: b.MaxAttempts, ProjectID: b.ProjectID,
+		PlanIDs: b.PlanIDs, PlanPhaseID: b.PlanPhaseID, Draft: b.Draft})
 	if err != nil {
 		return mapErr(c, err)
 	}
@@ -65,7 +78,26 @@ func (h *Handlers) GetTask(c *okapi.Context) error {
 	if err != nil {
 		return mapErr(c, err)
 	}
+	t.PlanIDs = h.Plans.PlanIDs(c.Request().Context(), middlewares.OrgID(c), []string{t.ID})[t.ID]
 	return ok(c, t)
+}
+
+// StartTask queues a draft task.
+func (h *Handlers) StartTask(c *okapi.Context) error {
+	t, err := h.Tasks.Start(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), c.Param("id"))
+	if err != nil {
+		return mapErr(c, err)
+	}
+	return ok(c, t)
+}
+
+// TaskPlans returns the plans linked to a task, as the agent received them.
+func (h *Handlers) TaskPlans(c *okapi.Context) error {
+	t, err := h.Tasks.Get(c.Request().Context(), middlewares.OrgID(c), c.Param("id"))
+	if err != nil {
+		return mapErr(c, err)
+	}
+	return ok(c, h.Plans.ForTask(c.Request().Context(), t.OrganizationID, t.ID))
 }
 
 // CancelTask stops a task.

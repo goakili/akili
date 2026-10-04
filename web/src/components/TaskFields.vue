@@ -1,8 +1,8 @@
 <!-- SPDX-FileCopyrightText: 2026 Jonas Kaninda -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
-import { AUTONOMY_LEVELS, type Autonomy } from '../api'
+import { computed, onMounted, ref, watch } from 'vue'
+import { api, AUTONOMY_LEVELS, type Autonomy, type PlanSummary } from '../api'
 import { useCatalog } from '../stores/catalog'
 import { useCoder } from '../stores/coder'
 import type { TargetMode, TaskForm } from '../lib/taskForm'
@@ -10,7 +10,16 @@ import { splitList } from '../lib/format'
 import Icon, { type IconName } from './Icon'
 
 const form = defineModel<TaskForm>({ required: true })
-const props = defineProps<{ idPrefix?: string; showErrors?: boolean; /** Fix the project (opened from a project page). */ lockProject?: boolean }>()
+const props = defineProps<{
+  idPrefix?: string
+  showErrors?: boolean
+  /** Fix the project (opened from a project page). */
+  lockProject?: boolean
+  /** Offer the project's plans (new tasks only; schedules don't link plans). */
+  withPlans?: boolean
+  /** A plan the task must keep (it focuses on one of its phases). */
+  lockedPlanId?: string
+}>()
 const catalog = useCatalog()
 const coder = useCoder()
 const p = computed(() => props.idPrefix ?? 'tf')
@@ -29,6 +38,30 @@ onMounted(async () => {
 })
 
 const project = computed(() => coder.project(form.value.project_id))
+
+// Only active plans can be linked; a plan picked before switching project is dropped.
+const plans = ref<PlanSummary[]>([])
+watch(
+  () => (props.withPlans ? form.value.project_id : ''),
+  async (id) => {
+    plans.value = []
+    if (!id) {
+      form.value.plan_ids = []
+      return
+    }
+    const all = (await api.listPlans(id, { quiet: true }).catch(() => null)) ?? []
+    if (form.value.project_id !== id) return
+    plans.value = all.filter((pl) => pl.status === 'active' || pl.status === 'in_progress')
+    form.value.plan_ids = form.value.plan_ids.filter((pid) => plans.value.some((pl) => pl.id === pid))
+  },
+  { immediate: true },
+)
+function togglePlan(id: string) {
+  const ids = new Set(form.value.plan_ids)
+  if (ids.has(id)) ids.delete(id)
+  else ids.add(id)
+  form.value.plan_ids = [...ids]
+}
 const projectTarget = computed(() => {
   const pr = project.value
   if (!pr) return 'the project\'s preferred agent'
@@ -105,6 +138,18 @@ const selectedAgent = computed(() => catalog.agents.find((a) => a.id === form.va
         <Icon name="gitBranch" :size="12" style="vertical-align: -1px" /> The agent works on a branch <code>akili/&lt;task id&gt;</code> of {{ project.owner }}/{{ project.repo }} and opens a pull request into <code>{{ project.default_branch }}</code>. The default branch is never pushed to.
       </span>
       <span v-else :id="`${p}-project-hint`" class="hint">Pick a project to have the agent change its repository and open a pull request.</span>
+    </div>
+
+    <div v-if="withPlans && form.project_id && plans.length" class="field">
+      <span :id="`${p}-plans`" class="label">Plans <span class="opt">(optional)</span></span>
+      <div class="chips" role="group" :aria-labelledby="`${p}-plans`">
+        <label v-for="pl in plans" :key="pl.id" class="chip-toggle" :class="{ on: form.plan_ids.includes(pl.id) }" :title="pl.description">
+          <input type="checkbox" :checked="form.plan_ids.includes(pl.id)" :disabled="pl.id === lockedPlanId || (!form.plan_ids.includes(pl.id) && form.plan_ids.length >= 10)" @change="togglePlan(pl.id)" />
+          <Icon v-if="form.plan_ids.includes(pl.id)" name="check" :size="13" />{{ pl.title }}
+          <span class="muted">· {{ (pl.counts.done ?? 0) + (pl.counts.skipped ?? 0) }}/{{ pl.phases }}</span>
+        </label>
+      </div>
+      <span class="hint">The agent gets the linked plans with their phases, works on the open phases and reports its progress on them.</span>
     </div>
 
     <div class="field">

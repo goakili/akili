@@ -12,7 +12,7 @@ export type Autonomy = 0 | 1 | 2 | 3
 export type Risk = 'low' | 'medium' | 'high' | 'critical'
 export type Effect = 'allow' | 'deny' | 'approve'
 export type AgentStatus = 'pending' | 'online' | 'offline' | 'revoked'
-export type TaskStatus = 'queued' | 'assigned' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out'
+export type TaskStatus = 'draft' | 'queued' | 'assigned' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out'
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired'
 export type SessionState = 'idle' | 'thinking' | 'running_tool' | 'waiting_approval' | ''
 export type ProviderKind = 'anthropic' | 'openai' | 'fake'
@@ -361,6 +361,8 @@ export interface Task extends Base {
   /** What created the task: manual, schedule, issue, template, alert, miabi, chat. */
   trigger: string
   trigger_ref: string
+  /** Project plans linked to the task. */
+  plan_ids?: string[] | null
 }
 
 export interface TaskTemplate {
@@ -943,6 +945,71 @@ export interface TaskInput {
   timeout_sec: number
   max_attempts: number
   project_id?: string | null
+  /** Project plans the task works on (project tasks only). */
+  plan_ids?: string[]
+  /** Focus the task on one phase of a plan (that plan is linked too). */
+  plan_phase_id?: string
+  /** Save without queueing; startTask queues it. */
+  draft?: boolean
+}
+
+export type PlanStatus = 'draft' | 'active' | 'in_progress' | 'done' | 'archived'
+export type PhaseStatus = 'todo' | 'in_progress' | 'done' | 'skipped'
+
+/** Work on a project written as phases (not a change plan: see ChangePlan). */
+export interface ProjectPlan extends Base {
+  project_id: string
+  title: string
+  description: string
+  status: PlanStatus
+  position: number
+  created_by: string
+}
+
+export interface PlanPhase extends Base {
+  plan_id: string
+  position: number
+  title: string
+  detail: string
+  /** What finished means for this phase. */
+  done_when: string
+  status: PhaseStatus
+  note: string
+  /** The task whose agent last changed the phase; null when a person did. */
+  done_by_task: string | null
+  /** A user id, or "agent:<id>". */
+  updated_by: string
+}
+
+export interface PlanSummary extends ProjectPlan {
+  phases: number
+  counts: Partial<Record<PhaseStatus, number>>
+  tasks: number
+}
+
+export interface PlanDetail {
+  plan: ProjectPlan
+  phases: PlanPhase[] | null
+  tasks: Task[] | null
+  /** Which tasks work on the plan, and on which phase when focused on one. */
+  links: { task_id: string; phase_id: string | null }[] | null
+}
+
+export interface PlanPhaseInput {
+  id?: string
+  title: string
+  detail?: string
+  done_when?: string
+}
+
+/** A plan as a task's agent received it. */
+export interface TaskPlan {
+  task_id: string
+  plan_id: string
+  /** The phase the task focuses on, or null for the whole plan. */
+  phase_id: string | null
+  snapshot: { title: string; description: string; phases: { id: string; title: string; detail?: string; done_when?: string; status: PhaseStatus }[] | null }
+  created_at: ISODate
 }
 
 export interface ScheduleInput {
@@ -1247,6 +1314,17 @@ export const api = {
   getTask: (id: string, o?: RequestOptions) => get<Task>(`/tasks/${enc(id)}`, o),
   cancelTask: (id: string) => post<Task>(`/tasks/${enc(id)}/cancel`),
   retryTask: (id: string) => post<Task>(`/tasks/${enc(id)}/retry`),
+  startTask: (id: string) => post<Task>(`/tasks/${enc(id)}/start`),
+  taskPlans: (id: string, o?: RequestOptions) => get<TaskPlan[] | null>(`/tasks/${enc(id)}/plans`, o),
+  listPlans: (projectId: string, o?: RequestOptions) => get<PlanSummary[] | null>(`/projects/${enc(projectId)}/plans`, o),
+  createPlan: (projectId: string, b: { title: string; description: string; status?: 'draft' | 'active'; phases: PlanPhaseInput[] }) =>
+    post<PlanDetail>(`/projects/${enc(projectId)}/plans`, b),
+  getPlan: (id: string, o?: RequestOptions) => get<PlanDetail>(`/plans/${enc(id)}`, o),
+  updatePlan: (id: string, b: { title?: string; description?: string; status?: 'draft' | 'active' | 'archived'; position?: number }) =>
+    put<ProjectPlan>(`/plans/${enc(id)}`, b),
+  deletePlan: (id: string) => del<MessageResponse>(`/plans/${enc(id)}`),
+  replacePlanPhases: (id: string, phases: PlanPhaseInput[]) => put<PlanDetail>(`/plans/${enc(id)}/phases`, { phases }),
+  updatePlanPhase: (planId: string, phaseId: string, b: { status: PhaseStatus; note?: string }) => patch<PlanPhase>(`/plans/${enc(planId)}/phases/${enc(phaseId)}`, b),
   taskDiff: (id: string, o?: RequestOptions) => getText(`/tasks/${enc(id)}/diff`, o),
 
   // integrations (admin): git forges and Miabi

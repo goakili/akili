@@ -173,6 +173,7 @@ const (
 	ToolMiabiRollback     = "miabi_rollback"
 	ToolMiabiRestart      = "miabi_restart"
 	ToolLessonPropose     = "lesson_propose"
+	ToolPlanPhaseUpdate   = "plan_phase_update"
 	// ToolChangeRun executes an approved change plan: steps, verification, automatic rollback.
 	ToolChangeRun = "change_run"
 )
@@ -259,6 +260,14 @@ type (
 	HostPortInput struct {
 		Host string `json:"host"`
 		Port int    `json:"port,omitempty"`
+	}
+
+	// PlanPhaseInput reports progress on a phase of a project plan linked to the task.
+	PlanPhaseInput struct {
+		Plan   string `json:"plan"`
+		Phase  string `json:"phase"`
+		Status string `json:"status"`
+		Note   string `json:"note,omitempty"`
 	}
 
 	// LessonInput proposes a lesson for future sessions; it is used only after an operator approves it.
@@ -1075,6 +1084,37 @@ var catalog = map[string]ToolSpec{
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"lesson":{"type":"string","minLength":10,"maxLength":400}},"required":["lesson"],"additionalProperties":false}`),
 		resources:   lessonResources,
 	},
+	ToolPlanPhaseUpdate: {
+		Name: ToolPlanPhaseUpdate, Risk: RiskLow, Remote: true, Project: true,
+		Description: "Report progress on a phase of a project plan linked to this task: in_progress when you start it, done when it is finished, " +
+			"skipped (with a note saying why) when it is not needed. Use the plan and phase ids from the task's Plans section.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"plan":{"type":"string"},"phase":{"type":"string"},` +
+			`"status":{"type":"string","enum":["in_progress","done","skipped"]},"note":{"type":"string","maxLength":1000}},` +
+			`"required":["plan","phase","status"],"additionalProperties":false}`),
+		resources: planPhaseResources,
+	},
+}
+
+// MaxPlanNote bounds the note an agent leaves on a plan phase.
+const MaxPlanNote = 1000
+
+func planPhaseResources(in json.RawMessage) (Resources, error) {
+	v, err := decode[PlanPhaseInput](in)
+	if err != nil {
+		return Resources{}, err
+	}
+	if v.Plan == "" || v.Phase == "" {
+		return Resources{}, fmt.Errorf("plan and phase are required")
+	}
+	switch v.Status {
+	case "in_progress", "done", "skipped":
+	default:
+		return Resources{}, fmt.Errorf("status must be in_progress, done or skipped")
+	}
+	if len([]rune(v.Note)) > MaxPlanNote {
+		return Resources{}, fmt.Errorf("a note is at most %d characters", MaxPlanNote)
+	}
+	return Resources{}, nil
 }
 
 // MaxLessonLen bounds a proposed lesson: lessons land in every future system prompt of the agent.

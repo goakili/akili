@@ -24,6 +24,7 @@ const STATUS: Record<string, Look> = {
   revoked: { tone: 'danger', icon: 'ban' },
   draining: { tone: 'warn', icon: 'pause' },
   // tasks
+  draft: { tone: '', icon: 'edit' },
   queued: { tone: 'info', icon: 'clock' },
   assigned: { tone: 'accent', icon: 'loader', anim: 'spin' },
   running: { tone: 'accent', icon: 'loader', anim: 'spin' },
@@ -55,6 +56,11 @@ const STATUS: Record<string, Look> = {
   // change plans
   rolled_back: { tone: 'warn', icon: 'undo', text: 'rolled back' },
   skipped: { tone: '', icon: 'skip' },
+  // project plans and steps
+  in_progress: { tone: 'accent', icon: 'loader', text: 'in progress' },
+  done: { tone: 'ok', icon: 'checkCircle' },
+  archived: { tone: '', icon: 'box' },
+  todo: { tone: '', icon: 'circle', text: 'to do' },
   check_failed: { tone: 'danger', icon: 'xCircle', text: 'check failed' },
   runbook: { tone: 'violet', icon: 'skills', text: 'runbook · built-in' },
   alert: { tone: 'warn', icon: 'siren' },

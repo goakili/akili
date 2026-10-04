@@ -147,6 +147,69 @@ api GET /sessions/$SES1 | grep >/dev/null "SANDBOX_OK" || fail "sandbox output m
 api GET /sessions/$SES1 | json "[e['payload'].get('output','') for e in d['data']['events'] if e['type']=='tool.result' and e['payload'].get('tool')=='sandbox_exec'][0]" | grep >/dev/null "SBX_UID=$(id -u)$" || fail "sandbox did not run as the agent's user"
 api GET /sessions/$SES1 | json "[e['payload'].get('output','') for e in d['data']['events'] if e['type']=='tool.result' and e['payload'].get('tool')=='pr_open'][0]" | grep >/dev/null "Opened PR #$PRN" || fail "pr_open result missing"
 
+step "Project plans: a draft task linked to a plan, started, reports progress with plan_phase_update"
+PLAN=$(api POST /projects/$PROJ/plans '{"title":"Version endpoint","description":"Expose the build version.","phases":[{"title":"Add /version"},{"title":"Document it","done_when":"the README shows an example"}]}')
+PLN=$(echo "$PLAN" | json "d['data']['plan']['id']")
+PHS1=$(echo "$PLAN" | json "d['data']['phases'][0]['id']")
+PHS2=$(echo "$PLAN" | json "d['data']['phases'][1]['id']")
+[ "$(echo "$PLAN" | json "d['data']['plan']['status']")" = "active" ] || fail "a new plan is not active: $PLAN"
+DRAFT_PLN=$(api POST /projects/$PROJ/plans '{"title":"Later","status":"draft"}' | json "d['data']['plan']['id']")
+link_code() { curl -sS -o /dev/null -w '%{http_code}' -b "$JAR" -X POST -H 'Content-Type: application/json' -d "$1" "$API/tasks"; }
+# Bodies go through variables: bash 3.2 brace-expands a quoted JSON string inside "$(...)".
+BODY='{"goal":"x","project_id":"'$PROJ'","plan_ids":["'$DRAFT_PLN'"]}'
+[ "$(link_code "$BODY")" = "400" ] || fail "a draft plan was linked to a task"
+BODY='{"goal":"x","plan_ids":["'$PLN'"]}'
+[ "$(link_code "$BODY")" = "400" ] || fail "a plan was linked to a task without a project"
+PGOAL="tool: plan_phase_update {\\\"plan\\\":\\\"$PLN\\\",\\\"phase\\\":\\\"$PHS1\\\",\\\"status\\\":\\\"done\\\",\\\"note\\\":\\\"added with a test\\\"}"
+TP=$(api POST /tasks "{\"goal\":\"$PGOAL\",\"project_id\":\"$PROJ\",\"plan_ids\":[\"$PLN\"],\"draft\":true}" | json "d['data']['id']")
+[ -n "$TP" ] || fail "draft task not created"
+sleep 3
+[ "$(task_status "$TP")" = "draft" ] || fail "a draft task was dispatched"
+[ "$(api GET /tasks/$TP | json "d['data']['plan_ids'][0]")" = "$PLN" ] || fail "the task does not list its plan"
+[ "$(curl -sS -o /dev/null -w '%{http_code}' -b "$JAR" -X DELETE "$API/plans/$PLN")" = "409" ] || fail "a plan was deleted while an unfinished task works on it"
+[ "$(api POST /tasks/$TP/start | json "d['data']['status']")" = "queued" ] || fail "starting the draft task"
+[ "$(curl -sS -o /dev/null -w '%{http_code}' -b "$JAR" -X POST "$API/tasks/$TP/start")" = "409" ] || fail "a queued task was started twice"
+wait_task "$TP" succeeded 120
+PHASE=$(api GET /plans/$PLN | json "[s for s in d['data']['phases'] if s['id']=='$PHS1'][0]")
+echo "$PHASE" | grep >/dev/null "'status': 'done'" || fail "the agent's phase update was not stored: $PHASE"
+echo "$PHASE" | grep >/dev/null "'done_by_task': '$TP'" || fail "the phase does not record its task: $PHASE"
+echo "$PHASE" | grep >/dev/null "'updated_by': 'agent:$AGENT'" || fail "the phase is not marked as changed by the agent: $PHASE"
+[ "$(api GET /plans/$PLN | json "d['data']['plan']['status']")" = "in_progress" ] || fail "the plan did not follow its phases"
+SESP=$(api GET /tasks/$TP | json "d['data']['session_id']")
+api GET /sessions/$SESP | json "d['data']['messages'][0]['content'][0]['text']" | grep >/dev/null "\[plan $PLN\]" || fail "the agent did not receive the plan in its goal"
+api GET "/audit?action=plan.phase_update" | grep >/dev/null "$PHS1" || fail "the agent's phase update was not audited"
+[ "$(api GET /tasks/$TP/plans | json "d['data'][0]['snapshot']['phases'][0]['status']")" = "todo" ] || fail "the task's plan snapshot changed with the plan"
+
+TQ=$(api POST /tasks "{\"goal\":\"$PGOAL\",\"project_id\":\"$PROJ\"}" | json "d['data']['id']")
+wait_task "$TQ" succeeded 120
+SESQ=$(api GET /tasks/$TQ | json "d['data']['session_id']")
+api GET /sessions/$SESQ | json "[e['payload'].get('output','') for e in d['data']['events'] if e['type']=='tool.result' and e['payload'].get('tool')=='plan_phase_update'][0]" | grep >/dev/null "not linked to this task" || fail "a task changed a plan it is not linked to"
+
+# One task per phase: the agent sees the whole plan but may report on its own phase only.
+BODY='{"goal":"x","project_id":"'$PROJ'","plan_phase_id":"'$PHS1'"}'
+[ "$(link_code "$BODY")" = "400" ] || fail "a task was focused on a phase that is already done"
+FGOAL='tool: plan_phase_update {\"plan\":\"'$PLN'\",\"phase\":\"'$PHS1'\",\"status\":\"in_progress\"}\ntool: plan_phase_update {\"plan\":\"'$PLN'\",\"phase\":\"'$PHS2'\",\"status\":\"in_progress\"}'
+BODY='{"goal":"'$FGOAL'","project_id":"'$PROJ'","plan_phase_id":"'$PHS2'"}'
+TF=$(api POST /tasks "$BODY" | json "d['data']['id']")
+[ -n "$TF" ] || fail "creating a task focused on a phase"
+[ "$(api GET /tasks/$TF/plans | json "d['data'][0]['phase_id']")" = "$PHS2" ] || fail "the task is not focused on its phase"
+wait_task "$TF" succeeded 120
+SESF=$(api GET /tasks/$TF | json "d['data']['session_id']")
+GOALF=$(api GET /sessions/$SESF | json "d['data']['messages'][0]['content'][0]['text']")
+echo "$GOALF" | grep >/dev/null "Document it ← this task" || fail "the focused phase is not marked in the goal: $GOALF"
+echo "$GOALF" | grep >/dev/null "Done when: the README shows an example" || fail "the goal lacks the phase's done-when: $GOALF"
+api GET /sessions/$SESF | json "[e['payload'].get('output','') for e in d['data']['events'] if e['type']=='tool.result' and e['payload'].get('tool')=='plan_phase_update'][0]" | grep >/dev/null "works only on phase $PHS2" || fail "a focused task changed another phase"
+[ "$(api GET /plans/$PLN | json "[p['status'] for p in d['data']['phases'] if p['id']=='$PHS1'][0] + ' ' + [p['status'] for p in d['data']['phases'] if p['id']=='$PHS2'][0]")" = "done in_progress" ] || fail "phase statuses after the focused task: $(api GET /plans/$PLN)"
+[ "$(api GET /plans/$PLN | json "[l['phase_id'] for l in d['data']['links'] if l['task_id']=='$TF'][0]")" = "$PHS2" ] || fail "the plan does not link the task to its phase"
+
+KEPT=$(api PUT /plans/$PLN/phases "{\"phases\":[{\"id\":\"$PHS1\",\"title\":\"Add /version endpoint\"},{\"title\":\"Release it\"}]}")
+[ "$(echo "$KEPT" | json "len(d['data']['phases'])")" = "2" ] || fail "replacing phases: $KEPT"
+[ "$(echo "$KEPT" | json "d['data']['phases'][0]['status'] + ' ' + d['data']['phases'][0]['title']")" = "done Add /version endpoint" ] || fail "a kept phase lost its status: $KEPT"
+echo "$KEPT" | json "[p['id'] for p in d['data']['phases']]" | grep >/dev/null "$PHS2" && fail "a removed phase is still there: $KEPT"
+api PATCH /plans/$PLN/phases/$(echo "$KEPT" | json "d['data']['phases'][1]['id']") '{"status":"skipped","note":"not needed"}' >/dev/null
+[ "$(api GET /plans/$PLN | json "d['data']['plan']['status']")" = "done" ] || fail "a plan with every phase done or skipped is not done"
+[ "$(api GET /projects/$PROJ/plans | json "[p for p in d['data'] if p['id']=='$PLN'][0]['tasks']")" = "2" ] || fail "the plan list does not count its linked tasks"
+
 step "Large push: a 2 MB commit goes through both proxies (git's probe request, chunked body, identity check)"
 GOAL='sandbox: head -c 1500000 /dev/urandom | base64 > big.txt && wc -c big.txt\ncommit: Add big.txt\npush'
 TB=$(api POST /tasks "{\"title\":\"large push\",\"goal\":\"$GOAL\",\"project_id\":\"$PROJ\",\"autonomy\":2}" | json "d['data']['id']")
