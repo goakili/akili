@@ -102,8 +102,10 @@ func (au *Authenticator) Authenticate(c *okapi.Context) error {
 		c.Set(CtxAuthMethod, "api_key")
 		c.Set(CtxScopes, strings.Join(key.Scopes, ","))
 		// Scope from the method: reads need "read", anything that changes state needs "write".
+		// A WebSocket upgrade is a GET but opens a live channel (an interactive root terminal, say),
+		// so it must not ride on a read-only key.
 		need := models.ScopeWrite
-		if m := c.Request().Method; m == http.MethodGet || m == http.MethodHead {
+		if m := c.Request().Method; (m == http.MethodGet || m == http.MethodHead) && !isWebSocketUpgrade(c.Request()) {
 			need = models.ScopeRead
 		}
 		if !slices.Contains(key.Scopes, need) && !(need == models.ScopeRead && slices.Contains(key.Scopes, models.ScopeWrite)) {
@@ -112,6 +114,19 @@ func (au *Authenticator) Authenticate(c *okapi.Context) error {
 		return c.Next()
 	}
 	return au.jwt.Middleware(c)
+}
+
+// isWebSocketUpgrade reports whether the request asks to switch to the WebSocket protocol.
+func isWebSocketUpgrade(r *http.Request) bool {
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return false
+	}
+	for _, f := range strings.Split(r.Header.Get("Connection"), ",") {
+		if strings.EqualFold(strings.TrimSpace(f), "upgrade") {
+			return true
+		}
+	}
+	return false
 }
 
 // RequireRole allows the request only for users at or above min.
