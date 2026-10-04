@@ -27,7 +27,7 @@ const confirm = useConfirm()
 const toast = useToast()
 const route = useRoute()
 
-const bare = computed(() => route.meta.public === true)
+const bare = computed(() => route.meta.public === true || route.meta.bare === true)
 
 // The org event feed runs while someone is signed in.
 watch(

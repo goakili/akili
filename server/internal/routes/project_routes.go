@@ -118,6 +118,15 @@ func (r *Router) projectRoutes() []okapi.RouteDefinition {
 		},
 		{
 			Method:      http.MethodGet,
+			Path:        "/projects/resolve",
+			Group:       g,
+			Middlewares: r.guard(models.RoleViewer),
+			Handler:     r.h.ResolveProject,
+			Summary:     "Find the project for a git remote URL (?remote=)",
+			Response:    &dto.Response[models.Project]{},
+		},
+		{
+			Method:      http.MethodGet,
 			Path:        "/projects/{id}",
 			Group:       g,
 			Middlewares: r.guard(models.RoleViewer),

@@ -15,6 +15,8 @@ declare module 'vue-router' {
     parent?: { label: string; to: string }
     /** Pages that manage their own height (chat): no bottom padding, fills the viewport. */
     fill?: boolean
+    /** Signed in, but shown without the app chrome (the editor sign-in page). */
+    bare?: boolean
   }
 }
 
@@ -44,6 +46,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/audit', name: 'audit', component: () => import('./views/AuditView.vue'), meta: { title: 'Audit log', minRole: 'admin' } },
   { path: '/mcp', name: 'mcp', component: () => import('./views/MCPView.vue'), meta: { title: 'MCP servers', minRole: 'admin' } },
   { path: '/integrations', name: 'integrations', component: () => import('./views/IntegrationsView.vue'), meta: { title: 'Integrations', minRole: 'admin' } },
+  { path: '/vscode/authorize', name: 'vscode-authorize', component: () => import('./views/VSCodeAuthorizeView.vue'), meta: { title: 'Sign in to your editor', bare: true } },
   { path: '/about', name: 'about', component: () => import('./views/AboutView.vue'), meta: { title: 'About' } },
   { path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: 'Settings' } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('./views/NotFoundView.vue'), meta: { title: 'Not found' } },

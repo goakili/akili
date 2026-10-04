@@ -115,6 +115,13 @@ wait_task() {
   fail "task $1 stuck in $(task_status "$1")"
 }
 
+step "Editor project lookup: a git remote finds its project, in https, ssh and scp form"
+for remote in "$GITEA/$GUSER/demo-svc.git" "git@127.0.0.1:$GUSER/demo-svc.git" "ssh://git@127.0.0.1:2222/$GUSER/Demo-Svc"; do
+  [ "$(api GET "/projects/resolve?remote=$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""))' "$remote")" | json "d['data']['id']")" = "$PROJ" ] || fail "remote $remote did not resolve to the project"
+done
+[ "$(curl -sS -o /dev/null -w '%{http_code}' -b "$JAR" "$API/projects/resolve?remote=https%3A%2F%2Fgithub.com%2F$GUSER%2Fdemo-svc")" = "404" ] || fail "a remote on another host resolved to the project"
+[ "$(curl -sS -o /dev/null -w '%{http_code}' -b "$JAR" "$API/projects/resolve?remote=%2Fhome%2Fme%2Frepo")" = "400" ] || fail "a local path was accepted as a remote"
+
 step "Coding task: write, test in the sandbox, commit, push, open a PR, check CI"
 GOAL='write: hello.txt :: hello from akili\nsandbox: cat hello.txt && echo SANDBOX_OK && echo SBX_UID=$(id -u)\ncommit: Add hello.txt\npush\npr: Add hello file\nchecks'
 T1=$(api POST /tasks "{\"goal\":\"$GOAL\",\"project_id\":\"$PROJ\",\"autonomy\":2}" | json "d['data']['id']")
