@@ -44,8 +44,8 @@ function setView(v: 'board' | 'list') {
 
 type ColKey = 'queued' | 'running' | 'approval' | 'done' | 'failed'
 const COLUMNS: { key: ColKey; title: string; icon: IconName; tone: string }[] = [
-  { key: 'queued', title: 'Queued', icon: 'clock', tone: 'var(--info-text)' },
-  { key: 'running', title: 'Running', icon: 'loader', tone: 'var(--primary-text)' },
+  { key: 'queued', title: 'Queued', icon: 'clock', tone: 'var(--text-tertiary)' },
+  { key: 'running', title: 'Running', icon: 'loader', tone: 'var(--info-text)' },
   { key: 'approval', title: 'Needs approval', icon: 'approvals', tone: 'var(--warning-text)' },
   { key: 'done', title: 'Done', icon: 'checkCircle', tone: 'var(--success-text)' },
   { key: 'failed', title: 'Failed', icon: 'xCircle', tone: 'var(--danger-text)' },
