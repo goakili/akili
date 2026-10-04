@@ -112,7 +112,7 @@ flowchart TB
 ## Quick start
 
 ```bash
-docker compose up -d --build                     # http://localhost:8080
+docker compose up -d --build                     # http://localhost:9000
 docker compose logs akili | grep password        # first-run owner password (or set AKILI_ADMIN_PASSWORD)
 ```
 
@@ -187,10 +187,10 @@ make e2e-all     # every end-to-end suite (coder, ops, miabi, ha, hardening, cha
 make build-ui    # build the UI into the server's embed directory
 make server agent   # bin/akili and bin/akili-agent
 make docker-build   # both images (docker/Dockerfile, docker/Dockerfile.agent)
-make run         # build UI + server, run the binary (embedded UI on :8080) with compose Postgres/Redis and .env
+make run         # build UI + server, run the binary (embedded UI on :9000) with compose Postgres/Redis and .env
 make run-agent   # build and run a local agent; enrolls on first run with AKILI_JOIN_TOKEN from .env
 make dev         # same, via `go run` (pair with `cd web && npm run dev` for hot reload)
-cd web && npm run dev   # UI on :5173, proxied to the API on :8080
+cd web && npm run dev   # UI on :5173, proxied to the API on :9000
 ```
 
 CI runs the unit tests and the UI checks, then every end-to-end suite in parallel, on each push to `main` and each pull request. Pushing a `v*` tag runs the release.
@@ -429,15 +429,18 @@ Settings come from environment variables. On start the server also loads `./.env
 
 | Variable | Default | Notes |
 |---|---|---|
+| `AKILI_PORT` | `9000` | the API, UI and agent tunnels; it was `8080` up to 0.1.0 |
 | `AKILI_ENV` | `development` | `production` enforces secret lengths and forbids `*` CORS |
 | `AKILI_DATABASE_URL` | local Postgres | |
 | `AKILI_REDIS_ADDR` / `_PASSWORD` / `_DB` | `localhost:6379` | |
 | `AKILI_JWT_SECRET` | dev default | ≥ 32 chars in production |
 | `AKILI_ENCRYPTION_KEY` | dev default | ≥ 32 chars; encrypts provider keys and the policy-signing key |
-| `AKILI_PUBLIC_URL` | `http://localhost:8080` | used in install commands and links |
+| `AKILI_PUBLIC_URL` | `http://localhost:9000` | used in install commands and links |
 | `AKILI_COOKIE_SECURE` | `false` | set `true` behind HTTPS |
 | `AKILI_ADMIN_EMAIL` / `_PASSWORD` | `admin@akili.local` / generated | first owner, created once |
 | `ANTHROPIC_API_KEY` | – | seeds the default provider on first start |
+
+**Upgrading from 0.1.0 or earlier:** the default port moved from `8080` to `9000`, matching Miabi, Posta and Goma Admin. Agents and forge webhooks keep the URL they were given. If those URLs include `:8080` and you don't put the port behind a proxy, set `AKILI_PORT=8080` to keep the old port. For Helm, set `config.port` and `service.port` to `8080`. Otherwise, re-point each agent and webhook to `:9000`.
 | `AKILI_DEFAULT_MODEL` | `claude-opus-5-5` | model for the seeded provider |
 | `AKILI_NOTIFY_WEBHOOK_URL` | – | Slack-compatible webhook for approvals and task results |
 | `AKILI_WEB_DIR` | – | serve the UI from disk instead of the embedded build |

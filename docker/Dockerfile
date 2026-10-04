@@ -37,6 +37,6 @@ RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 akili
 COPY --from=build /out/akili /usr/local/bin/akili
 COPY --from=miabi /out/miabi /usr/local/bin/miabi
 USER 10001
-EXPOSE 8080
+EXPOSE 9000
 ENTRYPOINT ["akili"]
 CMD ["server"]

@@ -71,7 +71,7 @@ func envInt(key string, def int) int {
 
 func main() {
 	cfg := &config{}
-	flag.StringVar(&cfg.url, "url", env("AKILI_URL", "http://127.0.0.1:8080"), "control plane URL (AKILI_URL)")
+	flag.StringVar(&cfg.url, "url", env("AKILI_URL", "http://127.0.0.1:9000"), "control plane URL (AKILI_URL)")
 	flag.IntVar(&cfg.agents, "agents", envInt("AGENTS", 1000), "number of simulated agents (AGENTS)")
 	flag.IntVar(&cfg.tasks, "tasks", envInt("TASKS", 0), "tasks to run across the agents once they are online; 0 skips (TASKS)")
 	flag.StringVar(&cfg.workDir, "work-dir", env("AKILI_LOADTEST_DIR", "./loadtest-state"), "directory holding one state dir per agent; reused across runs")

@@ -5,7 +5,7 @@
 # (see the README's reverse proxy section) or set AKILI_TLS_CERT_FILE and AKILI_TLS_KEY_FILE.
 #
 #   cp .env.example .env    # then fill in the secrets
-#   docker compose up -d    # http://localhost:8080
+#   docker compose up -d    # http://localhost:9000
 #
 # The first start creates the owner account from AKILI_ADMIN_EMAIL / AKILI_ADMIN_PASSWORD.
 # To try an agent on the same host: create one in the UI (Agents → Add agent), put its join token
@@ -15,7 +15,7 @@ services:
   akili:
     image: jkaninda/akili:${AKILI_VERSION:-latest}
     ports:
-      - "${HOST_PORT:-8080}:8080"
+      - "${HOST_PORT:-9000}:9000"
     environment:
       AKILI_ENV: production
       AKILI_PUBLIC_URL: ${AKILI_PUBLIC_URL:?required, the URL people and agents use, e.g. https://akili.example.com}
@@ -35,7 +35,7 @@ services:
       # Optional: an Akili Enterprise license token.
       AKILI_LICENSE: ${AKILI_LICENSE:-}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:9000/healthz"]
       interval: 30s
       timeout: 5s
       start_period: 20s
@@ -79,7 +79,7 @@ services:
     profiles: [agent]
     image: jkaninda/akili-agent:${AKILI_VERSION:-latest}
     environment:
-      AKILI_URL: http://akili:8080
+      AKILI_URL: http://akili:9000
       AKILI_JOIN_TOKEN: ${AKILI_JOIN_TOKEN:-}
     volumes:
       - agentstate:/var/lib/akili-agent

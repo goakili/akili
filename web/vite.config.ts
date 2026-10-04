@@ -20,7 +20,7 @@ function keepGitkeep(): Plugin {
   }
 }
 
-const backend = process.env.AKILI_API ?? 'http://localhost:8080'
+const backend = process.env.AKILI_API ?? 'http://localhost:9000'
 
 export default defineConfig({
   plugins: [vue(), keepGitkeep()],
