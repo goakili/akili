@@ -18,7 +18,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/goakili/akili/proto"
 	"github.com/goakili/akili/server/internal/chat/chattest"
+	"github.com/goakili/akili/server/internal/models"
 )
 
 func sign(secret string, ts int64, body []byte) http.Header {
@@ -99,6 +101,33 @@ func TestHelpers(t *testing.T) {
 	}
 	if textCommand("ap:apr_9:approve") != "/approve apr_9" {
 		t.Fatal("textCommand")
+	}
+}
+
+func TestQuestionHelpers(t *testing.T) {
+	q := &models.Question{Base: models.Base{ID: "qst_1"}, Question: "Which cache?", Options: []proto.AskUserOption{
+		{Label: "Redis", Description: "shared across replicas", Recommended: true}, {Label: "In memory"}}}
+	b := questionButtons(q)
+	if len(b) != 2 || b[0].Label != "★ Redis" || b[1].Data != "qa:qst_1:1" || len(b[1].Data) > 64 {
+		t.Fatalf("buttons: %+v", b)
+	}
+	if id, choice, ok := parseQuestionAction(b[1].Data); !ok || id != "qst_1" || choice != 1 {
+		t.Fatal("parseQuestionAction")
+	}
+	for _, bad := range []string{"qa:qst_1:-1", "qa:qst_1:x", "qa:qst_1", "ap:qst_1:1"} {
+		if _, _, ok := parseQuestionAction(bad); ok {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+	// Signal has no buttons: option numbers are 1-based, like the list in the message.
+	if textCommand(b[0].Data) != "/answer qst_1 1" {
+		t.Fatalf("textCommand = %q", textCommand(b[0].Data))
+	}
+	d := describeQuestion(q)
+	for _, want := range []string{"Which cache?", "1. Redis (recommended) — shared across replicas", "2. In memory", "/answer qst_1 <your answer>"} {
+		if !strings.Contains(d, want) {
+			t.Errorf("description lacks %q:\n%s", want, d)
+		}
 	}
 }
 

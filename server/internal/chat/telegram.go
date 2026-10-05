@@ -147,7 +147,14 @@ func (t *Telegram) Send(ctx context.Context, chatID string, msg Outgoing) error 
 			for j, b := range msg.Buttons {
 				row[j] = map[string]string{"text": b.Label, "callback_data": b.Data}
 			}
-			body["reply_markup"] = map[string]any{"inline_keyboard": [][]map[string]string{row}}
+			rows := [][]map[string]string{row}
+			if msg.Stacked {
+				rows = make([][]map[string]string, len(row))
+				for j := range row {
+					rows[j] = row[j : j+1]
+				}
+			}
+			body["reply_markup"] = map[string]any{"inline_keyboard": rows}
 		}
 		if err := t.call(ctx, "sendMessage", body, nil); err != nil {
 			return err

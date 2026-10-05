@@ -885,6 +885,13 @@ kbd {
   padding: 10px;
   border-radius: var(--radius);
 }
+.bell-question {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
 .bell-item + .bell-item {
   border-top: 1px solid var(--border-secondary);
 }

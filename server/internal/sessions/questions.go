@@ -50,7 +50,8 @@ func (h *Hub) askUser(ctx context.Context, s *models.ChatSession, req proto.Tool
 	// Model text shown to people and kept in the database: strip anything that looks like a credential.
 	opts := make([]proto.AskUserOption, len(in.Options))
 	for i, o := range in.Options {
-		opts[i] = proto.AskUserOption{Label: proto.Redact(strings.TrimSpace(o.Label)), Description: proto.Redact(strings.TrimSpace(o.Description))}
+		opts[i] = proto.AskUserOption{Label: proto.Redact(strings.TrimSpace(o.Label)), Description: proto.Redact(strings.TrimSpace(o.Description)),
+			Recommended: o.Recommended}
 	}
 	q := models.Question{Base: models.Base{ID: models.NewID("qst"), OrganizationID: s.OrganizationID}, SessionID: s.ID, TaskID: s.TaskID,
 		AgentID: s.AgentID, RequestID: req.RequestID, Question: proto.Redact(strings.TrimSpace(in.Question)), Options: opts,
@@ -151,8 +152,11 @@ func (h *Hub) expireQuestion(ctx context.Context, q *models.Question, why string
 	h.audit.Best(ctx, audit.Entry{OrganizationID: q.OrganizationID, ActorType: audit.ActorSystem, Action: "question.expired",
 		TargetType: "question", TargetID: q.ID, Metadata: map[string]any{"reason": why}})
 	h.resolved(ctx, q)
-	out := "No answer: " + why + ". If your first option is safe and easy to undo, continue with it and say so in your summary; " +
-		"otherwise stop and start your final message with \"BLOCKED:\" followed by the question."
+	out := "No answer: " + why + ". Stop and start your final message with \"BLOCKED:\" followed by the question."
+	if r := q.Recommended(); r != nil {
+		out = fmt.Sprintf("No answer: %s. If your recommended option %q is safe and easy to undo, continue with it and say so in your summary; "+
+			"otherwise stop and start your final message with \"BLOCKED:\" followed by the question.", why, r.Label)
+	}
 	if err := h.bus.SendCommandData(ctx, q.AgentID, bus.Command{Type: bus.CmdToolDecision, SessionID: q.SessionID},
 		proto.ToolDecision{RequestID: q.RequestID, Effect: proto.EffectAllow, Reason: "expired", Result: &proto.RemoteResult{Output: out}}); err != nil {
 		logger.Debug("question expired; agent not reachable", "question", q.ID, "error", err)

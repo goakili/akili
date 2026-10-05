@@ -23,7 +23,7 @@ type Incoming struct {
 	UserID   string // the platform's user id
 	UserName string
 	Text     string
-	// Action is a button's data (e.g. "ap:<approval id>:approve"); ActionRef acknowledges it.
+	// Action is a button's data ("ap:<approval id>:approve", "qa:<question id>:<option>"); ActionRef acknowledges it.
 	Action    string
 	ActionRef string
 }
@@ -38,6 +38,8 @@ type Button struct {
 type Outgoing struct {
 	Text    string
 	Buttons []Button
+	// Stacked puts each button on its own row where the platform lays them out (long option labels).
+	Stacked bool
 }
 
 // Platform sends to one chat channel.

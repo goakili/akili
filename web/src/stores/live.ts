@@ -18,6 +18,7 @@ type Listener = (ev: BusEvent) => void
 export const useLive = defineStore('live', () => {
   const status = ref<StreamStatus>('closed')
   const pendingApprovals = ref(0)
+  const pendingQuestions = ref(0)
   const killSwitch = ref(false)
   const version = ref('')
   const listeners = new Set<Listener>()
@@ -33,6 +34,7 @@ export const useLive = defineStore('live', () => {
     try {
       const o = await api.overview({ quiet: true })
       pendingApprovals.value = o.pending_approvals
+      pendingQuestions.value = o.pending_questions ?? 0
       killSwitch.value = o.kill_switch
       version.value = o.version
     } catch {
@@ -74,6 +76,13 @@ export const useLive = defineStore('live', () => {
             scheduleCounts()
             break
           case 'approval.resolved':
+            scheduleCounts()
+            break
+          case 'question.created':
+            pendingQuestions.value++
+            scheduleCounts()
+            break
+          case 'question.resolved':
             scheduleCounts()
             break
           case 'system.kill_switch':
@@ -125,5 +134,5 @@ export const useLive = defineStore('live', () => {
     return () => reconnectListeners.delete(fn)
   }
 
-  return { status, pendingApprovals, killSwitch, version, start, stop, focus, unfocus, on, onReconnect, refreshCounts }
+  return { status, pendingApprovals, pendingQuestions, killSwitch, version, start, stop, focus, unfocus, on, onReconnect, refreshCounts }
 })
