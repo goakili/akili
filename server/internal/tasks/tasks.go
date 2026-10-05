@@ -443,6 +443,7 @@ func (s *Service) Run(ctx context.Context) {
 				s.sweep(ctx)
 				s.runSchedules(ctx)
 				s.hub.ExpireApprovals(ctx)
+				s.hub.ExpireQuestions(ctx)
 			}
 			continue
 		}
@@ -595,8 +596,8 @@ func (s *Service) sweep(ctx context.Context) {
 	s.db.WithContext(ctx).Where("status IN ? AND lease_until < ?", []string{models.TaskAssigned, models.TaskRunning}, now).Limit(100).Find(&expired)
 	for i := range expired {
 		t := &expired[i]
-		// Still connected and holding the session: the task is alive, just quiet (e.g. waiting for an approval).
-		if t.AssignedAgentID != nil && s.bus.Present(ctx, *t.AssignedAgentID) && s.waitingApproval(ctx, t) {
+		// Still connected and holding the session: the task is alive, just quiet (waiting for an approval or an answer).
+		if t.AssignedAgentID != nil && s.bus.Present(ctx, *t.AssignedAgentID) && s.waitingOnPerson(ctx, t) {
 			s.db.WithContext(ctx).Model(t).Update("lease_until", now.Add(Lease))
 			continue
 		}
@@ -616,13 +617,14 @@ func (s *Service) sweep(ctx context.Context) {
 	}
 }
 
-func (s *Service) waitingApproval(ctx context.Context, t *models.Task) bool {
+func (s *Service) waitingOnPerson(ctx context.Context, t *models.Task) bool {
 	if t.SessionID == nil {
 		return false
 	}
-	var n int64
+	var n, q int64
 	s.db.WithContext(ctx).Model(&models.Approval{}).Where("session_id = ? AND status = ?", *t.SessionID, models.ApprovalPending).Count(&n)
-	return n > 0
+	s.db.WithContext(ctx).Model(&models.Question{}).Where("session_id = ? AND status = ?", *t.SessionID, models.QuestionPending).Count(&q)
+	return n+q > 0
 }
 
 // ---- schedules -----------------------------------------------------------------------------------

@@ -43,16 +43,17 @@ func PolicyTemplates() []Policy {
 	return []Policy{
 		{
 			Name:    "read-only",
-			Version: 6,
+			Version: 7,
 			// plan_propose only creates a draft a person must activate, so read-only agents can plan work.
-			Tools:   Rule{Allow: []string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolGitStatus, ToolGitDiff, ToolLessonPropose, ToolPlanPropose}},
+			// ask_user only waits for a person's answer.
+			Tools:   Rule{Allow: []string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolGitStatus, ToolGitDiff, ToolLessonPropose, ToolPlanPropose, ToolAskUser}},
 			Paths:   Rule{Allow: []string{"$WORKDIR/**", "/var/log/**", "/etc/**"}, Deny: commonDenyPaths},
 			MaxRisk: RiskLow,
 		},
 		{
 			Name:       "operator-safe",
-			Version:    7,
-			Tools:      Rule{Allow: append(append([]string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolShell, ToolHTTPFetch, ToolLessonPropose}, readHostTools...), miabiReadTools...)},
+			Version:    8,
+			Tools:      Rule{Allow: append(append([]string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolShell, ToolHTTPFetch, ToolLessonPropose, ToolAskUser}, readHostTools...), miabiReadTools...)},
 			Apps:       Rule{Allow: []string{"*"}},
 			Services:   Rule{Allow: []string{"*"}},
 			Containers: Rule{Allow: []string{"*"}},
@@ -79,9 +80,9 @@ func PolicyTemplates() []Policy {
 			// Runs production hosts: read-only tools freely, changes through approved change plans
 			// (change_run) or individually approved restarts, and a recorded terminal for admins.
 			Name:    "operator",
-			Version: 5,
+			Version: 6,
 			Tools: Rule{Allow: append(append(append([]string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolHTTPFetch, ToolShell, ToolFSEdit, ToolFSWrite,
-				ToolServiceRestart, ToolDockerRestart, ToolChangeRun, ToolLessonPropose}, readHostTools...), miabiReadTools...), miabiWriteTools...)},
+				ToolServiceRestart, ToolDockerRestart, ToolChangeRun, ToolLessonPropose, ToolAskUser}, readHostTools...), miabiReadTools...), miabiWriteTools...)},
 			Apps:       Rule{Allow: []string{"*"}},
 			Paths:      Rule{Allow: []string{"$WORKDIR/**", "/var/log/**", "/etc/**", "/tmp/**", "/var/tmp/**", "/opt/**", "/srv/**"}, Deny: commonDenyPaths},
 			Commands:   Rule{Allow: []string{"*"}, Deny: append([]string{"*sudo su*", "*sudo -i*", "*sudo bash*", "*sudo sh*", "*passwd*", "*visudo*", "*iptables -F*"}, commonDenyCommands...)},

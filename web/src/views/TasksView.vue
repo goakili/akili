@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, type Approval, type Task } from '../api'
+import { api, type Approval, type Question, type Task } from '../api'
 import { useAuth } from '../stores/auth'
 import { useCatalog } from '../stores/catalog'
 import { useLive } from '../stores/live'
@@ -40,6 +40,8 @@ const { loadingMore, hasMore } = finished
 const tasks = computed(() => [...active.value, ...finished.items.value])
 /** task id → number of pending approvals */
 const waiting = ref<Map<string, number>>(new Map())
+/** ids of tasks with a question waiting for an answer */
+const asking = ref<Set<string>>(new Set())
 const loading = ref(true)
 const filter = ref('')
 const view = computed<'board' | 'list'>(() => (route.query.view === 'list' ? 'list' : 'board'))
@@ -55,7 +57,7 @@ type ColKey = 'queued' | 'running' | 'approval' | 'done' | 'failed'
 const COLUMNS: { key: ColKey; title: string; icon: IconName; tone: string }[] = [
   { key: 'queued', title: 'Queued', icon: 'clock', tone: 'var(--text-tertiary)' },
   { key: 'running', title: 'Running', icon: 'loader', tone: 'var(--info-text)' },
-  { key: 'approval', title: 'Needs approval', icon: 'approvals', tone: 'var(--warning-text)' },
+  { key: 'approval', title: 'Needs you', icon: 'approvals', tone: 'var(--warning-text)' },
   { key: 'done', title: 'Done', icon: 'checkCircle', tone: 'var(--success-text)' },
   { key: 'failed', title: 'Failed', icon: 'xCircle', tone: 'var(--danger-text)' },
 ]
@@ -71,9 +73,18 @@ async function loadApprovals() {
   }
 }
 
+async function loadQuestions() {
+  try {
+    const qs = await fetchAll((page) => api.pageQuestions({ status: 'pending', page, size: 200 }, { quiet: true }))
+    asking.value = new Set(qs.map((q) => q.task_id).filter((id): id is string => !!id))
+  } catch {
+    /* the board still works without questions */
+  }
+}
+
 async function load() {
   try {
-    const [a] = await Promise.all([fetchAll((page) => api.pageTasks({ status: ACTIVE, page, size: 200 })), finished.reload(), loadApprovals()])
+    const [a] = await Promise.all([fetchAll((page) => api.pageTasks({ status: ACTIVE, page, size: 200 })), finished.reload(), loadApprovals(), loadQuestions()])
     active.value = a
   } catch {
     /* toasted */
@@ -105,10 +116,11 @@ function column(t: Task): ColKey {
   if (t.status === 'queued' || t.status === 'draft') return 'queued'
   if (t.status === 'succeeded') return 'done'
   if (t.status === 'failed' || t.status === 'cancelled' || t.status === 'timed_out') return 'failed'
-  return waiting.value.has(t.id) ? 'approval' : 'running'
+  return waiting.value.has(t.id) || asking.value.has(t.id) ? 'approval' : 'running'
 }
 function displayStatus(t: Task): string {
-  return column(t) === 'approval' ? 'needs_approval' : t.status
+  if (column(t) !== 'approval') return t.status
+  return waiting.value.has(t.id) ? 'needs_approval' : 'needs_input'
 }
 
 const byColumn = computed(() => {
@@ -168,6 +180,9 @@ onMounted(() => {
     if (ev.type === 'approval.created' || ev.type === 'approval.resolved') {
       const a = ev.data as Approval | undefined
       if (a?.task_id) loadApprovals()
+    }
+    if (ev.type === 'question.created' || ev.type === 'question.resolved') {
+      if ((ev.data as Question | undefined)?.task_id) loadQuestions()
     }
   })
   offRe = live.onReconnect(load)

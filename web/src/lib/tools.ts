@@ -64,6 +64,7 @@ export const TOOL_ICONS: Record<string, IconName> = {
   miabi_pipelines: 'gitBranch',
   miabi_pipeline_run: 'play',
   lesson_propose: 'lightbulb',
+  ask_user: 'help',
   plan_propose: 'list',
   plan_phase_update: 'check',
 }
@@ -150,6 +151,7 @@ export function callSummary(input: unknown, tool?: string): string {
   const i = input as Record<string, unknown> | null
   if (!i || typeof i !== 'object' || Array.isArray(i)) return ''
   if (tool === 'lesson_propose') return truncate(scalar(i.lesson), 80)
+  if (tool === 'ask_user') return truncate(scalar(i.question), 80)
   if (tool === 'plan_propose') {
     const n = Array.isArray(i.phases) ? i.phases.length : 0
     return truncate(scalar(i.title), 70) + (n ? ` · ${n} phase${n === 1 ? '' : 's'}` : '')

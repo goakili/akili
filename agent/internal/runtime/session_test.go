@@ -247,6 +247,32 @@ func TestTurnLimitFailsWithAClearError(t *testing.T) {
 	}
 }
 
+// TestAskUserWaitsForTheAnswer: the session reports waiting_input and the person's answer, relayed by
+// the control plane, is the tool result.
+func TestAskUserWaitsForTheAnswer(t *testing.T) {
+	conn := newFakeConn(func(proto.ToolRequest) []proto.ToolDecision {
+		return []proto.ToolDecision{{Effect: proto.EffectAllow, Result: &proto.RemoteResult{Output: "The user chose: Redis"}}}
+	})
+	ask := toolTurn(proto.ToolAskUser, proto.AskUserInput{Question: "Which cache?", Options: []proto.AskUserOption{{Label: "Redis"}, {Label: "In memory"}}})
+	llm := &scripted{turns: []proto.LLMEvent{ask, textTurn("using Redis")}}
+	s := setup(t, devPolicy, llm, conn, proto.ModeTask)
+	if d := runTask(t, s); d.Outcome != proto.OutcomeSucceeded {
+		t.Fatalf("done = %+v", d)
+	}
+	if res := llm.seen[1][len(llm.seen[1])-1].Content[0]; res.IsError || res.Content != "The user chose: Redis" {
+		t.Fatalf("answer not relayed: %+v", res)
+	}
+	var waited bool
+	for _, e := range conn.of(proto.TypeStatus) {
+		var st proto.Status
+		_ = e.Decode(&st)
+		waited = waited || (st.State == proto.StateWaitingInput && st.Detail == "Which cache?")
+	}
+	if !waited {
+		t.Fatal("agent never reported waiting_input")
+	}
+}
+
 func TestBadPolicySignatureRefused(t *testing.T) {
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	otherPub, _, _ := ed25519.GenerateKey(rand.Reader)

@@ -7,6 +7,7 @@ import {
   api,
   ApiError,
   type Approval,
+  type Question,
   type BusEvent,
   type Change,
   type ChatSession,
@@ -37,6 +38,7 @@ import Badge from './Badge.vue'
 import SafeMarkdown from './SafeMarkdown'
 import ToolCard from './ToolCard.vue'
 import ApprovalCard from './ApprovalCard.vue'
+import QuestionCard from './QuestionCard.vue'
 import Avatar from './Avatar.vue'
 import ProjectChip from './ProjectChip.vue'
 import Icon from './Icon'
@@ -61,6 +63,7 @@ const project = ref<Project | null>(null)
 const messages = ref<SessionMessage[]>([])
 const events = ref<SessionEvent[]>([])
 const approvals = ref<Map<string, Approval>>(new Map())
+const questions = ref<Map<string, Question>>(new Map())
 /** Change plans proposed in this session, by id (live through change.updated). */
 const changes = ref<Map<string, Change>>(new Map())
 const streaming = ref('')
@@ -108,6 +111,7 @@ async function load() {
     messages.value = d.messages ?? []
     events.value = d.events ?? []
     approvals.value = new Map((d.approvals ?? []).map((a) => [a.id, a]))
+    questions.value = new Map((d.questions ?? []).map((q) => [q.id, q]))
     loadChanges()
     stateDetail.value = ''
     if (d.session.state === 'idle' || d.session.status === 'closed') streaming.value = ''
@@ -160,6 +164,12 @@ function upsertApproval(a: Approval) {
   approvals.value = m
 }
 
+function upsertQuestion(q: Question) {
+  const m = new Map(questions.value)
+  m.set(q.id, q)
+  questions.value = m
+}
+
 function pushEvent(ev: BusEvent) {
   events.value.push({ id: -++eventSeq, session_id: props.sessionId, type: ev.type, payload: ev.data, created_at: ev.ts })
 }
@@ -202,6 +212,10 @@ function onEvent(ev: BusEvent) {
     case 'approval.created':
     case 'approval.resolved':
       if (ev.data) upsertApproval(ev.data as Approval)
+      break
+    case 'question.created':
+    case 'question.resolved':
+      if (ev.data) upsertQuestion(ev.data as Question)
       break
     case 'change.updated':
       if (ev.data) {
@@ -285,6 +299,7 @@ type Item =
       request?: ToolRequestPayload
       result?: ToolOutcome
       approval?: Approval
+      question?: Question
       change?: Change
       children?: ChangeChild[]
       tag?: string
@@ -292,6 +307,7 @@ type Item =
   | { kind: 'result'; key: string; at: number; content: string; isError: boolean }
   | { kind: 'sys'; key: string; at: number; text: string; tone: '' | 'ok' | 'error' }
   | { kind: 'approval'; key: string; at: number; approval: Approval }
+  | { kind: 'question'; key: string; at: number; question: Question }
 
 const ts = (s: string) => new Date(s).getTime() || 0
 
@@ -333,6 +349,15 @@ const timeline = computed<Item[]>(() => {
     const a = (req.approval_id && approvals.value.get(req.approval_id)) || approvalByRequest.get(req.request_id)
     if (a) claimedApprovals.add(a.id)
     return a
+  }
+
+  const questionByRequest = new Map<string, Question>()
+  for (const q of questions.value.values()) questionByRequest.set(q.request_id, q)
+  const claimedQuestions = new Set<string>()
+  const findQuestion = (req?: ToolRequestPayload) => {
+    const q = req ? questionByRequest.get(req.request_id) : undefined
+    if (q) claimedQuestions.add(q.id)
+    return q
   }
 
   const items: Item[] = []
@@ -381,6 +406,7 @@ const timeline = computed<Item[]>(() => {
             request: req,
             result: b.id ? (resultByToolUse.get(b.id) ?? resultBlocks.get(b.id)) : undefined,
             approval,
+            question: findQuestion(req),
             change: changeFor(name, req, approval),
           })
           break
@@ -411,7 +437,7 @@ const timeline = computed<Item[]>(() => {
         continue
       }
       const approval = findApproval(p)
-      items.push({ kind: 'tool', key, at, name: p.tool, input: p.input, request: p, result, approval, change: changeFor(p.tool, p, approval) })
+      items.push({ kind: 'tool', key, at, name: p.tool, input: p.input, request: p, result, approval, question: findQuestion(p), change: changeFor(p.tool, p, approval) })
     } else if (e.type === 'done') {
       const d = e.payload as DonePayload
       const ok = d?.outcome === 'succeeded'
@@ -448,6 +474,9 @@ const timeline = computed<Item[]>(() => {
   }
   for (const a of approvals.value.values()) {
     if (!claimedApprovals.has(a.id)) items.push({ kind: 'approval', key: `a${a.id}`, at: ts(a.created_at), approval: a })
+  }
+  for (const q of questions.value.values()) {
+    if (!claimedQuestions.has(q.id)) items.push({ kind: 'question', key: `q${q.id}`, at: ts(q.created_at), question: q })
   }
   return items
     .map((it, idx) => ({ it, idx }))
@@ -653,6 +682,8 @@ const stateLabel = computed(() => {
       return 'Running tool'
     case 'waiting_approval':
       return 'Waiting for approval'
+    case 'waiting_input':
+      return 'Waiting for your answer'
     default:
       return 'Idle'
   }
@@ -732,6 +763,9 @@ defineExpose({ reload: load })
               <summary><Icon name="brain" />Thought process<Icon name="chevronDown" class="chev" /></summary>
               <div class="think-text">{{ it.text || 'The model reasoned before answering (content not retained).' }}</div>
             </details>
+            <div v-else-if="it.kind === 'tool' && it.question" class="thread-item">
+              <QuestionCard :question="it.question" @resolved="upsertQuestion" />
+            </div>
             <div v-else-if="it.kind === 'tool'" class="thread-item">
               <ToolCard
                 :name="it.name"
@@ -760,6 +794,9 @@ defineExpose({ reload: load })
             </div>
             <div v-else-if="it.kind === 'approval'" class="thread-item">
               <ApprovalCard :approval="it.approval" @resolved="upsertApproval" />
+            </div>
+            <div v-else-if="it.kind === 'question'" class="thread-item">
+              <QuestionCard :question="it.question" @resolved="upsertQuestion" />
             </div>
           </template>
 
