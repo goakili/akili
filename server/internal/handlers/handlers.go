@@ -85,7 +85,7 @@ func mapErr(c *okapi.Context, err error) error {
 	case errors.Is(err, fleet.ErrNotFound), errors.Is(err, sessions.ErrNotFound), errors.Is(err, tasks.ErrNotFound), errors.Is(err, coder.ErrNotFound),
 		errors.Is(err, auth.ErrNotFound), errors.Is(err, plans.ErrNotFound), errors.Is(err, gorm.ErrRecordNotFound):
 		return c.AbortNotFound("not found")
-	case errors.Is(err, plans.ErrInUse), errors.Is(err, tasks.ErrNotDraft):
+	case errors.Is(err, plans.ErrInUse), errors.Is(err, tasks.ErrNotDraft), errors.Is(err, tasks.ErrNotContinuable):
 		return c.AbortConflict(err.Error())
 	case errors.Is(err, bus.ErrAgentOffline):
 		return c.AbortConflict("the agent is not connected")

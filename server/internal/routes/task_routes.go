@@ -76,5 +76,16 @@ func (r *Router) taskRoutes() []okapi.RouteDefinition {
 			Handler:     r.h.RetryTask,
 			Summary:     "Queue a finished task again",
 		},
+		{
+			Method:      http.MethodPost,
+			Path:        "/tasks/{id}/continue",
+			Group:       g,
+			Middlewares: r.guard(models.RoleOperator),
+			Handler:     okapi.H(r.h.ContinueTask),
+			Summary:     "Continue a stopped task from where it stopped",
+			Description: "Requeues a failed, timed-out or cancelled task on the agent that ran it. The new run starts from the previous run's conversation.",
+			Request:     &handlers.ContinueTaskRequest{},
+			Response:    &dto.Response[models.Task]{},
+		},
 	}
 }

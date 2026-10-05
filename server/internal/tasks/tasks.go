@@ -30,6 +30,12 @@ import (
 // Lease is how long an assigned task may go without a progress frame before it is considered lost.
 const Lease = 3 * time.Minute
 
+// Turn limits applied when a task does not set one. Coding tasks edit many files, so they get more.
+const (
+	DefaultMaxTurns        = 40
+	DefaultProjectMaxTurns = 80
+)
+
 // Event types.
 const (
 	EvTaskUpdated = "task.updated"
@@ -136,7 +142,10 @@ func (s *Service) Create(ctx context.Context, org, userID string, in Input) (*mo
 		in.TimeoutSec = 3600
 	}
 	if in.MaxTurns <= 0 {
-		in.MaxTurns = 40
+		in.MaxTurns = DefaultMaxTurns
+		if in.ProjectID != nil {
+			in.MaxTurns = DefaultProjectMaxTurns
+		}
 	}
 	if in.Selector == nil {
 		in.Selector = []string{}
@@ -267,6 +276,45 @@ func (s *Service) Retry(ctx context.Context, org, userID, id string) (*models.Ta
 	}
 	return s.Create(ctx, org, userID, Input{Title: t.Title, Goal: t.Goal, AgentID: t.AgentID, Selector: t.Selector, Priority: t.Priority,
 		Autonomy: t.Autonomy, BudgetUSD: t.BudgetUSD, MaxTurns: t.MaxTurns, TimeoutSec: t.TimeoutSec, MaxAttempts: t.MaxAttempts, ProjectID: t.ProjectID})
+}
+
+// ErrNotContinuable is returned when a task has no stopped run to continue.
+var ErrNotContinuable = errors.New("only failed, timed-out or cancelled tasks that ran can be continued")
+
+// Continue requeues a stopped task on the agent that ran it. The next run starts from the previous
+// run's conversation, so the agent picks up where it stopped. maxTurns > 0 replaces the turn limit.
+func (s *Service) Continue(ctx context.Context, org, userID, id string, maxTurns int) (*models.Task, error) {
+	t, err := s.Get(ctx, org, id)
+	if err != nil {
+		return nil, err
+	}
+	if t.SessionID == nil || (t.Status != models.TaskFailed && t.Status != models.TaskTimedOut && t.Status != models.TaskCancelled) {
+		return nil, ErrNotContinuable
+	}
+	updates := map[string]any{"status": models.TaskQueued, "status_reason": "continued", "attempts": 0, "lease_until": nil,
+		"started_at": nil, "finished_at": nil, "result": "", "error": ""}
+	// The workspace (worktree, uncommitted files) lives on the agent that ran the task.
+	if t.AgentID == nil && t.AssignedAgentID != nil {
+		updates["agent_id"] = *t.AssignedAgentID
+	}
+	if maxTurns > 0 {
+		updates["max_turns"] = maxTurns
+	}
+	res := s.db.WithContext(ctx).Model(&models.Task{}).Where("id = ? AND organization_id = ? AND status = ?", t.ID, org, t.Status).Updates(updates)
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	if res.RowsAffected == 0 {
+		return nil, ErrNotContinuable
+	}
+	s.audit.Best(ctx, audit.Entry{OrganizationID: org, ActorType: audit.ActorUser, ActorID: userID, Action: "task.continue", TargetType: "task", TargetID: t.ID,
+		Metadata: map[string]any{"previous_session_id": *t.SessionID, "previous_status": t.Status, "max_turns": maxTurns}})
+	if t, err = s.Get(ctx, org, id); err != nil {
+		return nil, err
+	}
+	s.emit(ctx, t)
+	s.bus.Wake(ctx)
+	return t, nil
 }
 
 // ---- session hooks -------------------------------------------------------------------------------
@@ -487,6 +535,12 @@ func (s *Service) assign(ctx context.Context, t *models.Task, agent *models.Agen
 		if err := tx.Create(sess).Error; err != nil {
 			return err
 		}
+		// Only Continue leaves a session on a queued task (requeues clear it): carry its history over.
+		if locked.SessionID != nil {
+			if err := copyHistory(tx, *locked.SessionID, sess.ID); err != nil {
+				return err
+			}
+		}
 		updates := map[string]any{"status": models.TaskAssigned, "assigned_agent_id": agent.ID, "session_id": sess.ID,
 			"attempts": gorm.Expr("attempts + 1"), "lease_until": lease, "status_reason": ""}
 		if locked.StartedAt == nil {
@@ -510,6 +564,20 @@ func (s *Service) assign(ctx context.Context, t *models.Task, agent *models.Agen
 		return err
 	}
 	return nil
+}
+
+func copyHistory(tx *gorm.DB, from, to string) error {
+	var msgs []models.SessionMessage
+	if err := tx.Where("session_id = ?", from).Order("id").Find(&msgs).Error; err != nil {
+		return err
+	}
+	for i := range msgs {
+		msgs[i].ID, msgs[i].SessionID = 0, to
+	}
+	if len(msgs) == 0 {
+		return nil
+	}
+	return tx.CreateInBatches(msgs, 200).Error
 }
 
 // sweep requeues tasks whose lease expired and times out tasks past their deadline.

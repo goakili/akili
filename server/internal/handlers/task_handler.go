@@ -118,6 +118,22 @@ func (h *Handlers) RetryTask(c *okapi.Context) error {
 	return created(c, t)
 }
 
+// ContinueTaskRequest continues a stopped task.
+type ContinueTaskRequest struct {
+	Body struct {
+		MaxTurns int `json:"max_turns" minimum:"0" maximum:"1000" description:"new turn limit for the continued run; 0 keeps the current one"`
+	} `json:"body"`
+}
+
+// ContinueTask requeues a stopped task with its previous conversation.
+func (h *Handlers) ContinueTask(c *okapi.Context, req *ContinueTaskRequest) error {
+	t, err := h.Tasks.Continue(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), c.Param("id"), req.Body.MaxTurns)
+	if err != nil {
+		return mapErr(c, err)
+	}
+	return ok(c, t)
+}
+
 // ---- schedules -----------------------------------------------------------------------------------
 
 // ScheduleRequest creates or updates a schedule.

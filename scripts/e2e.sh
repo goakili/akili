@@ -174,6 +174,22 @@ wait_task "$T1" succeeded 30
 wait_for "task email" 15 has_mail "Task succeeded: write a note"
 mail_body "Task succeeded: write a note" | grep >/dev/null "$BASE/tasks/$T1" || fail "task email has no link to the task"
 
+step "Turn limit: a task that runs out of turns fails clearly, and Continue finishes it from its history"
+TL=$(api POST /tasks "{\"title\":\"turn limit e2e\",\"goal\":\"write: tl-1.txt :: one\\nwrite: tl-2.txt :: two\\nwrite: tl-3.txt :: three\",\"agent_id\":\"$AGENT\",\"autonomy\":2,\"max_turns\":2,\"max_attempts\":1}" | json "d['data']['id']")
+for _ in $(seq 30); do [ "$(task_status "$TL")" = "failed" ] && break; sleep 1; done
+[ "$(task_status "$TL")" = "failed" ] || fail "turn-limited task did not fail: $(api GET /tasks/$TL)"
+api GET "/tasks/$TL" | json "d['data']['error']" | grep >/dev/null "turn limit reached" || fail "turn-limit error is unclear: $(api GET /tasks/$TL)"
+[ ! -e "$WORK/agent-work/tl-3.txt" ] || fail "the task ran past its turn limit"
+TL_SES=$(api GET "/tasks/$TL" | json "d['data']['session_id']")
+done_continue=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -X POST -H 'Content-Type: application/json' -d '{}' "$API/tasks/$T1/continue")
+[ "$done_continue" = "409" ] || fail "a succeeded task could be continued ($done_continue)"
+[ "$(api POST "/tasks/$TL/continue" '{}' | json "d['data']['id']")" = "$TL" ] || fail "continue did not return the same task"
+wait_task "$TL" succeeded 30
+[ "$(cat "$WORK/agent-work/tl-3.txt")" = "three" ] || fail "the continued task did not finish the remaining step"
+[ "$(cat "$WORK/agent-work/tl-1.txt")" = "one" ] || fail "tl-1.txt missing"
+[ "$(api GET "/tasks/$TL" | json "d['data']['session_id']")" != "$TL_SES" ] || fail "continue reused the closed session"
+api GET "/audit?action=task.continue" | json "d['data']['items'][0]['target_id']" | grep >/dev/null "$TL" || fail "continue not audited"
+
 step "Task 2: a high-risk shell command waits for approval, then runs"
 T2=$(api POST /tasks "{\"title\":\"approval e2e\",\"goal\":\"run: echo approved-e2e\",\"agent_id\":\"$AGENT\",\"autonomy\":2}" | json "d['data']['id']")
 pending() { [ "$(api GET '/approvals?status=pending' | json "len(d['data'])")" -ge 1 ]; }

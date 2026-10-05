@@ -104,9 +104,9 @@ type Heartbeat struct {
 // HeartbeatInterval is how often an agent reports.
 const HeartbeatInterval = 15 * time.Second
 
-// ResumeGoal is the user turn an agent adds when it resumes a task after a reconnect: the original
-// goal is already in the history.
-const ResumeGoal = "Continue the task from where you left off. The connection was interrupted; check the state before repeating any step."
+// ResumeGoal is the user turn an agent adds when it resumes a task (after a reconnect, or when an
+// operator continues a stopped task): the original goal is already in the history.
+const ResumeGoal = "Continue the task from where you left off. Your previous run was interrupted before it finished; check the state before repeating any step."
 
 // Session stream.
 const (

@@ -1345,6 +1345,7 @@ export const api = {
   getTask: (id: string, o?: RequestOptions) => get<Task>(`/tasks/${enc(id)}`, o),
   cancelTask: (id: string) => post<Task>(`/tasks/${enc(id)}/cancel`),
   retryTask: (id: string) => post<Task>(`/tasks/${enc(id)}/retry`),
+  continueTask: (id: string, maxTurns = 0) => post<Task>(`/tasks/${enc(id)}/continue`, { max_turns: maxTurns }),
   startTask: (id: string) => post<Task>(`/tasks/${enc(id)}/start`),
   taskPlans: (id: string, o?: RequestOptions) => get<TaskPlan[] | null>(`/tasks/${enc(id)}/plans`, o),
   listPlans: (projectId: string, o?: RequestOptions) => get<PlanSummary[] | null>(`/projects/${enc(projectId)}/plans`, o),
