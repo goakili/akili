@@ -293,10 +293,12 @@ type (
 		Options  []AskUserOption `json:"options"`
 	}
 
-	// AskUserOption is one suggested answer.
+	// AskUserOption is one suggested answer. At most one is Recommended: the agent's own pick, which it
+	// may fall back to when nobody answers.
 	AskUserOption struct {
 		Label       string `json:"label"`
 		Description string `json:"description,omitempty"`
+		Recommended bool   `json:"recommended,omitempty"`
 	}
 
 	// LessonInput proposes a lesson for future sessions; it is used only after an operator approves it.
@@ -1125,11 +1127,12 @@ var catalog = map[string]ToolSpec{
 	ToolAskUser: {
 		Name: ToolAskUser, Risk: RiskLow, Remote: true,
 		Description: "Ask the person who runs this task to decide something that is theirs to decide (a trade-off, a preference, which of several valid " +
-			"approaches). Give 2-6 options, best first, each a short label with a one-line description; they pick one or answer in their own words. " +
-			"Wait for the answer, then continue. Don't ask for facts you can check yourself, and don't ask for permission: risky tools ask for approval on their own.",
+			"approaches). Give 2-6 options, each a short label with a one-line description, and mark the one you recommend (at most one); " +
+			"they pick one or answer in their own words. Wait for the answer, then continue. Don't ask for facts you can check yourself, " +
+			"and don't ask for permission: risky tools ask for approval on their own.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"question":{"type":"string","minLength":1,"maxLength":1000},` +
 			`"options":{"type":"array","minItems":2,"maxItems":6,"items":{"type":"object","properties":{` +
-			`"label":{"type":"string","minLength":1,"maxLength":120},"description":{"type":"string","maxLength":300}},` +
+			`"label":{"type":"string","minLength":1,"maxLength":120},"description":{"type":"string","maxLength":300},"recommended":{"type":"boolean"}},` +
 			`"required":["label"],"additionalProperties":false}}},"required":["question","options"],"additionalProperties":false}`),
 		resources: askUserResources,
 	},
@@ -1227,7 +1230,11 @@ func askUserResources(in json.RawMessage) (Resources, error) {
 		return Resources{}, fmt.Errorf("give %d-%d options; the user can always answer in their own words", MinQuestionOpts, MaxQuestionOpts)
 	}
 	seen := map[string]bool{}
+	recommended := 0
 	for _, o := range v.Options {
+		if o.Recommended {
+			recommended++
+		}
 		l := strings.TrimSpace(o.Label)
 		if l == "" || len([]rune(l)) > MaxOptionLabel || strings.ContainsAny(l, "\r\n") {
 			return Resources{}, fmt.Errorf("an option needs a one-line label of 1-%d characters", MaxOptionLabel)
@@ -1239,6 +1246,9 @@ func askUserResources(in json.RawMessage) (Resources, error) {
 			return Resources{}, fmt.Errorf("option %q is listed twice", l)
 		}
 		seen[strings.ToLower(l)] = true
+	}
+	if recommended > 1 {
+		return Resources{}, fmt.Errorf("recommend at most one option")
 	}
 	return Resources{}, nil
 }

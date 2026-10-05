@@ -314,7 +314,7 @@ export interface Question extends Base {
   agent_id: string
   request_id: string
   question: string
-  options: { label: string; description?: string }[] | null
+  options: { label: string; description?: string; recommended?: boolean }[] | null
   status: QuestionStatus
   /** 0-based option picked; null when answered in own words. */
   choice: number | null
@@ -553,6 +553,7 @@ export interface Overview {
   agents: { total: number; online: number; pending: number }
   tasks: { queued: number; running: number; succeeded_24h: number; failed_24h: number }
   pending_approvals: number
+  pending_questions: number
   spend_today_usd: number
   spend_month_usd: number
   tokens_today: number

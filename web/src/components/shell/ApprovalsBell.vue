@@ -1,8 +1,8 @@
 <!-- SPDX-FileCopyrightText: 2026 Jonas Kaninda -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { api, type Approval } from '../../api'
+import { computed, ref, watch } from 'vue'
+import { api, type Approval, type Question } from '../../api'
 import { useAuth } from '../../stores/auth'
 import { useCatalog } from '../../stores/catalog'
 import { useLive } from '../../stores/live'
@@ -25,13 +25,20 @@ const root = ref<HTMLElement | null>(null)
 const trigger = ref<HTMLElement | null>(null)
 const { open, toggle, close } = usePopover(root, trigger)
 const items = ref<Approval[]>([])
+const questions = ref<Question[]>([])
+const total = computed(() => live.pendingApprovals + live.pendingQuestions)
 const loading = ref(false)
 const busy = ref<string | null>(null)
 
 async function load() {
   loading.value = true
   try {
-    items.value = (await api.listApprovals({ status: 'pending', size: 6 }, { quiet: true })) ?? []
+    const [a, q] = await Promise.all([
+      api.listApprovals({ status: 'pending', size: 6 }, { quiet: true }),
+      api.pageQuestions({ status: 'pending', size: 6 }, { quiet: true }).catch(() => null),
+    ])
+    items.value = a ?? []
+    questions.value = q?.items ?? []
     catalog.loadAgents()
   } catch {
     /* the badge count still shows */
@@ -42,9 +49,25 @@ async function load() {
 
 watch(open, (o) => o && load())
 watch(
-  () => live.pendingApprovals,
+  () => [live.pendingApprovals, live.pendingQuestions],
   () => open.value && load(),
 )
+
+async function answer(q: Question, choice: number) {
+  busy.value = q.id
+  try {
+    await api.answerQuestion(q.id, { choice })
+    toast.success(`Answer sent to ${catalog.agentName(q.agent_id)}`)
+    questions.value = questions.value.filter((x) => x.id !== q.id)
+    live.refreshCounts()
+  } catch {
+    /* toasted */
+  } finally {
+    busy.value = null
+  }
+}
+
+const questionLink = (q: Question) => (q.task_id ? `/tasks/${q.task_id}` : `/sessions/${q.session_id}`)
 
 async function decide(a: Approval, allow: boolean) {
   busy.value = a.id
@@ -77,27 +100,54 @@ function planOf(a: Approval) {
       ref="trigger"
       type="button"
       class="icon-btn"
-      :aria-label="live.pendingApprovals ? `Approvals: ${live.pendingApprovals} pending` : 'Approvals: none pending'"
+      :aria-label="total ? `Waiting on you: ${live.pendingApprovals} approvals, ${live.pendingQuestions} questions` : 'Nothing waiting on you'"
       aria-haspopup="true"
       :aria-expanded="open"
       @click="toggle"
     >
       <Icon name="bell" />
-      <span v-if="live.pendingApprovals > 0" class="bell-count" aria-hidden="true">{{ live.pendingApprovals > 99 ? '99+' : live.pendingApprovals }}</span>
+      <span v-if="total > 0" class="bell-count" aria-hidden="true">{{ total > 99 ? '99+' : total }}</span>
     </button>
-    <div v-if="open" class="menu wide" role="dialog" aria-label="Pending approvals">
+    <div v-if="open" class="menu wide" role="dialog" aria-label="Waiting on you">
       <div class="menu-head row between">
-        <strong>Pending approvals</strong>
-        <span v-if="live.pendingApprovals" class="badge accent">{{ live.pendingApprovals }}</span>
+        <strong>Waiting on you</strong>
+        <span v-if="total" class="badge accent">{{ total }}</span>
       </div>
-      <div v-if="loading && !items.length" class="stack tight" style="padding: 10px">
+      <div v-if="loading && !items.length && !questions.length" class="stack tight" style="padding: 10px">
         <span class="skel" style="width: 70%" /><span class="skel" style="width: 50%" />
       </div>
-      <div v-else-if="!items.length" class="empty compact">
+      <div v-else-if="!items.length && !questions.length" class="empty compact">
         <strong>You're all caught up</strong>
-        <p class="small">No tool calls are waiting for a decision.</p>
+        <p class="small">No approvals or questions are waiting for you.</p>
       </div>
       <div v-else style="max-height: 420px; overflow-y: auto">
+        <div v-for="q in questions" :key="q.id" class="bell-item">
+          <div class="row between">
+            <span class="row strong" style="min-width: 0"><Icon name="help" :size="14" />Question</span>
+            <span class="xs muted nowrap num">{{ countdown(q.expires_at, now) }}</span>
+          </div>
+          <div class="small bell-question">{{ q.question }}</div>
+          <div class="small muted truncate">
+            <RouterLink :to="`/agents/${q.agent_id}`" @click="close">{{ catalog.agentName(q.agent_id) }}</RouterLink>
+          </div>
+          <div class="row wrap">
+            <template v-if="auth.isOperator">
+              <button
+                v-for="(o, i) in q.options ?? []"
+                :key="i"
+                type="button"
+                class="btn btn-xs"
+                :class="{ 'btn-primary': o.recommended }"
+                :title="o.description || (o.recommended ? 'The agent recommends this option' : undefined)"
+                :disabled="busy === q.id"
+                @click="answer(q, i)"
+              >
+                {{ o.label }}
+              </button>
+            </template>
+            <RouterLink :to="questionLink(q)" class="small" style="margin-left: auto" @click="close">{{ auth.isOperator ? 'Something else…' : 'Open' }}</RouterLink>
+          </div>
+        </div>
         <div v-for="a in items" :key="a.id" class="bell-item">
           <div class="row between">
             <div class="row" style="min-width: 0">

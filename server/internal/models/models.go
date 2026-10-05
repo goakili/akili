@@ -636,6 +636,16 @@ type Question struct {
 	ExpiresAt  time.Time  `json:"expires_at"`
 }
 
+// Recommended is the option the agent marked as its own pick, if any.
+func (q *Question) Recommended() *proto.AskUserOption {
+	for i := range q.Options {
+		if q.Options[i].Recommended {
+			return &q.Options[i]
+		}
+	}
+	return nil
+}
+
 // Approval statuses.
 const (
 	ApprovalPending  = "pending"

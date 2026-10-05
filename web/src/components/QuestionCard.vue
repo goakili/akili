@@ -67,12 +67,12 @@ function sendOwn() {
         type="button"
         role="listitem"
         class="qc-option"
-        :class="{ chosen: question.choice === i }"
+        :class="{ chosen: question.choice === i, recommended: o.recommended }"
         :disabled="!canAnswer"
         :aria-pressed="question.choice === i"
         @click="answer({ choice: i })"
       >
-        <span class="qc-label">{{ o.label }}</span>
+        <span class="qc-label">{{ o.label }}<span v-if="o.recommended" class="qc-rec">Recommended</span></span>
         <span v-if="o.description" class="qc-desc">{{ o.description }}</span>
       </button>
     </div>
@@ -95,7 +95,9 @@ function sendOwn() {
       <template v-else>Chose “{{ question.answer }}”</template>
       {{ question.answered_at ? relTime(question.answered_at, now) : '' }}
     </div>
-    <div v-else-if="question.status === 'expired'" class="small muted">Nobody answered in time; the agent was told to continue safely or stop.</div>
+    <div v-else-if="question.status === 'expired'" class="small muted">
+      Nobody answered in time; the agent {{ question.options?.some((o) => o.recommended) ? 'was told to use its recommended option only if that is safe and easy to undo, or stop' : 'was told to stop' }}.
+    </div>
   </div>
 </template>
 
@@ -174,6 +176,19 @@ function sendOwn() {
 .qc-label {
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+.qc-option.recommended {
+  border-color: color-mix(in srgb, var(--primary-500) 55%, var(--border-input));
+}
+.qc-rec {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+  color: var(--primary-500);
+  background: color-mix(in srgb, var(--primary-500) 12%, transparent);
 }
 .qc-desc {
   font-size: 12.5px;

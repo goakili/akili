@@ -6,6 +6,7 @@
 #  - chatting with an agent from Telegram; approving a high-risk call with a button (and an
 #    unlinked user's button press is ignored)
 #  - /task from Signal with the result posted back; Slack signed events (bad signature, replay)
+#  - ask_user questions from chat tasks: a Telegram option button, and /answer in own words from Signal
 #  - lessons: proposed by the agent, absent from prompts until approved, then present
 set -euo pipefail
 
@@ -164,6 +165,25 @@ signal "+4911" uuid-ann "/approve $SAP"
 wait_for "task result" 40 sent_has signal "+4911" "succeeded"
 [ "$(cat "$WORK/wk/sig.txt")" = "from signal" ] || fail "sig.txt"
 [ "$(api GET '/tasks' | json "[t['trigger'] for t in d['data'] if t['title'].startswith('write: sig.txt')][0]")" = "chat" ] || fail "task trigger"
+
+step "Questions: a chat task asks; answered with a Telegram button, and in own words from Signal"
+tg 42 7 jo '/task tool: ask_user {"question":"Which colour?","options":[{"label":"Red"},{"label":"Blue","recommended":true}]}'
+wait_for "question in telegram" 30 sent_has telegram 42 "Question from the agent"
+sent_has telegram 42 "2. Blue (recommended)" || fail "the recommended option is not marked"
+QBTN=$(curl -s "$FAKE/_fake/sent" | python3 -c 'import json,sys; s=json.load(sys.stdin); b=[x for m in s if m["chat"]=="42" for x in m.get("buttons") or [] if x.startswith("qa:") and x.endswith(":1")]; print(b[-1] if b else "")')
+[ -n "$QBTN" ] || fail "no option button"
+tg_button 42 99 "$QBTN"
+sleep 2
+[ "$(api GET "/questions?status=pending" | json "'$(echo "$QBTN" | cut -d: -f2)' in [q['id'] for q in d['data']]")" = "True" ] || fail "an unlinked user's button press answered the question"
+tg_button 42 7 "$QBTN"
+wait_for "answer confirmed" 20 sent_has telegram 42 "Answered: Blue"
+wait_for "telegram task result" 40 sent_has telegram 42 'option 2: "Blue"'
+signal "+4911" uuid-ann '/task tool: ask_user {"question":"Which size?","options":[{"label":"S"},{"label":"M"}]}'
+wait_for "signal question" 30 sent_has signal "+4911" "Reply /answer qst_"
+SQ=$(curl -s "$FAKE/_fake/sent" | python3 -c 'import json,sys,re; s=[m["text"] for m in json.load(sys.stdin) if m["chat"]=="+4911" and "Reply /answer" in m["text"]]; print(re.search(r"/answer (qst_\w+)", s[-1]).group(1))')
+signal "+4911" uuid-ann "/answer $SQ Extra large, with pockets"
+wait_for "signal task result" 40 sent_has signal "+4911" "Extra large, with pockets"
+[ "$(api GET "/audit?action=chat.answer" | json "len(d['data'])")" = "2" ] || fail "chat answers not audited"
 
 step "Slack: signed events only; retries handled once"
 [ "$(slack_post events '{"type":"url_verification","challenge":"ch-123"}')" = "200" ] && grep -q "ch-123" "$WORK/slack.out" || fail "url verification"

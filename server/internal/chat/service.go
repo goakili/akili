@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -107,9 +108,11 @@ const helpText = `Akili commands:
 /agent <name>  talk to another agent (starts a new conversation)
 /new           start a new conversation with the current agent
 /task <goal>   run a task on the current agent; the result is posted here
-/status        current agent and pending approvals
+/status        current agent, pending approvals and questions
 /approvals     list pending approvals
 /approve <id>, /deny <id>
+/questions     list questions agents are waiting on
+/answer <id> <option number or your own words>
 /unlink        unlink this chat account
 Anything else is sent to the agent.`
 
@@ -165,6 +168,11 @@ func (s *Service) Handle(ctx context.Context, ch *models.ChatChannel, in Incomin
 		s.listApprovals(ctx, ch, in, user)
 	case "/approve", "/deny":
 		s.decide(ctx, ch, in, user, arg, strings.EqualFold(cmd, "/approve"))
+	case "/questions":
+		s.listQuestions(ctx, ch, in, user)
+	case "/answer":
+		id, rest, _ := strings.Cut(arg, " ")
+		s.answerText(ctx, ch, in, user, id, strings.TrimSpace(rest))
 	default:
 		if strings.HasPrefix(cmd, "/") {
 			s.reply(ctx, ch, in.ChatID, Outgoing{Text: "Unknown command. " + helpText})
@@ -330,9 +338,10 @@ func (s *Service) status(ctx context.Context, ch *models.ChatChannel, in Incomin
 	} else {
 		b.WriteString(err.Error() + "\n")
 	}
-	var n int64
+	var n, q int64
 	s.db.WithContext(ctx).Model(&models.Approval{}).Where("organization_id = ? AND status = ?", ch.OrganizationID, models.ApprovalPending).Count(&n)
-	fmt.Fprintf(&b, "Pending approvals: %d\nYou: %s (%s)", n, u.Email, u.Role)
+	s.db.WithContext(ctx).Model(&models.Question{}).Where("organization_id = ? AND status = ?", ch.OrganizationID, models.QuestionPending).Count(&q)
+	fmt.Fprintf(&b, "Pending approvals: %d\nOpen questions: %d\nYou: %s (%s)", n, q, u.Email, u.Role)
 	s.reply(ctx, ch, in.ChatID, Outgoing{Text: b.String()})
 }
 
@@ -430,12 +439,15 @@ func (s *Service) listApprovals(ctx context.Context, ch *models.ChatChannel, in 
 
 // action handles a button press.
 func (s *Service) action(ctx context.Context, ch *models.ChatChannel, in Incoming, u *models.User) {
-	id, verb, ok := parseApprovalAction(in.Action)
-	if !ok {
-		s.ack(ctx, ch, in.ActionRef, "Unknown action")
+	if id, verb, ok := parseApprovalAction(in.Action); ok {
+		s.decide(ctx, ch, in, u, id, verb == "approve")
 		return
 	}
-	s.decide(ctx, ch, in, u, id, verb == "approve")
+	if id, choice, ok := parseQuestionAction(in.Action); ok {
+		s.answer(ctx, ch, in, u, id, &choice, "")
+		return
+	}
+	s.ack(ctx, ch, in.ActionRef, "Unknown action")
 }
 
 // decide approves or denies as the linked user, with the same role and audit as the UI.
@@ -468,6 +480,106 @@ func (s *Service) decide(ctx context.Context, ch *models.ChatChannel, in Incomin
 	default:
 		ack(ap.Status)
 		s.record(ctx, u, "chat.approval", ch, map[string]any{"approval_id": ap.ID, "status": ap.Status})
+	}
+}
+
+func questionButtons(q *models.Question) []Button {
+	out := make([]Button, len(q.Options))
+	for i, o := range q.Options {
+		label := truncate(o.Label, 60)
+		if o.Recommended {
+			label = "★ " + label
+		}
+		out[i] = Button{Label: label, Data: fmt.Sprintf("qa:%s:%d", q.ID, i)}
+	}
+	return out
+}
+
+// parseQuestionAction reads "qa:<question id>:<0-based option>".
+func parseQuestionAction(data string) (id string, choice int, ok bool) {
+	parts := strings.Split(data, ":")
+	if len(parts) != 3 || parts[0] != "qa" {
+		return "", 0, false
+	}
+	n, err := strconv.Atoi(parts[2])
+	if err != nil || n < 0 {
+		return "", 0, false
+	}
+	return parts[1], n, true
+}
+
+func describeQuestion(q *models.Question) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Question from the agent:\n%s\n", q.Question)
+	for i, o := range q.Options {
+		fmt.Fprintf(&b, "\n%d. %s", i+1, o.Label)
+		if o.Recommended {
+			b.WriteString(" (recommended)")
+		}
+		if o.Description != "" {
+			b.WriteString(" — " + o.Description)
+		}
+	}
+	fmt.Fprintf(&b, "\n\nPick an option, or answer in your own words: /answer %s <your answer>\nid: %s", q.ID, q.ID)
+	return b.String()
+}
+
+func (s *Service) listQuestions(ctx context.Context, ch *models.ChatChannel, in Incoming, u *models.User) {
+	var qs []models.Question
+	s.db.WithContext(ctx).Where("organization_id = ? AND status = ?", ch.OrganizationID, models.QuestionPending).Order("created_at").Limit(10).Find(&qs)
+	if len(qs) == 0 {
+		s.reply(ctx, ch, in.ChatID, Outgoing{Text: "No open questions."})
+		return
+	}
+	for i := range qs {
+		s.reply(ctx, ch, in.ChatID, Outgoing{Text: describeQuestion(&qs[i]), Buttons: questionButtons(&qs[i]), Stacked: true})
+	}
+}
+
+// answerText handles /answer <id> <rest>: an option number picks that option, anything else is the
+// person's own words.
+func (s *Service) answerText(ctx context.Context, ch *models.ChatChannel, in Incoming, u *models.User, id, rest string) {
+	if id == "" || rest == "" {
+		s.reply(ctx, ch, in.ChatID, Outgoing{Text: "Usage: /answer <id> <option number or your own words>"})
+		return
+	}
+	if n, err := strconv.Atoi(rest); err == nil {
+		choice := n - 1
+		s.answer(ctx, ch, in, u, id, &choice, "")
+		return
+	}
+	s.answer(ctx, ch, in, u, id, nil, rest)
+}
+
+// answer answers a question as the linked user, with the same role and audit as the UI.
+func (s *Service) answer(ctx context.Context, ch *models.ChatChannel, in Incoming, u *models.User, id string, choice *int, text string) {
+	ack := func(t string) {
+		if in.ActionRef != "" {
+			s.ack(ctx, ch, in.ActionRef, t)
+		}
+	}
+	if models.RoleRank(u.Role) < models.RoleRank(models.RoleOperator) {
+		ack("Not allowed")
+		s.allowed(ctx, ch, in, u, models.RoleOperator)
+		return
+	}
+	q, err := s.hub.Answer(ctx, ch.OrganizationID, id, u.ID, choice, text)
+	switch {
+	case errors.Is(err, sessions.ErrNotFound):
+		ack("Not found")
+		s.reply(ctx, ch, in.ChatID, Outgoing{Text: "No question " + id + "."})
+	case errors.Is(err, sessions.ErrQuestionClosed):
+		ack("Already answered")
+		s.reply(ctx, ch, in.ChatID, Outgoing{Text: "Question " + id + " was already answered or expired."})
+	case errors.Is(err, sessions.ErrBadAnswer):
+		ack("Invalid answer")
+		s.reply(ctx, ch, in.ChatID, Outgoing{Text: "That is not one of the options. Use its number, or write your answer: /answer " + id + " <your answer>"})
+	case err != nil:
+		ack("Failed")
+		s.reply(ctx, ch, in.ChatID, Outgoing{Text: "Could not answer: " + err.Error()})
+	default:
+		ack("Answered")
+		s.record(ctx, u, "chat.answer", ch, map[string]any{"question_id": q.ID, "own_words": q.Choice == nil})
 	}
 }
 
@@ -648,6 +760,26 @@ func (s *Service) forward(ctx context.Context, ev bus.Event) {
 		}
 		if ch, conv := s.target(ctx, ev.SessionID); ch != nil {
 			s.reply(ctx, ch, conv.ExternalID, Outgoing{Text: fmt.Sprintf("%s: %s (%s)", a.Tool, a.Status, a.ID)})
+		}
+	case sessions.EvQuestionCreated:
+		var q models.Question
+		if json.Unmarshal(ev.Data, &q) != nil {
+			return
+		}
+		if ch, conv := s.target(ctx, ev.SessionID); ch != nil {
+			s.reply(ctx, ch, conv.ExternalID, Outgoing{Text: describeQuestion(&q), Buttons: questionButtons(&q), Stacked: true})
+		}
+	case sessions.EvQuestionResolved:
+		var q models.Question
+		if json.Unmarshal(ev.Data, &q) != nil || q.Status == models.QuestionPending {
+			return
+		}
+		if ch, conv := s.target(ctx, ev.SessionID); ch != nil {
+			text := fmt.Sprintf("Question %s expired without an answer.", q.ID)
+			if q.Status == models.QuestionAnswered {
+				text = fmt.Sprintf("Answered: %s (%s)", truncate(q.Answer, 300), q.ID)
+			}
+			s.reply(ctx, ch, conv.ExternalID, Outgoing{Text: text})
 		}
 	case sessions.EvError:
 		var e proto.Error

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -119,6 +120,9 @@ func (s *Signal) Send(ctx context.Context, chatID string, msg Outgoing) error {
 func textCommand(data string) string {
 	if id, verb, ok := parseApprovalAction(data); ok {
 		return "/" + verb + " " + id
+	}
+	if id, choice, ok := parseQuestionAction(data); ok {
+		return fmt.Sprintf("/answer %s %d", id, choice+1)
 	}
 	return data
 }

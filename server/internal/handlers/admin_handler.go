@@ -58,6 +58,7 @@ type Overview struct {
 		Failed    int64 `json:"failed_24h"`
 	} `json:"tasks"`
 	PendingApprovals int64   `json:"pending_approvals"`
+	PendingQuestions int64   `json:"pending_questions"`
 	SpendTodayUSD    float64 `json:"spend_today_usd"`
 	SpendMonthUSD    float64 `json:"spend_month_usd"`
 	TokensToday      int64   `json:"tokens_today"`
@@ -85,6 +86,7 @@ func (h *Handlers) GetOverview(c *okapi.Context) error {
 	h.DB.Model(&models.Task{}).Where("organization_id = ? AND status = ? AND finished_at > ?", org, models.TaskSucceeded, day).Count(&o.Tasks.Succeeded)
 	h.DB.Model(&models.Task{}).Where("organization_id = ? AND status IN ? AND finished_at > ?", org, []string{models.TaskFailed, models.TaskTimedOut}, day).Count(&o.Tasks.Failed)
 	h.DB.Model(&models.Approval{}).Where("organization_id = ? AND status = ?", org, models.ApprovalPending).Count(&o.PendingApprovals)
+	h.DB.Model(&models.Question{}).Where("organization_id = ? AND status = ?", org, models.QuestionPending).Count(&o.PendingQuestions)
 	now := time.Now().UTC()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	month := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
