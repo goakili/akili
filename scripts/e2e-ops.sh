@@ -148,18 +148,28 @@ cat > "$WORK/term.mjs" <<'JS'
 const [,, url, cookie, origin] = process.argv
 const ws = new WebSocket(url, { headers: { Cookie: cookie, Origin: origin } })
 ws.binaryType = 'arraybuffer'
-let out = '', sent = false
+let out = '', sent = false, opened = false
 const timer = setTimeout(() => { console.log('TIMEOUT ' + JSON.stringify(out)); process.exit(1) }, 20000)
-ws.onopen = () => setTimeout(() => { ws.send(JSON.stringify({ type: 'input', data: 'echo TERM_OK_$((40+2))\n' })); sent = true }, 800)
+ws.onopen = () => { opened = true; setTimeout(() => { ws.send(JSON.stringify({ type: 'input', data: 'echo TERM_OK_$((40+2))\n' })); sent = true }, 800) }
 ws.onmessage = (ev) => {
   if (typeof ev.data === 'string') { const m = JSON.parse(ev.data); if (m.type === 'exit') { clearTimeout(timer); console.log(out.includes('TERM_OK_42') ? 'OK' : 'NOOUTPUT ' + JSON.stringify(out)); process.exit(0) } return }
   out += new TextDecoder().decode(ev.data)
   if (sent && out.includes('TERM_OK_42')) ws.send(JSON.stringify({ type: 'input', data: 'exit\n' }))
 }
-ws.onerror = (e) => { console.log('ERROR ' + (e.message || e.type)); process.exit(1) }
+// HANDSHAKE: the upgrade was refused before the terminal opened (the server log has the status).
+ws.onerror = (e) => { console.log((opened ? 'ERROR ' : 'HANDSHAKE ') + (e.message || e.error?.message || e.type)); process.exit(1) }
+ws.onclose = (e) => { clearTimeout(timer); console.log('CLOSED ' + e.code + ' ' + e.reason + ' ' + JSON.stringify(out)); process.exit(1) }
 JS
 COOKIE="akili_session=$(awk '$6=="akili_session"{print $7}' "$JAR")"
-RES=$(node "$WORK/term.mjs" "ws://127.0.0.1:$PORT/api/v1/agents/$AGENT/terminal?cols=100&rows=30" "$COOKIE" "$BASE")
+# The terminal handler refuses an agent whose presence lapsed, so wait until the API says online.
+online() { [ "$(api GET /agents/$AGENT | json "d['data']['status']")" = "online" ]; }
+wait_for "agent online before the terminal" 30 online
+# || true: under set -e a failing client would end the script before fail can say why.
+term() { node "$WORK/term.mjs" "ws://127.0.0.1:$PORT/api/v1/agents/$AGENT/terminal?cols=100&rows=30" "$COOKIE" "$BASE" 2>&1 || true; }
+RES=$(term)
+case "$RES" in HANDSHAKE*)
+  echo "terminal handshake refused once ($RES); retrying"; sleep 2; RES=$(term) ;;
+esac
 [ "$RES" = "OK" ] || fail "terminal: $RES"
 recorded() { [ "$(api GET "/terminals?agent_id=$AGENT" | json "d['data'][0]['status']")" = "closed" ]; }
 wait_for "terminal recording saved" 15 recorded
