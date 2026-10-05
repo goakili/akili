@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/goakili/akili/proto"
@@ -162,6 +163,10 @@ func (h *Hub) BuildOpen(ctx context.Context, sessionID, agentID string) (proto.S
 	}
 	if s.System == "" {
 		s.ToolNames = offeredTools(pol, spec)
+		if s.Mode != proto.ModeTask {
+			// In a chat the agent asks in its reply.
+			s.ToolNames = slices.DeleteFunc(s.ToolNames, func(t string) bool { return t == proto.ToolAskUser })
+		}
 		if h.mcpTools != nil {
 			for _, t := range h.mcpTools(ctx, s.OrganizationID) {
 				if pol.AllowsTool(t.Name) {
@@ -300,6 +305,9 @@ func (h *Hub) HandleFrame(ctx context.Context, agentID, sessionID string, env pr
 			return nil, err
 		}
 		d := h.authorize(ctx, &s, req)
+		if d.Effect == proto.EffectAllow && req.Tool == proto.ToolAskUser {
+			return h.askUser(ctx, &s, req), nil
+		}
 		if d.Effect == proto.EffectAllow && isRemote(req.Tool) {
 			// Remote tools (forge, Miabi) can take minutes; answer when they finish so the session
 			// stream keeps flowing.
@@ -368,6 +376,8 @@ func (h *Hub) authorize(ctx context.Context, s *models.ChatSession, req proto.To
 		d = proto.Decision{Effect: proto.EffectDeny, Reason: "the organization kill switch is engaged"}
 	case agent.Status == models.AgentRevoked:
 		d = proto.Decision{Effect: proto.EffectDeny, Reason: "agent is revoked"}
+	case req.Tool == proto.ToolAskUser && s.Mode != proto.ModeTask:
+		d = proto.Decision{Effect: proto.EffectDeny, Reason: "in a chat, ask in your reply instead"}
 	case isProjectTool(req.Tool) && s.ProjectID == nil:
 		d = proto.Decision{Effect: proto.EffectDeny, Reason: req.Tool + " needs a session bound to a project"}
 	default:
@@ -585,6 +595,7 @@ func (h *Hub) sessionEnded(ctx context.Context, sessionID string, reason string,
 			h.resolveChange(ctx, ap.ID, proto.ChangeExpired)
 		}
 	}
+	h.expireSessionQuestions(ctx, s.ID, reason)
 	if taskLost && s.Status == models.SessionOpen && s.TaskID != nil && h.tasks != nil {
 		h.tasks.TaskLost(ctx, *s.TaskID, reason)
 	}

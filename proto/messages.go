@@ -198,6 +198,8 @@ const (
 	StateThinking        = "thinking"
 	StateRunningTool     = "running_tool"
 	StateWaitingApproval = "waiting_approval"
+	// StateWaitingInput: the agent asked the user a question (ask_user) and waits for the answer.
+	StateWaitingInput = "waiting_input"
 )
 
 // Status reports what a session is doing.

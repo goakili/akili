@@ -78,10 +78,11 @@ type SessionDetail struct {
 	Messages  []models.SessionMessage `json:"messages"`
 	Events    []models.SessionEvent   `json:"events"`
 	Approvals []models.Approval       `json:"approvals"`
+	Questions []models.Question       `json:"questions"`
 	Project   *models.Project         `json:"project,omitempty"`
 }
 
-// GetSession returns a session with messages, events and approvals.
+// GetSession returns a session with messages, events, approvals and questions.
 func (h *Handlers) GetSession(c *okapi.Context) error {
 	s, err := h.Sessions.Get(c.Request().Context(), middlewares.OrgID(c), c.Param("id"))
 	if err != nil {
@@ -91,6 +92,7 @@ func (h *Handlers) GetSession(c *okapi.Context) error {
 	h.DB.Where("session_id = ?", s.ID).Order("id").Find(&d.Messages)
 	h.DB.Where("session_id = ?", s.ID).Order("id").Limit(2000).Find(&d.Events)
 	h.DB.Where("session_id = ?", s.ID).Order("created_at").Find(&d.Approvals)
+	h.DB.Where("session_id = ?", s.ID).Order("created_at").Find(&d.Questions)
 	if s.ProjectID != nil {
 		d.Project, _ = h.Coder.Project(c.Request().Context(), s.OrganizationID, *s.ProjectID)
 	}

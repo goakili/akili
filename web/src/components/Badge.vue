@@ -44,6 +44,8 @@ const STATUS: Record<string, Look> = {
   thinking: { tone: 'info', icon: 'brain', anim: 'pulse' },
   running_tool: { tone: 'violet', icon: 'wrench', anim: 'pulse', text: 'running tool' },
   waiting_approval: { tone: 'warn', icon: 'approvals', anim: 'pulse', text: 'waiting for approval' },
+  waiting_input: { tone: 'info', icon: 'help', anim: 'pulse', text: 'waiting for your answer' },
+  needs_input: { tone: 'info', icon: 'help', text: 'needs your answer' },
   chat: { tone: 'info', icon: 'chat' },
   task: { tone: 'violet', icon: 'tasks' },
   // results

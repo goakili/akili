@@ -175,6 +175,8 @@ const (
 	ToolLessonPropose     = "lesson_propose"
 	ToolPlanPhaseUpdate   = "plan_phase_update"
 	ToolPlanPropose       = "plan_propose"
+	// ToolAskUser asks the person who runs the task to choose between options or answer in their own words.
+	ToolAskUser = "ask_user"
 	// ToolChangeRun executes an approved change plan: steps, verification, automatic rollback.
 	ToolChangeRun = "change_run"
 )
@@ -283,6 +285,18 @@ type (
 		Title    string `json:"title"`
 		Detail   string `json:"detail,omitempty"`
 		DoneWhen string `json:"done_when,omitempty"`
+	}
+
+	// AskUserInput is a question for the user: they pick one of the options or write their own answer.
+	AskUserInput struct {
+		Question string          `json:"question"`
+		Options  []AskUserOption `json:"options"`
+	}
+
+	// AskUserOption is one suggested answer.
+	AskUserOption struct {
+		Label       string `json:"label"`
+		Description string `json:"description,omitempty"`
 	}
 
 	// LessonInput proposes a lesson for future sessions; it is used only after an operator approves it.
@@ -1108,6 +1122,17 @@ var catalog = map[string]ToolSpec{
 			`"required":["plan","phase","status"],"additionalProperties":false}`),
 		resources: planPhaseResources,
 	},
+	ToolAskUser: {
+		Name: ToolAskUser, Risk: RiskLow, Remote: true,
+		Description: "Ask the person who runs this task to decide something that is theirs to decide (a trade-off, a preference, which of several valid " +
+			"approaches). Give 2-6 options, best first, each a short label with a one-line description; they pick one or answer in their own words. " +
+			"Wait for the answer, then continue. Don't ask for facts you can check yourself, and don't ask for permission: risky tools ask for approval on their own.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"question":{"type":"string","minLength":1,"maxLength":1000},` +
+			`"options":{"type":"array","minItems":2,"maxItems":6,"items":{"type":"object","properties":{` +
+			`"label":{"type":"string","minLength":1,"maxLength":120},"description":{"type":"string","maxLength":300}},` +
+			`"required":["label"],"additionalProperties":false}}},"required":["question","options"],"additionalProperties":false}`),
+		resources: askUserResources,
+	},
 	ToolPlanPropose: {
 		Name: ToolPlanPropose, Risk: RiskLow, Remote: true, Project: true,
 		Description: "Propose a plan for work on this project: a one-line title, a description of the goal and approach, and ordered phases " +
@@ -1180,6 +1205,43 @@ func planPhaseResources(in json.RawMessage) (Resources, error) {
 
 // MaxLessonLen bounds a proposed lesson: lessons land in every future system prompt of the agent.
 const MaxLessonLen = 400
+
+// Bounds of an ask_user question.
+const (
+	MaxQuestionLen       = 1000
+	MinQuestionOpts      = 2
+	MaxQuestionOpts      = 6
+	MaxOptionLabel       = 120
+	MaxOptionDescription = 300
+)
+
+func askUserResources(in json.RawMessage) (Resources, error) {
+	v, err := decode[AskUserInput](in)
+	if err != nil {
+		return Resources{}, err
+	}
+	if q := strings.TrimSpace(v.Question); q == "" || len([]rune(q)) > MaxQuestionLen {
+		return Resources{}, fmt.Errorf("a question must be 1-%d characters", MaxQuestionLen)
+	}
+	if len(v.Options) < MinQuestionOpts || len(v.Options) > MaxQuestionOpts {
+		return Resources{}, fmt.Errorf("give %d-%d options; the user can always answer in their own words", MinQuestionOpts, MaxQuestionOpts)
+	}
+	seen := map[string]bool{}
+	for _, o := range v.Options {
+		l := strings.TrimSpace(o.Label)
+		if l == "" || len([]rune(l)) > MaxOptionLabel || strings.ContainsAny(l, "\r\n") {
+			return Resources{}, fmt.Errorf("an option needs a one-line label of 1-%d characters", MaxOptionLabel)
+		}
+		if len([]rune(o.Description)) > MaxOptionDescription {
+			return Resources{}, fmt.Errorf("an option description is at most %d characters", MaxOptionDescription)
+		}
+		if seen[strings.ToLower(l)] {
+			return Resources{}, fmt.Errorf("option %q is listed twice", l)
+		}
+		seen[strings.ToLower(l)] = true
+	}
+	return Resources{}, nil
+}
 
 func lessonResources(in json.RawMessage) (Resources, error) {
 	v, err := decode[LessonInput](in)

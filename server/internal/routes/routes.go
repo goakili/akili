@@ -35,7 +35,7 @@ func Register(app *okapi.Okapi, h *handlers.Handlers, authn *middlewares.Authent
 
 	for _, defs := range [][]okapi.RouteDefinition{
 		r.healthRoutes(), r.agentFacingRoutes(), r.authRoutes(), r.userRoutes(), r.agentRoutes(), r.sessionRoutes(),
-		r.approvalRoutes(), r.taskRoutes(), r.scheduleRoutes(), r.skillRoutes(), r.policyRoutes(), r.providerRoutes(),
+		r.approvalRoutes(), r.questionRoutes(), r.taskRoutes(), r.scheduleRoutes(), r.skillRoutes(), r.policyRoutes(), r.providerRoutes(),
 		r.systemRoutes(), r.projectRoutes(), r.opsRoutes(), r.chatRoutes(), r.lessonRoutes(), r.planRoutes(), r.mcpRoutes(), r.licenseRoutes(),
 	} {
 		app.Register(defs...)

@@ -14,7 +14,7 @@ export type Effect = 'allow' | 'deny' | 'approve'
 export type AgentStatus = 'pending' | 'online' | 'offline' | 'revoked'
 export type TaskStatus = 'draft' | 'queued' | 'assigned' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out'
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired'
-export type SessionState = 'idle' | 'thinking' | 'running_tool' | 'waiting_approval' | ''
+export type SessionState = 'idle' | 'thinking' | 'running_tool' | 'waiting_approval' | 'waiting_input' | ''
 export type ProviderKind = 'anthropic' | 'openai' | 'fake'
 export type Effort = '' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
@@ -305,6 +305,25 @@ export interface SessionEvent {
   created_at: ISODate
 }
 
+export type QuestionStatus = 'pending' | 'answered' | 'expired'
+
+/** An agent's ask_user call: pick one of its options or answer in your own words. */
+export interface Question extends Base {
+  session_id: string
+  task_id: string | null
+  agent_id: string
+  request_id: string
+  question: string
+  options: { label: string; description?: string }[] | null
+  status: QuestionStatus
+  /** 0-based option picked; null when answered in own words. */
+  choice: number | null
+  answer: string
+  answered_by: string | null
+  answered_at: ISODate | null
+  expires_at: ISODate
+}
+
 export interface Approval extends Base {
   session_id: string
   task_id: string | null
@@ -329,6 +348,7 @@ export interface SessionDetail {
   messages: SessionMessage[] | null
   events: SessionEvent[] | null
   approvals: Approval[] | null
+  questions: Question[] | null
   project?: Project | null
 }
 
@@ -1359,6 +1379,9 @@ export const api = {
   // approvals
   listApprovals: (p: { status?: string } & PageQuery = {}, o?: RequestOptions) => get<Approval[] | null>('/approvals' + qs(p), o),
   pageApprovals: (p: { status?: string } & PageQuery = {}, o?: RequestOptions) => getPage<Approval>('/approvals' + qs(p), o),
+  pageQuestions: (p: { status?: QuestionStatus; task_id?: string; session_id?: string } & PageQuery = {}, o?: RequestOptions) =>
+    getPage<Question>('/questions' + qs(p), o),
+  answerQuestion: (id: string, a: { choice: number } | { text: string }) => post<Question>(`/questions/${enc(id)}/answer`, a),
   approve: (id: string, note = '') => post<Approval>(`/approvals/${enc(id)}/approve`, { note }),
   deny: (id: string, note = '') => post<Approval>(`/approvals/${enc(id)}/deny`, { note }),
 

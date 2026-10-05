@@ -609,6 +609,33 @@ type SessionEvent struct {
 	CreatedAt time.Time       `json:"created_at"`
 }
 
+// Question statuses.
+const (
+	QuestionPending  = "pending"
+	QuestionAnswered = "answered"
+	QuestionExpired  = "expired"
+)
+
+// Question is an agent's ask_user call: a choice between options that is the user's to make. The
+// person picks an option or answers in their own words. Question and options come from the model,
+// so they are untrusted text: answering one never approves a tool call.
+type Question struct {
+	Base
+	SessionID string                `gorm:"size:40;index;not null" json:"session_id"`
+	TaskID    *string               `gorm:"size:40;index" json:"task_id"`
+	AgentID   string                `gorm:"size:40;not null" json:"agent_id"`
+	RequestID string                `gorm:"size:60;not null" json:"request_id"`
+	Question  string                `gorm:"type:text;not null" json:"question"`
+	Options   []proto.AskUserOption `gorm:"type:jsonb;serializer:json" json:"options"`
+	Status    string                `gorm:"size:20;index;not null" json:"status"`
+	// Choice is the 0-based option picked; nil when the person wrote their own answer.
+	Choice     *int       `json:"choice"`
+	Answer     string     `gorm:"type:text" json:"answer"`
+	AnsweredBy *string    `gorm:"size:40" json:"answered_by"`
+	AnsweredAt *time.Time `json:"answered_at"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+}
+
 // Approval statuses.
 const (
 	ApprovalPending  = "pending"
@@ -791,7 +818,7 @@ func All() []any {
 		&ChatSession{}, &SessionMessage{}, &SessionEvent{}, &Attachment{}, &Approval{}, &Task{}, &Schedule{}, &Usage{},
 		&AuditLog{}, &Setting{}, &UpgradeStep{}, &Integration{}, &Project{}, &Change{}, &AlertRoute{}, &TerminalSession{}, &MiabiWatch{},
 		&MiabiWorkspace{}, &MCPServer{}, &MCPTool{}, &Lesson{}, &ChatChannel{}, &ChatIdentity{}, &ChatLinkCode{}, &ChatConversation{}, &License{},
-		&ProjectPlan{}, &PlanPhase{}, &TaskPlan{},
+		&ProjectPlan{}, &PlanPhase{}, &TaskPlan{}, &Question{},
 	}
 }
 

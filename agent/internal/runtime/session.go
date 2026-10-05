@@ -365,6 +365,10 @@ func (s *Session) call(ctx context.Context, req proto.ToolRequest) (string, bool
 	if err := s.conn.Send(proto.TypeToolRequest, req); err != nil {
 		return "not run: control plane unreachable", true
 	}
+	if req.Tool == proto.ToolAskUser {
+		// The control plane answers only once a person does: show who the session is waiting on.
+		s.status(proto.StateWaitingInput, askedQuestion(req.Input))
+	}
 	var final proto.ToolDecision
 wait:
 	for {
@@ -418,6 +422,12 @@ wait:
 	res := s.exec.Run(ctx, req.Tool, req.Input)
 	s.report(req, res.Output, res.IsError, time.Since(start).Milliseconds())
 	return res.Output, res.IsError
+}
+
+func askedQuestion(in json.RawMessage) string {
+	var q proto.AskUserInput
+	_ = json.Unmarshal(in, &q)
+	return q.Question
 }
 
 func (s *Session) base() string {

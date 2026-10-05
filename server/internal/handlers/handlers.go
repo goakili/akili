@@ -108,7 +108,9 @@ func mapErr(c *okapi.Context, err error) error {
 		return c.AbortConflict(err.Error())
 	case errors.Is(err, bus.ErrAgentOffline):
 		return c.AbortConflict("the agent is not connected")
-	case errors.Is(err, sessions.ErrApprovalClosed):
+	case errors.Is(err, sessions.ErrBadAnswer):
+		return c.AbortBadRequest(err.Error())
+	case errors.Is(err, sessions.ErrApprovalClosed), errors.Is(err, sessions.ErrQuestionClosed):
 		return c.AbortConflict(err.Error())
 	case errors.Is(err, context.Canceled):
 		return nil
