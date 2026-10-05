@@ -16,6 +16,23 @@ type Response[T any] struct {
 	Data    T    `json:"data"`
 }
 
+// PageResponse is one page of a list. Pageable is present only when a next page exists, so a
+// client keeps loading until it is absent.
+type PageResponse[T any] struct {
+	Success  bool      `json:"success"`
+	Data     []T       `json:"data"`
+	Pageable *Pageable `json:"pageable,omitempty"`
+}
+
+// Pageable describes the page just returned and where the next one starts.
+type Pageable struct {
+	CurrentPage   int   `json:"current_page"`
+	NextPage      int   `json:"next_page"`
+	Size          int   `json:"size"`
+	TotalPages    int   `json:"total_pages"`
+	TotalElements int64 `json:"total_elements"`
+}
+
 // ErrorInfo describes an error.
 type ErrorInfo struct {
 	StatusCode int    `json:"status_code"`

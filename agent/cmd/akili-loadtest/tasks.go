@@ -153,11 +153,11 @@ func runTasks(ctx context.Context, cfg *config, api *apiClient, sims []*sim, rep
 	}
 }
 
-// pollTasks settles pending tasks: one list call covers the newest 500, the rest are fetched one
+// pollTasks settles pending tasks: one list call covers the newest 200 (the largest page), the rest are fetched one
 // by one.
 func pollTasks(ctx context.Context, api *apiClient, pending map[string]*taskRun) {
 	var list []apiTask
-	if err := api.call(ctx, http.MethodGet, "/tasks?limit=500", nil, &list); err == nil {
+	if err := api.call(ctx, http.MethodGet, "/tasks?size=200", nil, &list); err == nil {
 		seen := map[string]bool{}
 		for i := range list {
 			t := &list[i]

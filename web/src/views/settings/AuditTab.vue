@@ -1,25 +1,22 @@
 <!-- SPDX-FileCopyrightText: 2026 Jonas Kaninda -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { api, type AuditLog, type VerifyResult } from '../../api'
 import { useCatalog } from '../../stores/catalog'
 import { fmtDate } from '../../lib/format'
+import { usePaged } from '../../lib/paged'
 import JsonBlock from '../../components/JsonBlock'
 import EmptyState from '../../components/EmptyState.vue'
+import InfiniteScroll from '../../components/InfiniteScroll.vue'
 import SkeletonRows from '../../components/SkeletonRows.vue'
 import Icon from '../../components/Icon'
 import { useRoute } from 'vue-router'
 
-const items = ref<AuditLog[]>([])
-const total = ref(0)
-const page = ref(0)
-const size = ref(50)
 const action = ref('')
 const actor = ref('')
 const route = useRoute()
 const target = ref(typeof route.query.target === 'string' ? route.query.target : '')
-const loading = ref(false)
 const open = ref<Set<number>>(new Set())
 const verify = ref<VerifyResult | null>(null)
 const verifying = ref(false)
@@ -47,29 +44,14 @@ async function loadNames() {
   }
 }
 
-const pages = computed(() => Math.max(1, Math.ceil(total.value / size.value)))
-
-async function load() {
-  loading.value = true
-  try {
-    const r = await api.audit({ page: page.value, size: size.value, action: action.value.trim() || undefined, actor_id: actor.value.trim() || undefined, target_id: target.value.trim() || undefined })
-    items.value = r.items ?? []
-    total.value = r.total
-  } catch {
-    /* toasted */
-  } finally {
-    loading.value = false
-  }
-}
+const paged = usePaged((page) =>
+  api.pageAudit({ page, action: action.value.trim() || undefined, actor_id: actor.value.trim() || undefined, target_id: target.value.trim() || undefined }),
+)
+const { items, loading, loadingMore, hasMore, total } = paged
 
 function search() {
-  page.value = 0
-  load()
-}
-
-function go(p: number) {
-  page.value = Math.min(Math.max(0, p), pages.value - 1)
-  load()
+  open.value = new Set()
+  paged.reload()
 }
 
 function toggle(id: number) {
@@ -91,7 +73,7 @@ async function runVerify() {
 }
 
 onMounted(() => {
-  load()
+  paged.reload()
   loadNames()
 })
 </script>
@@ -146,19 +128,9 @@ onMounted(() => {
           </tbody>
         </table>
       </div>
-      <div class="pager">
-        <span>{{ total.toLocaleString() }} entries · page {{ page + 1 }} of {{ pages }}</span>
-        <div class="row">
-          <label for="au-size" class="sr-only">Page size</label>
-          <select id="au-size" v-model.number="size" class="select sm" style="width: 90px" @change="search">
-            <option :value="25">25</option>
-            <option :value="50">50</option>
-            <option :value="100">100</option>
-            <option :value="200">200</option>
-          </select>
-          <button type="button" class="btn btn-sm" :disabled="page === 0 || loading" @click="go(page - 1)">Previous</button>
-          <button type="button" class="btn btn-sm" :disabled="page >= pages - 1 || loading" @click="go(page + 1)">Next</button>
-        </div>
+      <InfiniteScroll :has-more="hasMore" :loading="loadingMore" @more="paged.more" />
+      <div v-if="items.length" class="pager">
+        <span>{{ items.length.toLocaleString() }}{{ total !== null ? ` of ${total.toLocaleString()}` : '' }} entries</span>
       </div>
     </div>
   </div>

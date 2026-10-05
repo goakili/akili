@@ -40,7 +40,8 @@ func (r *Router) systemRoutes() []okapi.RouteDefinition {
 			Middlewares: r.guard(models.RoleAdmin),
 			Handler:     r.h.ListAudit,
 			Summary:     "Audit log",
-			Response:    &dto.Response[handlers.AuditPage]{},
+			Response:    &dto.PageResponse[models.AuditLog]{},
+			Options:     pageDocs(),
 		},
 		{
 			Method:      http.MethodGet,

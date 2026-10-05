@@ -10,7 +10,7 @@ LDFLAGS_AGENT  = -s -w -X main.Version=$(VERSION)
 -include .env
 export
 
-REGISTRY    ?= jkaninda
+REGISTRY    ?= 
 IMAGE_TAG   ?= $(VERSION)
 PLATFORMS   ?= linux/amd64,linux/arm64
 BUILDER     ?= akili-builder

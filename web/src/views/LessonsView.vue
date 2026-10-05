@@ -9,10 +9,12 @@ import { useConfirm } from '../stores/confirm'
 import { useToast } from '../stores/toast'
 import { fmtDate, relTime, shortId } from '../lib/format'
 import { useNow } from '../lib/now'
+import { usePaged } from '../lib/paged'
 import Badge from '../components/Badge.vue'
 import Modal from '../components/Modal.vue'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
+import InfiniteScroll from '../components/InfiniteScroll.vue'
 import SkeletonRows from '../components/SkeletonRows.vue'
 import Icon from '../components/Icon'
 
@@ -27,8 +29,8 @@ const MAX_LEN = 400
 
 const status = ref<LessonStatus>('proposed')
 const agentFilter = ref('')
-const items = ref<Lesson[]>([])
-const loading = ref(true)
+const paged = usePaged((page) => api.pageLessons({ status: status.value, agent_id: agentFilter.value || undefined, page }))
+const { items, loading, loadingMore, hasMore } = paged
 const proposedCount = ref(0)
 const busy = ref<string | null>(null)
 
@@ -41,16 +43,16 @@ const FILTERS: { value: LessonStatus; label: string }[] = [
 const agents = computed(() => catalog.agents.filter((a) => a.status !== 'revoked'))
 
 async function load() {
-  loading.value = true
-  const agent_id = agentFilter.value || undefined
+  await Promise.all([paged.reload(), countProposed()])
+}
+
+async function countProposed() {
   try {
-    items.value = (await api.listLessons({ status: status.value, agent_id })) ?? []
-    if (status.value === 'proposed') proposedCount.value = items.value.length
-    else proposedCount.value = ((await api.listLessons({ status: 'proposed', agent_id }, { quiet: true }).catch(() => null)) ?? []).length
+    // One row is enough: the total comes with the page while more rows follow.
+    const p = await api.pageLessons({ status: 'proposed', agent_id: agentFilter.value || undefined, size: 1 }, { quiet: true })
+    proposedCount.value = p.total ?? p.items.length
   } catch {
-    /* toasted */
-  } finally {
-    loading.value = false
+    /* the badge is optional */
   }
 }
 
@@ -103,8 +105,8 @@ async function decide() {
       toast.success('Lesson rejected')
     }
     deciding.value = null
-    items.value = items.value.filter((x) => x.id !== d.lesson.id)
-    if (status.value === 'proposed') proposedCount.value = items.value.length
+    paged.remove(d.lesson.id)
+    if (status.value === 'proposed') proposedCount.value = Math.max(0, proposedCount.value - 1)
   } catch {
     /* toasted */
   } finally {
@@ -123,7 +125,7 @@ async function remove(l: Lesson) {
   busy.value = l.id
   try {
     await api.deleteLesson(l.id)
-    items.value = items.value.filter((x) => x.id !== l.id)
+    paged.remove(l.id)
     toast.success('Lesson deleted')
   } catch {
     /* toasted */
@@ -264,6 +266,7 @@ onMounted(() => {
           </tbody>
         </table>
       </div>
+      <InfiniteScroll :has-more="hasMore" :loading="loadingMore" @more="paged.more" />
     </div>
 
     <Modal :open="!!deciding" :title="deciding?.action === 'approve' ? 'Approve lesson' : 'Reject lesson'" wide :dismissable="!saving" @close="deciding = null">

@@ -188,7 +188,7 @@ wait_task "$TL" succeeded 30
 [ "$(cat "$WORK/agent-work/tl-3.txt")" = "three" ] || fail "the continued task did not finish the remaining step"
 [ "$(cat "$WORK/agent-work/tl-1.txt")" = "one" ] || fail "tl-1.txt missing"
 [ "$(api GET "/tasks/$TL" | json "d['data']['session_id']")" != "$TL_SES" ] || fail "continue reused the closed session"
-api GET "/audit?action=task.continue" | json "d['data']['items'][0]['target_id']" | grep >/dev/null "$TL" || fail "continue not audited"
+api GET "/audit?action=task.continue" | json "d['data'][0]['target_id']" | grep >/dev/null "$TL" || fail "continue not audited"
 
 step "Task 2: a high-risk shell command waits for approval, then runs"
 T2=$(api POST /tasks "{\"title\":\"approval e2e\",\"goal\":\"run: echo approved-e2e\",\"agent_id\":\"$AGENT\",\"autonomy\":2}" | json "d['data']['id']")
@@ -216,7 +216,7 @@ wait_task "$T3" succeeded 30
 sleep 2
 [ "$(mails "denied e2e")" = "0" ] || fail "task email sent although turned off"
 [ "$(mails "Approval needed")" = "1" ] || fail "a second approval email within a minute (rate limit)"
-api GET "/audit?action=notify.email" | json "d['data']['items'][0]['metadata']['posta_id']" | grep >/dev/null "^00000000-" || fail "email not audited with the Posta id"
+api GET "/audit?action=notify.email" | json "d['data'][0]['metadata']['posta_id']" | grep >/dev/null "^00000000-" || fail "email not audited with the Posta id"
 
 step "Chat: policy denies reading /etc/shadow"
 SES=$(api POST /sessions "{\"agent_id\":\"$AGENT\",\"title\":\"e2e chat\"}" | json "d['data']['id']")
@@ -330,7 +330,7 @@ api GET '/audit?action=auth.mfa_failed' | grep >/dev/null "$MFA_USER" || fail "f
 step "Audit chain verifies"
 v=$(api GET /audit/verify)
 [ "$(echo "$v" | json "d['data']['valid']")" = "True" ] || fail "audit chain invalid: $v"
-[ "$(api GET '/audit?action=tool.request' | json "d['data']['total']")" -ge 4 ] || fail "tool requests not audited"
+[ "$(api GET '/audit?action=tool.request' | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" -ge 4 ] || fail "tool requests not audited"
 
 step "Revocation cuts the tunnel and blocks reconnects"
 api POST "/agents/$AGENT/revoke" >/dev/null
@@ -340,7 +340,7 @@ sleep 3
 grep -q "connection lost" "$WORK/agent.log" || fail "agent did not lose its tunnel"
 reconnect_refused() { grep -q "refused this agent's identity" "$WORK/agent.log" && grep -q "agent connection refused" "$WORK/server.log"; }
 wait_for "reconnect refused" 40 reconnect_refused
-api GET '/audit?action=agent.connect_refused' | json "d['data']['items'][0]['metadata']['reason']" | grep >/dev/null "revoked" || fail "refused reconnect not audited with its reason"
+api GET '/audit?action=agent.connect_refused' | json "d['data'][0]['metadata']['reason']" | grep >/dev/null "revoked" || fail "refused reconnect not audited with its reason"
 
 step "API key with read scope cannot write"
 KEY=$(api POST /api-keys '{"name":"ro","scopes":["read"]}' | json "d['data']['secret']")

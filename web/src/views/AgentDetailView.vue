@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, ApiError, AUTONOMY_LEVELS, type Agent, type AuditLog, type ChatSession, type Enrollment, type TerminalSession, type User } from '../api'
+import { api, ApiError, AUTONOMY_LEVELS, type Agent, type Enrollment, type TerminalSession, type User } from '../api'
 import { useAuth } from '../stores/auth'
 import { useCatalog } from '../stores/catalog'
 import { useConfirm } from '../stores/confirm'
@@ -13,12 +13,14 @@ import { useUi } from '../stores/ui'
 import { agentFormFrom, agentInput, type AgentForm } from '../lib/agentForm'
 import { fmtDate, relTime, usd, num, durationSec, duration } from '../lib/format'
 import { useNow } from '../lib/now'
+import { usePaged, type Paged } from '../lib/paged'
 import Badge from '../components/Badge.vue'
 import Modal from '../components/Modal.vue'
 import AgentFields from '../components/AgentFields.vue'
 import EnrollmentPanel from '../components/EnrollmentPanel.vue'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
+import InfiniteScroll from '../components/InfiniteScroll.vue'
 import SkeletonRows from '../components/SkeletonRows.vue'
 import Icon, { type IconName } from '../components/Icon'
 
@@ -34,9 +36,15 @@ const router = useRouter()
 const now = useNow()
 
 const agent = ref<Agent | null>(null)
-const sessions = ref<ChatSession[] | null>(null)
-const activity = ref<AuditLog[] | null>(null)
-const terminals = ref<TerminalSession[] | null>(null)
+const sessionsPaged = usePaged((page) => api.pageSessions({ agent_id: props.id, page }))
+const { items: sessions, loading: sessionsLoading, loadingMore: sessionsLoadingMore, hasMore: sessionsHasMore } = sessionsPaged
+const activityPaged = usePaged((page) => api.pageAudit({ target_id: props.id, page }))
+const { items: activity, loading: activityLoading, loadingMore: activityLoadingMore, hasMore: activityHasMore } = activityPaged
+let activityLoaded = false
+const terminalsPaged = usePaged((page) => api.pageTerminals({ agent_id: props.id, page }, { quiet: true }))
+const { items: terminals, loading: terminalsLoading, loadingMore: terminalsLoadingMore, hasMore: terminalsHasMore } = terminalsPaged
+/** A tab's count: every matching row once the server reported the total, else what is loaded. */
+const countOf = <T,>(p: Paged<T>) => (p.loading.value ? undefined : (p.total.value ?? p.items.value.length))
 const users = ref<User[]>([])
 const notFound = ref(false)
 const form = ref<AgentForm>(agentFormFrom())
@@ -50,9 +58,9 @@ const TABS = computed(() => {
   const t: { id: TabId; label: string; icon: IconName; count?: number }[] = [
     { id: 'overview', label: 'Overview', icon: 'overview' },
     { id: 'config', label: 'Configuration', icon: 'settings' },
-    { id: 'sessions', label: 'Sessions', icon: 'chat', count: sessions.value?.length },
+    { id: 'sessions', label: 'Sessions', icon: 'chat', count: countOf(sessionsPaged) },
   ]
-  if (auth.isAdmin) t.push({ id: 'terminals', label: 'Terminal sessions', icon: 'terminal', count: terminals.value?.length })
+  if (auth.isAdmin) t.push({ id: 'terminals', label: 'Terminal sessions', icon: 'terminal', count: countOf(terminalsPaged) })
   if (auth.isAdmin) t.push({ id: 'activity', label: 'Activity', icon: 'activity' })
   return t
 })
@@ -81,29 +89,20 @@ async function load(resetForm = true) {
 }
 
 function loadSessions() {
-  api.listSessions({ agent_id: props.id, limit: 50 }).then((s) => (sessions.value = s ?? [])).catch(() => (sessions.value = []))
+  sessionsPaged.refresh()
 }
 
-async function loadActivity() {
-  if (!auth.isAdmin) return
-  try {
-    const r = await api.audit({ target_id: props.id, size: 50 })
-    activity.value = r.items ?? []
-  } catch {
-    activity.value = []
-  }
+function loadActivity() {
+  if (!auth.isAdmin || activityLoaded) return
+  activityLoaded = true
+  activityPaged.reload()
 }
-watch(tab, (t) => t === 'activity' && activity.value === null && loadActivity(), { immediate: true })
+watch(tab, (t) => t === 'activity' && loadActivity(), { immediate: true })
 
 async function loadTerminals() {
   if (!auth.isAdmin) return
-  try {
-    const [t, u] = await Promise.all([api.listTerminals({ agent_id: props.id }, { quiet: true }), users.value.length ? null : api.listUsers().catch(() => null)])
-    terminals.value = t ?? []
-    if (u) users.value = u
-  } catch {
-    terminals.value = []
-  }
+  const [, u] = await Promise.all([terminalsPaged.reload(), users.value.length ? null : api.listUsers().catch(() => null)])
+  if (u) users.value = u
 }
 watch(tab, (t) => t === 'terminals' && loadTerminals(), { immediate: true })
 
@@ -437,7 +436,7 @@ onUnmounted(() => off?.())
             <tr><th>Session</th><th>Mode</th><th>State</th><th class="right hide-mobile">Tokens</th><th class="right hide-mobile">Cost</th><th>Last activity</th></tr>
           </thead>
           <tbody>
-            <SkeletonRows v-if="sessions === null" :cols="6" :rows="3" />
+            <SkeletonRows v-if="sessionsLoading" :cols="6" :rows="3" />
             <tr v-else-if="!sessions.length">
               <td colspan="6">
                 <EmptyState title="No sessions yet" icon="chat">
@@ -446,7 +445,7 @@ onUnmounted(() => off?.())
                 </EmptyState>
               </td>
             </tr>
-            <tr v-for="s in sessions ?? []" :key="s.id" class="clickable" tabindex="0" @click="router.push(`/sessions/${s.id}`)" @keydown.enter="router.push(`/sessions/${s.id}`)">
+            <tr v-for="s in sessionsLoading ? [] : sessions" :key="s.id" class="clickable" tabindex="0" @click="router.push(`/sessions/${s.id}`)" @keydown.enter="router.push(`/sessions/${s.id}`)">
               <td><RouterLink :to="`/sessions/${s.id}`" class="cell-title" @click.stop>{{ s.title || (s.mode === 'task' ? 'Task run' : 'Chat') }}</RouterLink></td>
               <td><Badge :value="s.mode" /></td>
               <td><Badge :value="s.status === 'closed' ? 'closed' : s.state || 'idle'" /></td>
@@ -457,6 +456,7 @@ onUnmounted(() => off?.())
           </tbody>
         </table>
       </div>
+      <InfiniteScroll :has-more="sessionsHasMore" :loading="sessionsLoadingMore" @more="sessionsPaged.more" />
     </section>
 
     <!-- terminal sessions -->
@@ -471,14 +471,14 @@ onUnmounted(() => off?.())
             <tr><th>Started</th><th>User</th><th>Duration</th><th class="right hide-mobile">Recorded</th><th>Exit</th><th><span class="sr-only">Replay</span></th></tr>
           </thead>
           <tbody>
-            <SkeletonRows v-if="terminals === null" :cols="6" :rows="3" />
+            <SkeletonRows v-if="terminalsLoading" :cols="6" :rows="3" />
             <tr v-else-if="!terminals.length">
               <td colspan="6">
                 <EmptyState title="No terminal sessions yet" icon="terminal" compact>Every terminal opened on this agent is recorded (input and output) and can be replayed here.</EmptyState>
               </td>
             </tr>
             <tr
-              v-for="t in terminals ?? []"
+              v-for="t in terminalsLoading ? [] : terminals"
               :key="t.id"
               class="clickable"
               tabindex="0"
@@ -500,6 +500,7 @@ onUnmounted(() => off?.())
           </tbody>
         </table>
       </div>
+      <InfiniteScroll :has-more="terminalsHasMore" :loading="terminalsLoadingMore" @more="terminalsPaged.more" />
     </section>
 
     <!-- activity -->
@@ -508,9 +509,9 @@ onUnmounted(() => off?.())
         <table class="table">
           <thead><tr><th>When</th><th>Action</th><th>Actor</th><th class="hide-mobile">Details</th></tr></thead>
           <tbody>
-            <SkeletonRows v-if="activity === null" :cols="4" :rows="4" />
+            <SkeletonRows v-if="activityLoading" :cols="4" :rows="4" />
             <tr v-else-if="!activity.length"><td colspan="4"><EmptyState title="No recorded activity" icon="activity" compact>Audit entries that target this agent show up here.</EmptyState></td></tr>
-            <tr v-for="r in activity ?? []" :key="r.id">
+            <tr v-for="r in activityLoading ? [] : activity" :key="r.id">
               <td class="nowrap" :title="fmtDate(r.created_at)">{{ relTime(r.created_at, now) }}</td>
               <td class="mono small strong">{{ r.action }}</td>
               <td><span class="badge outline">{{ r.actor_type }}</span></td>
@@ -519,7 +520,8 @@ onUnmounted(() => off?.())
           </tbody>
         </table>
       </div>
-      <div class="pager"><span>Latest 50 entries</span><RouterLink :to="{ path: '/audit', query: { target: agent.id } }">Open in audit log</RouterLink></div>
+      <InfiniteScroll :has-more="activityHasMore" :loading="activityLoadingMore" @more="activityPaged.more" />
+      <div class="pager"><span /><RouterLink :to="{ path: '/audit', query: { target: agent.id } }">Open in audit log</RouterLink></div>
     </section>
 
     <Modal :open="!!enrollment" title="New join token" wide @close="enrollment = null">

@@ -9,25 +9,18 @@ import { useLive } from '../stores/live'
 import ApprovalCard from '../components/ApprovalCard.vue'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
+import InfiniteScroll from '../components/InfiniteScroll.vue'
+import { usePaged } from '../lib/paged'
 
 const auth = useAuth()
 const catalog = useCatalog()
 const live = useLive()
 const status = ref<ApprovalStatus | ''>('pending')
-const items = ref<Approval[]>([])
-const loading = ref(true)
+const paged = usePaged((page) => api.pageApprovals({ status: status.value || undefined, page }))
+const { items, loading, loadingMore, hasMore } = paged
 const list = ref<HTMLElement | null>(null)
-/** approval id → change id, for change_run approvals (links to the change page). */
+/** approval id → change id, for change_run approvals whose link arrived live after the approval. */
 const changeOf = ref<Map<string, string>>(new Map())
-
-async function loadChanges() {
-  try {
-    const cs = (await api.listChanges({ limit: 200 }, { quiet: true })) ?? []
-    changeOf.value = new Map(cs.filter((c) => c.approval_id).map((c) => [c.approval_id, c.id]))
-  } catch {
-    /* cards still render the plan */
-  }
-}
 
 const FILTERS: { value: ApprovalStatus | ''; label: string }[] = [
   { value: 'pending', label: 'Pending' },
@@ -37,21 +30,10 @@ const FILTERS: { value: ApprovalStatus | ''; label: string }[] = [
   { value: '', label: 'All' },
 ]
 
-async function load() {
-  loading.value = true
-  try {
-    items.value = (await api.listApprovals({ status: status.value || undefined, limit: 200 })) ?? []
-  } catch {
-    /* toasted */
-  } finally {
-    loading.value = false
-  }
-}
-
 function setStatus(s: ApprovalStatus | '') {
   status.value = s
   items.value = []
-  load()
+  paged.reload()
 }
 
 function upsert(a: Approval) {
@@ -77,8 +59,7 @@ function upsert(a: Approval) {
 let off: (() => void) | null = null
 let offRe: (() => void) | null = null
 onMounted(() => {
-  load()
-  loadChanges()
+  paged.reload()
   catalog.loadAgents()
   off = live.on((ev) => {
     if ((ev.type === 'approval.created' || ev.type === 'approval.resolved') && ev.data) upsert(ev.data as Approval)
@@ -87,7 +68,7 @@ onMounted(() => {
       if (c.approval_id && !changeOf.value.has(c.approval_id)) changeOf.value = new Map(changeOf.value).set(c.approval_id, c.id)
     }
   })
-  offRe = live.onReconnect(load)
+  offRe = live.onReconnect(paged.refresh)
 })
 onUnmounted(() => {
   off?.()
@@ -120,8 +101,9 @@ onUnmounted(() => {
     </div>
     <div v-else ref="list" class="stack">
       <div v-for="a in items" :key="a.id">
-        <ApprovalCard :approval="a" show-context flat :keyboard="auth.isOperator" :change-id="changeOf.get(a.id)" @resolved="upsert" />
+        <ApprovalCard :approval="a" show-context flat :keyboard="auth.isOperator" :change-id="a.change_id ?? changeOf.get(a.id)" @resolved="upsert" />
       </div>
     </div>
+    <InfiniteScroll v-if="items.length" :has-more="hasMore" :loading="loadingMore" @more="paged.more" />
   </div>
 </template>

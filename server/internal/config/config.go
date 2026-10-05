@@ -435,7 +435,10 @@ func (c *Config) Initialize(app *okapi.Okapi, errorHandler okapi.ErrorHandler) e
 			Title:       "Akili API",
 			Version:     Version,
 			Description: "Security-first control plane for autonomous AI operator agents.",
-			License:     okapi.License{Name: "Apache-2.0"},
+			License: okapi.License{
+				Name: "AGPL-3.0-or-later",
+				URL:  "https://www.gnu.org/licenses/agpl-3.0.html",
+			},
 			SecuritySchemes: okapi.SecuritySchemes{
 				{Name: "BearerAuth", Type: "http", Scheme: "bearer", BearerFormat: "JWT or ak_ API key"},
 			},

@@ -10,27 +10,13 @@ import (
 	"github.com/goakili/akili/server/internal/config"
 	"github.com/goakili/akili/server/internal/middlewares"
 	"github.com/goakili/akili/server/internal/models"
+	"github.com/goakili/akili/server/internal/storage/pagination"
 	"github.com/jkaninda/okapi"
 )
 
-// AuditPage is a page of audit rows.
-type AuditPage struct {
-	Items []models.AuditLog `json:"items"`
-	Total int64             `json:"total"`
-	Page  int               `json:"page"`
-	Size  int               `json:"size"`
-}
-
 // ListAudit pages through the audit log with optional filters.
 func (h *Handlers) ListAudit(c *okapi.Context) error {
-	page, size := queryInt(c, "page", 0), queryInt(c, "size", 50)
-	if size <= 0 || size > 500 {
-		size = 50
-	}
-	if page < 0 {
-		page = 0
-	}
-	q := h.DB.Model(&models.AuditLog{}).Where("organization_id = ?", middlewares.OrgID(c))
+	q := h.DB.Where("organization_id = ?", middlewares.OrgID(c))
 	if a := c.Query("action"); a != "" {
 		q = q.Where("action LIKE ?", a+"%")
 	}
@@ -40,13 +26,12 @@ func (h *Handlers) ListAudit(c *okapi.Context) error {
 	if t := c.Query("target_id"); t != "" {
 		q = q.Where("target_id = ?", t)
 	}
-	var out AuditPage
-	q.Count(&out.Total)
-	if err := q.Order("id DESC").Offset(page * size).Limit(size).Find(&out.Items).Error; err != nil {
+	p := pageParams(c)
+	out, total, err := pagination.Find[models.AuditLog](q, p, "id DESC")
+	if err != nil {
 		return c.AbortInternalServerError("list failed", err)
 	}
-	out.Page, out.Size = page, size
-	return ok(c, out)
+	return paged(c, out, total, p)
 }
 
 // VerifyAudit walks the hash chain.

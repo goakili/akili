@@ -26,6 +26,7 @@ import {
 } from '../api'
 import type { StreamStatus } from '../lib/sse'
 import { fmtTime, num, usd } from '../lib/format'
+import { fetchAll } from '../lib/paged'
 import { phaseLabel, type ChangeChild } from '../lib/tools'
 import { useAuth } from '../stores/auth'
 import { useCatalog } from '../stores/catalog'
@@ -124,7 +125,7 @@ async function load() {
 
 async function loadChanges() {
   try {
-    const list = (await api.listChanges({ session_id: props.sessionId }, { quiet: true })) ?? []
+    const list = await fetchAll((page) => api.pageChanges({ session_id: props.sessionId, page, size: 200 }, { quiet: true }))
     changes.value = new Map(list.map((c) => [c.id, c]))
   } catch {
     /* change cards fall back to the plan alone */

@@ -120,7 +120,7 @@ wait_for "change succeeded" 60 done_change
 [ "$(api GET /changes/$CHG | json "[c['status'] for c in d['data']['calls']]")" = "['ok', 'ok']" ] || fail "call outcomes: $(api GET /changes/$CHG)"
 task_done() { [ "$(api GET /tasks/$T1 | json "d['data']['status']")" = "succeeded" ]; }
 wait_for "triage task finished" 60 task_done
-[ "$(api GET '/audit?action=change.succeeded' | json "d['data']['total']")" -ge 1 ] || fail "change not audited"
+[ "$(api GET '/audit?action=change.succeeded' | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" -ge 1 ] || fail "change not audited"
 
 step "A failing check rolls the change back automatically"
 python3 - "$WORK/route2.json" <<'PY'
@@ -178,7 +178,7 @@ curl -sS -b "$JAR" "$API/terminals/$TRM/recording" > "$WORK/cast"
 head -1 "$WORK/cast" | grep >/dev/null '"version":2' || fail "recording is not an asciinema v2 cast"
 grep -q 'TERM_OK_42' "$WORK/cast" || fail "recording lacks the output"
 grep -q '"i","echo TERM_OK' "$WORK/cast" || fail "recording lacks the operator input"
-[ "$(api GET '/audit?action=terminal.open' | json "d['data']['total']")" -ge 1 ] || fail "terminal.open not audited"
+[ "$(api GET '/audit?action=terminal.open' | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" -ge 1 ] || fail "terminal.open not audited"
 
 step "Terminal refused when the policy does not allow it, and for cross-site origins"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Origin: https://evil.example' "$API/agents/$AGENT/terminal")" = "403" ] || fail "cross-site origin accepted"

@@ -103,8 +103,8 @@ done_task() { [ "$(api GET /tasks/$T | json "d['data']['status']")" = "succeeded
 wait_for "task to finish" 90 done_task
 [ "$(cat "$WORK/wk/second.txt" 2>/dev/null)" = "resumed after failover" ] || fail "the second step did not run after the failover"
 [ "$(api GET /tasks/$T | json "d['data']['attempts']")" = "1" ] || fail "the task was restarted (attempts=$(api GET /tasks/$T | json "d['data']['attempts']")), not resumed"
-[ "$(api GET "/audit?action=session.resume" | json "d['data']['total']")" -ge 1 ] || fail "resume not audited"
-[ "$(api GET "/audit?action=task.requeue" | json "d['data']['total']")" = "0" ] || fail "the task was requeued"
+[ "$(api GET "/audit?action=session.resume" | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" -ge 1 ] || fail "resume not audited"
+[ "$(api GET "/audit?action=task.requeue" | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" = "0" ] || fail "the task was requeued"
 
 step "The killed replica restarts and the fleet keeps working"
 start_replica "$H"

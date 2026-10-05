@@ -3,7 +3,6 @@
 <script setup lang="ts">
 // Replays a recorded terminal (asciinema v2) into a read-only xterm: play/pause, speed, seek.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { useRoute } from 'vue-router'
 import type { Terminal } from '@xterm/xterm'
 import { api, ApiError, type TerminalSession, type User } from '../api'
 import { useCatalog } from '../stores/catalog'
@@ -17,7 +16,6 @@ import Badge from '../components/Badge.vue'
 import Icon from '../components/Icon'
 
 const props = defineProps<{ id: string }>()
-const route = useRoute()
 const catalog = useCatalog()
 const ui = useUi()
 
@@ -51,15 +49,14 @@ function clock(sec: number): string {
 }
 
 async function load() {
-  const agentId = typeof route.query.agent === 'string' ? route.query.agent : undefined
   try {
-    const [text, list, us] = await Promise.all([
+    const [text, found, us] = await Promise.all([
       api.terminalRecording(props.id, { quiet: true }),
-      api.listTerminals({ agent_id: agentId, limit: 100 }, { quiet: true }).catch(() => null),
+      api.getTerminal(props.id, { quiet: true }).catch(() => null),
       api.listUsers().catch(() => null),
       catalog.loadAgents(),
     ])
-    meta.value = (list ?? []).find((t) => t.id === props.id) ?? null
+    meta.value = found
     users.value = us ?? []
     cast.value = parseCast(text)
     ui.crumb = `Recording · ${catalog.agentName(meta.value?.agent_id)}`

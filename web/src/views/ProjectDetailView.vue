@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, ApiError, AUTONOMY_LEVELS, type Autonomy, type ChatSession, type MaintenancePreset, type PlanSummary, type Project, type Schedule, type Task } from '../api'
+import { api, ApiError, AUTONOMY_LEVELS, type Autonomy, type MaintenancePreset, type PlanSummary, type Project, type Schedule, type Task } from '../api'
 import { useAuth } from '../stores/auth'
 import { useCatalog } from '../stores/catalog'
 import { useCoder } from '../stores/coder'
@@ -14,10 +14,12 @@ import { useUi } from '../stores/ui'
 import { projectFormErrors, projectFormFrom, projectInput, type ProjectForm } from '../lib/projectForm'
 import { fmtDate, relTime, safeUrl } from '../lib/format'
 import { useNow } from '../lib/now'
+import { usePaged, type Paged } from '../lib/paged'
 import Badge from '../components/Badge.vue'
 import Modal from '../components/Modal.vue'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
+import InfiniteScroll from '../components/InfiniteScroll.vue'
 import SkeletonRows from '../components/SkeletonRows.vue'
 import ProjectFields from '../components/ProjectFields.vue'
 import NewTaskModal from '../components/NewTaskModal.vue'
@@ -40,9 +42,15 @@ const now = useNow()
 
 const project = ref<Project | null>(null)
 const notFound = ref(false)
-const tasks = ref<Task[] | null>(null)
+const tasksPaged = usePaged((page) => api.pageTasks({ project_id: props.id, page }, { quiet: true }))
+const { items: tasks, loading: tasksLoading, loadingMore: tasksLoadingMore, hasMore: tasksHasMore } = tasksPaged
+/** Counted on the server: the task list only holds the pages scrolled through. */
+const openTasks = ref<number | null>(null)
+const prCount = ref<number | null>(null)
 const schedules = ref<Schedule[] | null>(null)
-const sessions = ref<ChatSession[] | null>(null)
+const sessionsPaged = usePaged((page) => api.pageSessions({ mode: 'chat', project_id: props.id, page }))
+const { items: sessions, loading: sessionsLoading, loadingMore: sessionsLoadingMore, hasMore: sessionsHasMore } = sessionsPaged
+const countOf = <T,>(p: Paged<T>) => (p.loading.value ? undefined : (p.total.value ?? p.items.value.length))
 const presets = ref<MaintenancePreset[]>([])
 const plans = ref<PlanSummary[] | null>(null)
 const planTitle = (id: string) => plans.value?.find((p) => p.id === id)?.title ?? id
@@ -53,9 +61,9 @@ const TABS = computed(() => {
   const t: { id: TabId; label: string; icon: IconName; count?: number }[] = [
     { id: 'overview', label: 'Overview', icon: 'overview' },
     { id: 'plans', label: 'Plans', icon: 'list', count: plans.value?.filter((p) => p.status !== 'done' && p.status !== 'archived').length },
-    { id: 'tasks', label: 'Tasks', icon: 'tasks', count: tasks.value?.length },
+    { id: 'tasks', label: 'Tasks', icon: 'tasks', count: countOf(tasksPaged) },
     { id: 'maintenance', label: 'Maintenance', icon: 'schedules', count: schedules.value?.length },
-    { id: 'chat', label: 'Chat', icon: 'chat', count: sessions.value?.length },
+    { id: 'chat', label: 'Chat', icon: 'chat', count: countOf(sessionsPaged) },
   ]
   return t
 })
@@ -93,10 +101,18 @@ async function loadPlans() {
 }
 
 async function loadTasks() {
+  await Promise.all([tasksPaged.refresh(), loadTaskCounts()])
+}
+
+async function loadTaskCounts() {
+  const count = async (q: { status?: string; has_pr?: boolean }) => {
+    const p = await api.pageTasks({ ...q, project_id: props.id, size: 1 }, { quiet: true })
+    return p.total ?? p.items.length
+  }
   try {
-    tasks.value = (await api.listTasks({ limit: 500, project_id: props.id }, { quiet: true })) ?? []
+    ;[openTasks.value, prCount.value] = await Promise.all([count({ status: 'queued,assigned,running' }), count({ has_pr: true })])
   } catch {
-    tasks.value = tasks.value ?? []
+    /* the summary shows … */
   }
 }
 async function loadSchedules() {
@@ -106,19 +122,13 @@ async function loadSchedules() {
     schedules.value = schedules.value ?? []
   }
 }
-async function loadSessions() {
-  try {
-    sessions.value = (await api.listSessions({ mode: 'chat', limit: 200, project_id: props.id })) ?? []
-  } catch {
-    sessions.value = sessions.value ?? []
-  }
+function loadSessions() {
+  return sessionsPaged.refresh()
 }
 
 const forge = computed(() => coder.forgeOf(project.value))
 const integration = computed(() => coder.integrations.find((i) => i.id === project.value?.integration_id))
 const repoUrl = computed(() => safeUrl(project.value?.web_url))
-const openTasks = computed(() => (tasks.value ?? []).filter((t) => ['queued', 'assigned', 'running'].includes(t.status)).length)
-const prCount = computed(() => (tasks.value ?? []).filter((t) => t.pr_url).length)
 const target = computed(() => {
   const p = project.value
   if (!p) return ''
@@ -192,8 +202,7 @@ function newTask(planIds: string[] = [], goal = '', focus: PhaseFocus | null = n
 async function startDraft(t: Task) {
   try {
     const started = await api.startTask(t.id)
-    const i = tasks.value?.findIndex((x) => x.id === t.id) ?? -1
-    if (tasks.value && i >= 0) tasks.value[i] = { ...started, plan_ids: t.plan_ids }
+    tasksPaged.upsert({ ...started, plan_ids: t.plan_ids })
     toast.success(`Task queued: ${t.title || 'untitled'}`)
   } catch {
     /* toasted */
@@ -315,11 +324,10 @@ onMounted(async () => {
   off = live.on((ev) => {
     if (ev.type === 'task.updated' && ev.data) {
       const t = ev.data as Task
-      if (t.project_id !== props.id || !tasks.value) return
-      const i = tasks.value.findIndex((x) => x.id === t.id)
+      if (t.project_id !== props.id) return
       // task.updated carries the task without its plans: keep the ones we know.
-      if (i >= 0) tasks.value[i] = { ...t, plan_ids: tasks.value[i].plan_ids }
-      else tasks.value.unshift(t)
+      tasksPaged.upsert({ ...t, plan_ids: tasks.value.find((x) => x.id === t.id)?.plan_ids ?? t.plan_ids })
+      loadTaskCounts()
     }
     if (ev.type === 'plan.updated' && (ev.data as { project_id?: string } | undefined)?.project_id === props.id) loadPlans()
     if (ev.type === 'session.created' || ev.type === 'session.closed') loadSessions()
@@ -421,8 +429,8 @@ onUnmounted(() => {
                 <span v-if="project.trigger_label" class="badge violet square"><Icon name="tag" />{{ project.trigger_label }}</span>
                 <span v-else class="muted">none (issues do not create tasks)</span>
               </dd>
-              <dt>Open tasks</dt><dd class="num">{{ tasks ? openTasks : '…' }}</dd>
-              <dt>Pull requests</dt><dd class="num">{{ tasks ? prCount : '…' }} <span class="muted small">opened by tasks</span></dd>
+              <dt>Open tasks</dt><dd class="num">{{ openTasks ?? '…' }}</dd>
+              <dt>Pull requests</dt><dd class="num">{{ prCount ?? '…' }} <span class="muted small">opened by tasks</span></dd>
               <dt>Created</dt><dd>{{ fmtDate(project.created_at) }}</dd>
               <dt>ID</dt><dd class="mono small">{{ project.id }}</dd>
             </dl>
@@ -442,7 +450,7 @@ onUnmounted(() => {
               <tr><th>Task</th><th>Status</th><th>Pull request</th><th class="hide-mobile">Branch</th><th class="hide-mobile">Trigger</th><th class="hide-mobile">Updated</th></tr>
             </thead>
             <tbody>
-              <SkeletonRows v-if="tasks === null" :cols="6" :rows="3" />
+              <SkeletonRows v-if="tasksLoading" :cols="6" :rows="3" />
               <tr v-else-if="!tasks.length">
                 <td colspan="6">
                   <EmptyState title="No coding tasks yet" icon="gitPR" compact>
@@ -451,7 +459,7 @@ onUnmounted(() => {
                   </EmptyState>
                 </td>
               </tr>
-              <tr v-for="t in tasks ?? []" :key="t.id" class="clickable" tabindex="0" @click="router.push(`/tasks/${t.id}`)" @keydown.enter="router.push(`/tasks/${t.id}`)">
+              <tr v-for="t in tasksLoading ? [] : tasks" :key="t.id" class="clickable" tabindex="0" @click="router.push(`/tasks/${t.id}`)" @keydown.enter="router.push(`/tasks/${t.id}`)">
                 <td style="max-width: 380px">
                   <RouterLink :to="`/tasks/${t.id}`" class="cell-title truncate" style="display: block" @click.stop>{{ t.title || t.goal }}</RouterLink>
                   <div v-if="t.status_reason" class="cell-sub truncate">{{ t.status_reason }}</div>
@@ -473,6 +481,7 @@ onUnmounted(() => {
             </tbody>
           </table>
         </div>
+        <InfiniteScroll :has-more="tasksHasMore" :loading="tasksLoadingMore" @more="tasksPaged.more" />
       </section>
 
       <!-- maintenance -->
@@ -563,9 +572,9 @@ onUnmounted(() => {
             <table class="table">
               <thead><tr><th>Session</th><th>Agent</th><th>State</th><th class="hide-mobile">Branch</th><th class="hide-mobile">Last activity</th></tr></thead>
               <tbody>
-                <SkeletonRows v-if="sessions === null" :cols="5" :rows="2" />
+                <SkeletonRows v-if="sessionsLoading" :cols="5" :rows="2" />
                 <tr v-else-if="!sessions.length"><td colspan="5"><EmptyState title="No chats yet" icon="chat" compact>Coding chats on this project show up here.</EmptyState></td></tr>
-                <tr v-for="s in sessions ?? []" :key="s.id" class="clickable" tabindex="0" @click="router.push(`/sessions/${s.id}`)" @keydown.enter="router.push(`/sessions/${s.id}`)">
+                <tr v-for="s in sessionsLoading ? [] : sessions" :key="s.id" class="clickable" tabindex="0" @click="router.push(`/sessions/${s.id}`)" @keydown.enter="router.push(`/sessions/${s.id}`)">
                   <td><RouterLink :to="`/sessions/${s.id}`" class="cell-title" @click.stop>{{ s.title || 'Chat' }}</RouterLink><div class="cell-sub">{{ relTime(s.created_at, now) }}</div></td>
                   <td class="nowrap">{{ catalog.agentName(s.agent_id) }}</td>
                   <td><Badge :value="s.status === 'closed' ? 'closed' : s.state || 'idle'" /></td>
@@ -575,6 +584,7 @@ onUnmounted(() => {
               </tbody>
             </table>
           </div>
+          <InfiniteScroll :has-more="sessionsHasMore" :loading="sessionsLoadingMore" @more="sessionsPaged.more" />
         </section>
       </div>
     </div>

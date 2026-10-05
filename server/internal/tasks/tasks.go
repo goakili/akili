@@ -21,6 +21,7 @@ import (
 	"github.com/goakili/akili/server/internal/notify"
 	"github.com/goakili/akili/server/internal/plans"
 	"github.com/goakili/akili/server/internal/sessions"
+	"github.com/goakili/akili/server/internal/storage/pagination"
 	"github.com/jkaninda/logger"
 	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
@@ -230,20 +231,27 @@ func (s *Service) Get(ctx context.Context, org, id string) (*models.Task, error)
 	return &t, nil
 }
 
-// List returns tasks, newest first.
-func (s *Service) List(ctx context.Context, org, status string, limit int, projectID ...string) ([]models.Task, error) {
-	if limit <= 0 || limit > 500 {
-		limit = 200
-	}
+// ListFilter narrows List. Status is a comma-separated list.
+type ListFilter struct {
+	Status    string
+	ProjectID string
+	// HasPR keeps tasks that opened a pull request.
+	HasPR bool
+}
+
+// List returns one page of tasks, newest first, and the number of matching tasks.
+func (s *Service) List(ctx context.Context, org string, f ListFilter, p pagination.Page) ([]models.Task, int64, error) {
 	q := s.db.WithContext(ctx).Where("organization_id = ?", org)
-	if status != "" {
-		q = q.Where("status IN ?", strings.Split(status, ","))
+	if f.Status != "" {
+		q = q.Where("status IN ?", strings.Split(f.Status, ","))
 	}
-	if len(projectID) > 0 && projectID[0] != "" {
-		q = q.Where("project_id = ?", projectID[0])
+	if f.ProjectID != "" {
+		q = q.Where("project_id = ?", f.ProjectID)
 	}
-	var out []models.Task
-	return out, q.Order("created_at DESC").Limit(limit).Find(&out).Error
+	if f.HasPR {
+		q = q.Where("pr_url <> ''")
+	}
+	return pagination.Find[models.Task](q, p, "created_at DESC, id DESC")
 }
 
 // Cancel stops a task. A queued task is cancelled at once; a running one is interrupted.

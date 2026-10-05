@@ -23,7 +23,8 @@ func (r *Router) opsRoutes() []okapi.RouteDefinition {
 			Middlewares: r.guard(models.RoleViewer),
 			Handler:     r.h.ListChanges,
 			Summary:     "List change plans",
-			Response:    &dto.Response[[]models.Change]{},
+			Response:    &dto.PageResponse[models.Change]{},
+			Options:     pageDocs(),
 		},
 		{
 			Method:      http.MethodGet,
@@ -85,7 +86,8 @@ func (r *Router) opsRoutes() []okapi.RouteDefinition {
 			Middlewares: r.guard(models.RoleAdmin),
 			Handler:     r.h.ListTerminals,
 			Summary:     "Recorded terminal sessions",
-			Response:    &dto.Response[[]models.TerminalSession]{},
+			Response:    &dto.PageResponse[models.TerminalSession]{},
+			Options:     pageDocs(),
 		},
 		{
 			Method:      http.MethodGet,

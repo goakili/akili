@@ -9,6 +9,7 @@ import { useCatalog } from '../stores/catalog'
 import { useCoder } from '../stores/coder'
 import { useLive } from '../stores/live'
 import { safeUrl } from '../lib/format'
+import { fetchAll } from '../lib/paged'
 import { forgeIcon } from '../lib/forge'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -35,7 +36,8 @@ async function load() {
 // Open coding work per project: the task list has no project filter, so filter active tasks here.
 async function loadOpen() {
   try {
-    openTasks.value = ((await api.listTasks({ status: 'queued,assigned,running', limit: 500 }, { quiet: true })) ?? []).filter((t) => t.project_id)
+    const open = await fetchAll((page) => api.pageTasks({ status: 'queued,assigned,running', page, size: 200 }, { quiet: true }))
+    openTasks.value = open.filter((t) => t.project_id)
   } catch {
     /* counts are optional */
   }

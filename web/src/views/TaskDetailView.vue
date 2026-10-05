@@ -15,6 +15,7 @@ import { durationSec, fmtDate, fmtTime, usd, duration, safeUrl } from '../lib/fo
 import { copyText } from '../lib/clipboard'
 import { prNoun, prNumber } from '../lib/forge'
 import { useNow } from '../lib/now'
+import { fetchAll } from '../lib/paged'
 import Badge from '../components/Badge.vue'
 import SafeMarkdown from '../components/SafeMarkdown'
 import SessionTranscript from '../components/SessionTranscript.vue'
@@ -40,7 +41,7 @@ const task = ref<Task | null>(null)
 /** Change plans proposed while working on this task. */
 const changes = ref<Change[]>([])
 function loadChanges() {
-  api.listChanges({ task_id: props.id }, { quiet: true }).then((c) => (changes.value = c ?? [])).catch(() => {})
+  fetchAll((page) => api.pageChanges({ task_id: props.id, page, size: 200 }, { quiet: true })).then((c) => (changes.value = c)).catch(() => {})
 }
 const notFound = ref(false)
 const busy = ref(false)

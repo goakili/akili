@@ -277,11 +277,12 @@ type LessonDecisionRequest struct {
 
 // ListLessons lists lessons.
 func (h *Handlers) ListLessons(c *okapi.Context) error {
-	out, err := h.Lessons.List(c.Request().Context(), middlewares.OrgID(c), lessons.Filter{Status: c.Query("status"), AgentID: c.Query("agent_id")})
+	p := pageParams(c)
+	out, total, err := h.Lessons.List(c.Request().Context(), middlewares.OrgID(c), lessons.Filter{Status: c.Query("status"), AgentID: c.Query("agent_id")}, p)
 	if err != nil {
 		return c.AbortInternalServerError("list failed", err)
 	}
-	return ok(c, out)
+	return paged(c, out, total, p)
 }
 
 // CreateLesson adds an approved lesson written by an operator.
