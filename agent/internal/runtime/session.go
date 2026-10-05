@@ -246,6 +246,13 @@ const BlockedPrefix = "BLOCKED:"
 
 var errInterrupted = errors.New("interrupted by operator")
 
+// maxCutOffTurns caps turns whose tool input was cut off at the output limit. They do not count
+// toward MaxTurns, so a model writing a large file in parts is not charged for its retries.
+const maxCutOffTurns = 10
+
+// ErrTurnLimit is returned when the model is still working after MaxTurns turns.
+var ErrTurnLimit = errors.New("turn limit reached")
+
 // turn runs the model/tool loop for one user message and returns the final assistant text.
 func (s *Session) turn(parent context.Context, user proto.Message) (string, error) {
 	ctx, cancel := context.WithCancel(parent)
@@ -263,7 +270,8 @@ func (s *Session) turn(parent context.Context, user proto.Message) (string, erro
 		return "", err
 	}
 	var last string
-	for i := 0; i < s.open.MaxTurns; i++ {
+	cutOff := 0
+	for turns := 0; turns < s.open.MaxTurns; turns++ {
 		s.status(proto.StateThinking, "")
 		ev, err := s.llm.Complete(ctx, proto.LLMRequest{SessionID: s.open.SessionID, System: s.open.System, Messages: s.history, Tools: s.defs},
 			func(kind, d string) { _ = s.conn.Send(proto.TypeDelta, proto.Delta{Text: d, Kind: kind}) })
@@ -297,6 +305,10 @@ func (s *Session) turn(parent context.Context, user proto.Message) (string, erro
 		if ev.StopReason == proto.StopMaxTokens {
 			// Tool input may be truncated; do not run it. Let the model retry with smaller calls.
 			s.closeToolUses(uses, "not run: the tool input was cut off at the output limit; retry with a smaller call (e.g. write the file in parts)")
+			if cutOff++; cutOff > maxCutOffTurns {
+				return last, fmt.Errorf("the model's output was cut off at the output limit %d times", cutOff)
+			}
+			turns--
 			continue
 		}
 		results := s.runTools(ctx, uses)
@@ -310,7 +322,7 @@ func (s *Session) turn(parent context.Context, user proto.Message) (string, erro
 			return last, errInterrupted
 		}
 	}
-	return last, fmt.Errorf("stopped after %d model turns without finishing", s.open.MaxTurns)
+	return last, fmt.Errorf("%w: the agent was still working after %d model turns; continue the task to pick up where it stopped, or raise its max turns", ErrTurnLimit, s.open.MaxTurns)
 }
 
 // runTools executes tool calls in order. Every call gets a result block, so the history stays valid

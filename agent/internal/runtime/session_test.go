@@ -11,6 +11,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -206,6 +207,43 @@ func TestMaxTokensToolIsNotRun(t *testing.T) {
 	runTask(t, s)
 	if len(conn.of(proto.TypeToolRequest)) != 0 {
 		t.Fatal("a tool from a max_tokens turn was requested")
+	}
+}
+
+// TestCutOffTurnsDoNotUseTheBudget: setup allows 5 turns; six cut-off retries must not exhaust them.
+func TestCutOffTurnsDoNotUseTheBudget(t *testing.T) {
+	conn := newFakeConn(func(proto.ToolRequest) []proto.ToolDecision { return []proto.ToolDecision{{Effect: proto.EffectAllow}} })
+	cut := toolTurn(proto.ToolFSWrite, proto.FSWriteInput{Path: "big.txt", Content: "partial"})
+	cut.StopReason = proto.StopMaxTokens
+	llm := &scripted{turns: []proto.LLMEvent{cut, cut, cut, cut, cut, cut, textTurn("done")}}
+	s := setup(t, devPolicy, llm, conn, proto.ModeTask)
+	if d := runTask(t, s); d.Outcome != proto.OutcomeSucceeded || d.Summary != "done" {
+		t.Fatalf("done = %+v", d)
+	}
+}
+
+func TestCutOffTurnsAreCapped(t *testing.T) {
+	conn := newFakeConn(nil)
+	cut := toolTurn(proto.ToolFSWrite, proto.FSWriteInput{Path: "big.txt", Content: "partial"})
+	cut.StopReason = proto.StopMaxTokens
+	turns := make([]proto.LLMEvent, maxCutOffTurns+1)
+	for i := range turns {
+		turns[i] = cut
+	}
+	s := setup(t, devPolicy, &scripted{turns: append(turns, textTurn("done"))}, conn, proto.ModeTask)
+	if d := runTask(t, s); d.Outcome != proto.OutcomeFailed || !strings.Contains(d.Error, "cut off") {
+		t.Fatalf("done = %+v", d)
+	}
+}
+
+func TestTurnLimitFailsWithAClearError(t *testing.T) {
+	conn := newFakeConn(func(proto.ToolRequest) []proto.ToolDecision { return []proto.ToolDecision{{Effect: proto.EffectAllow}} })
+	read := toolTurn(proto.ToolFSRead, proto.FSReadInput{Path: "x"})
+	llm := &scripted{turns: []proto.LLMEvent{read, read, read, read, read, textTurn("never reached")}}
+	s := setup(t, devPolicy, llm, conn, proto.ModeTask)
+	d := runTask(t, s)
+	if d.Outcome != proto.OutcomeFailed || !strings.Contains(d.Error, ErrTurnLimit.Error()) || !strings.Contains(d.Error, "5 model turns") {
+		t.Fatalf("done = %+v", d)
 	}
 }
 

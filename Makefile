@@ -1,6 +1,5 @@
 VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
-# Release builds are Enterprise builds: the Enterprise code stays inactive until a license is installed.
-# LICENSE_PUBLIC_KEY is the issuer's public key (from the private akili-keygen tool); without it no license verifies.
+
 GO_TAGS            ?= enterprise
 LICENSE_PUBLIC_KEY ?=
 LDFLAGS_SERVER = -s -w -X github.com/goakili/akili/server/internal/config.Version=$(VERSION) \
@@ -8,13 +7,10 @@ LDFLAGS_SERVER = -s -w -X github.com/goakili/akili/server/internal/config.Versio
 DOCKER_ARGS    = --build-arg VERSION=$(VERSION) --build-arg GO_TAGS=$(GO_TAGS) --build-arg LICENSE_PUBLIC_KEY=$(LICENSE_PUBLIC_KEY)
 LDFLAGS_AGENT  = -s -w -X main.Version=$(VERSION)
 
-# .env (if present) feeds the run targets, e.g. AKILI_JOIN_TOKEN for run-agent.
 -include .env
 export
 
-# Container images: `make docker-build` builds both for this machine; `make docker-push` builds
-# them for PLATFORMS and pushes :$(IMAGE_TAG) and :latest to $(REGISTRY).
-REGISTRY    ?= registry-1.jkantech.net/prod
+REGISTRY    ?= jkaninda
 IMAGE_TAG   ?= $(VERSION)
 PLATFORMS   ?= linux/amd64,linux/arm64
 BUILDER     ?= akili-builder
@@ -29,8 +25,7 @@ AGENT_WORKDIR   ?= .agent/work
 
 all: build-ui server agent
 
-# Build the web UI into server/internal/web/dist, which the server binary embeds. Dependencies are
-# installed only when missing or when package-lock.json is newer than node_modules.
+
 build-ui: web/node_modules/.package-lock.json
 	cd web && npm run build
 
@@ -39,7 +34,6 @@ web/node_modules/.package-lock.json: web/package-lock.json
 
 web: build-ui
 
-# The VS Code extension (vscode/): the sidebar webview is built from web/src/vscode.
 vscode: web/node_modules/.package-lock.json vscode/node_modules/.package-lock.json
 	cd vscode && npm run build
 
@@ -67,7 +61,6 @@ docker-build-agent:
 	docker buildx build --load -f docker/Dockerfile.agent --build-arg VERSION=$(VERSION) \
 		-t $(AGENT_IMAGE):$(IMAGE_TAG) -t $(AGENT_IMAGE):latest .
 
-# A multi-platform push needs a BuildKit container builder; create it once if missing.
 docker-builder:
 	@docker buildx inspect $(BUILDER) >/dev/null 2>&1 || docker buildx create --name $(BUILDER) --driver docker-container >/dev/null
 
@@ -92,8 +85,7 @@ vet:
 	@for m in $(MODULES); do (cd $$m && go vet ./...) || exit 1; done
 	cd server && go vet -tags enterprise ./...
 
-# Build the UI and the server, then run the built binary (embedded UI on :9000) against the compose
-# Postgres/Redis. Settings come from .env.
+
 run: server
 	@test -f .env || cp .env.example .env
 	./bin/akili server

@@ -45,6 +45,7 @@ function loadChanges() {
 const notFound = ref(false)
 const busy = ref(false)
 
+const continuable = computed(() => !!task.value?.session_id && ['failed', 'cancelled', 'timed_out'].includes(task.value.status))
 const terminal = computed(() => !!task.value && ['succeeded', 'failed', 'cancelled', 'timed_out'].includes(task.value.status))
 
 function setTask(t: Task) {
@@ -96,6 +97,18 @@ async function cancel() {
   try {
     setTask(await api.cancelTask(props.id))
     toast.success('Task cancelled')
+  } catch {
+    /* toasted */
+  } finally {
+    busy.value = false
+  }
+}
+
+async function resume() {
+  busy.value = true
+  try {
+    setTask(await api.continueTask(props.id))
+    toast.success('Task continues from where it stopped')
   } catch {
     /* toasted */
   } finally {
@@ -249,7 +262,8 @@ onUnmounted(() => {
       <template v-if="auth.isOperator">
         <button v-if="task.status === 'draft'" type="button" class="btn btn-primary" :disabled="busy" @click="start"><Icon name="play" />Start task</button>
         <button v-if="!terminal" type="button" class="btn btn-danger-ghost" :disabled="busy" @click="cancel"><Icon name="stop" />{{ task.status === 'draft' ? 'Discard draft' : 'Cancel task' }}</button>
-        <button v-if="terminal" type="button" class="btn btn-primary" :disabled="busy" @click="retry"><Icon name="refresh" />Retry</button>
+        <button v-if="continuable" type="button" class="btn btn-primary" :disabled="busy" title="Run again on the same agent, starting from this run's conversation" @click="resume"><Icon name="play" />Continue</button>
+        <button v-if="terminal" type="button" class="btn" :class="{ 'btn-primary': !continuable }" :disabled="busy" title="Start over as a new task" @click="retry"><Icon name="refresh" />Retry</button>
       </template>
     </PageHeader>
 
