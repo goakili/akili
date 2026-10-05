@@ -191,7 +191,7 @@ wait_task "$TL" succeeded 30
 api GET "/audit?action=task.continue" | json "d['data'][0]['target_id']" | grep >/dev/null "$TL" || fail "continue not audited"
 
 step "ask_user: the task waits for the user's choice, by option or in their own words"
-ASK_BODY=$(python3 -c 'import json,sys; q1={"question":"Which colour?","options":[{"label":"Red","description":"warm"},{"label":"Blue"}]}; q2={"question":"Which size?","options":[{"label":"S"},{"label":"M"}]}; print(json.dumps({"title":"ask e2e","goal":"tool: ask_user "+json.dumps(q1)+"\ntool: ask_user "+json.dumps(q2),"agent_id":sys.argv[1],"autonomy":2,"max_attempts":1}))' "$AGENT")
+ASK_BODY=$(python3 -c 'import json,sys; q1={"question":"Which colour?","options":[{"label":"Red","description":"warm"},{"label":"Blue"}]}; q2={"question":"Which size?","options":[{"label":"S"},{"label":"M"}]}; print(json.dumps({"title":"ask e2e","goal":"tool: ask_user "+json.dumps(q1)+"\ntool: ask_user "+json.dumps(q2),"agent_id":sys.argv[1],"autonomy":2,"max_attempts":1,"timeout_sec":10}))' "$AGENT")
 TA=$(api POST /tasks "$ASK_BODY" | json "d['data']['id']")
 question() { api GET "/questions?status=pending&task_id=$TA" | json "[q['id'] for q in d['data'] if q['question']=='$1'][0]"; }
 asked() { question "$1" | grep -q '^qst_'; }
@@ -200,6 +200,10 @@ Q1=$(question "Which colour?")
 [ "$(task_status "$TA")" = "running" ] || fail "a task waiting on a question is $(task_status "$TA")"
 TA_SES=$(api GET "/tasks/$TA" | json "d['data']['session_id']")
 [ "$(api GET "/sessions/$TA_SES" | json "d['data']['session']['state']")" = "waiting_input" ] || fail "session is not waiting_input"
+# The task has a 10 s timeout; time spent waiting on a person does not count toward it.
+[ "$(api GET "/tasks/$TA" | json "d['data']['paused_at'] is not None")" = "True" ] || fail "the task clock did not pause"
+sleep 32
+[ "$(task_status "$TA")" = "running" ] || fail "a task waiting on a question timed out: $(api GET /tasks/$TA)"
 code() { curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -X POST -H 'Content-Type: application/json' -d "$2" "$API/questions/$1/answer"; }
 [ "$(code "$Q1" '{"choice":0,"text":"both"}')" = "400" ] || fail "an option and own words were accepted together"
 [ "$(code "$Q1" '{"choice":5}')" = "400" ] || fail "an option out of range was accepted"
@@ -208,6 +212,7 @@ code() { curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -X POST -H 'Content-Ty
 wait_for "the second question" 30 asked "Which size?"
 [ "$(code "$(question "Which size?")" '{"text":"Extra large, please"}')" = "200" ] || fail "answering in own words"
 wait_task "$TA" succeeded 30
+[ "$(api GET "/tasks/$TA" | json "d['data']['paused_sec'] >= 30")" = "True" ] || fail "waiting time not recorded: $(api GET /tasks/$TA)"
 api GET "/tasks/$TA" | json "d['data']['result']" | grep -q "Extra large, please" || fail "the own-words answer did not reach the agent: $(api GET /tasks/$TA)"
 api GET "/sessions/$TA_SES" | json "[b.get('content','') for m in d['data']['messages'] for b in m['content']]" | grep -q 'option 2: "Blue"' || fail "the chosen option did not reach the agent"
 [ "$(api GET "/audit?action=question.answered&target_id=$Q1" | json "len(d['data'])")" = "1" ] || fail "the answer was not audited"

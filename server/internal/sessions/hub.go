@@ -219,8 +219,7 @@ func (h *Hub) BuildOpen(ctx context.Context, sessionID, agentID string) (proto.S
 			h.db.WithContext(ctx).Where("organization_id = ? AND task_id = ?", t.OrganizationID, t.ID).Order("created_at, plan_id").Find(&links)
 			open.Goal += plans.GoalSection(links)
 		}
-		if t.TimeoutSec > 0 && t.StartedAt != nil {
-			d := t.StartedAt.Add(time.Duration(t.TimeoutSec) * time.Second)
+		if d, ok := t.Deadline(); ok {
 			open.Deadline = &d
 		}
 	}
@@ -437,6 +436,7 @@ func (h *Hub) authorize(ctx context.Context, s *models.ChatSession, req proto.To
 			out.Effect, out.Reason = proto.EffectDeny, "could not create approval"
 		} else {
 			out.ApprovalID = ap.ID
+			h.pauseTask(ctx, s.TaskID)
 			h.bus.EmitData(ctx, s.OrganizationID, bus.Event{Type: EvApprovalCreated, SessionID: s.ID, AgentID: agent.ID, TaskID: deref(s.TaskID)}, ap)
 			h.notify.Send(fmt.Sprintf("Akili: agent %q requests approval for %s (%s risk): %s\n%s",
 				agent.Name, req.Tool, ap.Risk, truncateJSON(req.Input, 300), h.notify.Link("/approvals")))
@@ -596,6 +596,7 @@ func (h *Hub) sessionEnded(ctx context.Context, sessionID string, reason string,
 		}
 	}
 	h.expireSessionQuestions(ctx, s.ID, reason)
+	h.resumeTask(ctx, s.ID, s.TaskID)
 	if taskLost && s.Status == models.SessionOpen && s.TaskID != nil && h.tasks != nil {
 		h.tasks.TaskLost(ctx, *s.TaskID, reason)
 	}
@@ -694,7 +695,8 @@ func (h *Hub) Decide(ctx context.Context, org, approvalID, userID string, allow 
 	var s models.ChatSession
 	h.db.WithContext(ctx).First(&s, "id = ?", ap.SessionID)
 	h.addEvent(ctx, &s, EvApprovalResolved, ap)
-	decision := proto.ToolDecision{RequestID: ap.RequestID, Effect: effect, Reason: reason, ApprovalID: ap.ID}
+	decision := proto.ToolDecision{RequestID: ap.RequestID, Effect: effect, Reason: reason, ApprovalID: ap.ID,
+		Deadline: h.resumeTask(ctx, ap.SessionID, ap.TaskID)}
 	if allow && isRemote(ap.Tool) {
 		h.completeRemote(&s, decision, ap.Tool, ap.Input)
 		return &ap, nil
@@ -737,7 +739,8 @@ func (h *Hub) expire(ctx context.Context, ap *models.Approval) {
 		h.addEvent(ctx, &s, EvApprovalResolved, ap)
 	}
 	_ = h.bus.SendCommandData(ctx, ap.AgentID, bus.Command{Type: bus.CmdToolDecision, SessionID: ap.SessionID},
-		proto.ToolDecision{RequestID: ap.RequestID, Effect: proto.EffectDeny, Reason: "approval expired", ApprovalID: ap.ID})
+		proto.ToolDecision{RequestID: ap.RequestID, Effect: proto.EffectDeny, Reason: "approval expired", ApprovalID: ap.ID,
+			Deadline: h.resumeTask(ctx, ap.SessionID, ap.TaskID)})
 }
 
 // RecordUsage adds a model call's cost to the session.

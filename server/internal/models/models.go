@@ -636,6 +636,15 @@ type Question struct {
 	ExpiresAt  time.Time  `json:"expires_at"`
 }
 
+// Deadline is when the task times out, not counting time spent waiting on a person. ok is false
+// without a timeout, before the task started, or while it waits (the clock is stopped).
+func (t *Task) Deadline() (at time.Time, ok bool) {
+	if t.TimeoutSec <= 0 || t.StartedAt == nil || t.PausedAt != nil {
+		return time.Time{}, false
+	}
+	return t.StartedAt.Add(time.Duration(t.TimeoutSec+t.PausedSec) * time.Second), true
+}
+
 // Recommended is the option the agent marked as its own pick, if any.
 func (q *Question) Recommended() *proto.AskUserOption {
 	for i := range q.Options {
@@ -712,6 +721,10 @@ type Task struct {
 	LeaseUntil      *time.Time     `json:"lease_until"`
 	StartedAt       *time.Time     `json:"started_at"`
 	FinishedAt      *time.Time     `json:"finished_at"`
+	// PausedAt is set while the task waits on a person (an approval or a question); PausedSec is the
+	// waiting time so far. Neither counts toward TimeoutSec.
+	PausedAt  *time.Time `json:"paused_at"`
+	PausedSec int        `gorm:"not null;default:0" json:"paused_sec"`
 	Result          string         `gorm:"type:text" json:"result"`
 	Error           string         `gorm:"type:text" json:"error"`
 	ScheduleID      *string        `gorm:"size:40;index" json:"schedule_id"`

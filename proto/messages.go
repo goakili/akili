@@ -255,6 +255,9 @@ type ToolDecision struct {
 	Result *RemoteResult `json:"result,omitempty"`
 	// ChangeID is set when an approved change_run may start.
 	ChangeID string `json:"change_id,omitempty"`
+	// Deadline is the task's new deadline when this decision ends a wait on a person (approval or
+	// ask_user): time spent waiting does not count toward the task timeout.
+	Deadline *time.Time `json:"deadline,omitempty"`
 }
 
 // RemoteResult is the outcome of a tool the control plane executed.

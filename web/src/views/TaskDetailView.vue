@@ -382,7 +382,13 @@ onUnmounted(() => {
             <dt>Cost</dt><dd class="num">{{ usd(task.cost_usd) }} <span class="muted">of {{ task.budget_usd ? usd(task.budget_usd) : 'no cap' }}</span></dd>
             <dt>Duration</dt><dd class="num">{{ elapsed || '—' }}</dd>
             <dt>Attempts</dt><dd>{{ task.attempts }} of {{ task.max_attempts }}</dd>
-            <dt>Limits</dt><dd>{{ task.max_turns }} turns · {{ durationSec(task.timeout_sec) }} timeout</dd>
+            <dt>Limits</dt>
+            <dd>
+              {{ task.max_turns }} turns · {{ durationSec(task.timeout_sec) }} timeout
+              <div v-if="task.paused_at || task.paused_sec" class="xs muted">
+                {{ task.paused_at ? 'Timeout paused while it waits on you' : `+${durationSec(task.paused_sec)} spent waiting on people (not counted)` }}
+              </div>
+            </dd>
             <dt>Priority</dt><dd>{{ task.priority }}</dd>
             <dt>Created</dt><dd>{{ fmtDate(task.created_at) }}</dd>
             <template v-if="task.schedule_id"><dt>Schedule</dt><dd><RouterLink to="/schedules">View schedules</RouterLink></dd></template>

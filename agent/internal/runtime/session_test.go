@@ -325,3 +325,44 @@ func TestChatImagesReachTheModelAsReferences(t *testing.T) {
 		t.Fatalf("image %+v: want the png reference only, without bytes; the svg must be dropped", src)
 	}
 }
+
+func TestDeadlinePausesWhileWaiting(t *testing.T) {
+	ctx, d, cancel := withDeadline(context.Background(), time.Now().Add(80*time.Millisecond))
+	defer cancel()
+	d.pause()
+	time.Sleep(150 * time.Millisecond)
+	if ctx.Err() != nil {
+		t.Fatal("the deadline fired while paused")
+	}
+	d.resume(nil)
+	if ctx.Err() != nil {
+		t.Fatal("resume did not push the deadline back by the time spent waiting")
+	}
+	next := time.Now().Add(30 * time.Millisecond)
+	d.pause()
+	d.resume(&next)
+	<-ctx.Done()
+	if !errors.Is(context.Cause(ctx), context.DeadlineExceeded) {
+		t.Fatalf("cause = %v, want deadline exceeded", context.Cause(ctx))
+	}
+}
+
+// TestTaskTimesOutOnItsDeadline: a task past its deadline ends timed_out, not cancelled.
+func TestTaskTimesOutOnItsDeadline(t *testing.T) {
+	llm := blockingLLM{}
+	conn := newFakeConn(nil)
+	s := setup(t, devPolicy, llm, conn, proto.ModeTask)
+	at := time.Now().Add(50 * time.Millisecond)
+	s.open.Deadline = &at
+	if d := runTask(t, s); d.Outcome != proto.OutcomeTimedOut {
+		t.Fatalf("done = %+v", d)
+	}
+}
+
+// blockingLLM waits until the context ends, like a slow model call.
+type blockingLLM struct{}
+
+func (blockingLLM) Complete(ctx context.Context, _ proto.LLMRequest, _ func(kind, text string)) (*proto.LLMEvent, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}

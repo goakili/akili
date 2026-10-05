@@ -61,6 +61,8 @@ type Session struct {
 	mu        sync.Mutex
 	pending   map[string]chan proto.ToolDecision
 	cancelRun context.CancelFunc
+	// deadline is the task's pausable clock; nil without a deadline.
+	deadline *deadline
 
 	userCh chan proto.Message
 	closed chan struct{}
@@ -152,7 +154,7 @@ func (s *Session) Run(ctx context.Context) {
 func (s *Session) runTask(ctx context.Context) {
 	if s.open.Deadline != nil {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, *s.open.Deadline)
+		ctx, s.deadline, cancel = withDeadline(ctx, *s.open.Deadline)
 		defer cancel()
 	}
 	goal := s.open.Goal
@@ -166,7 +168,7 @@ func (s *Session) runTask(ctx context.Context) {
 		// The model reports it could not do the task; do not record that as success.
 		done = proto.Done{Outcome: proto.OutcomeFailed, Summary: summary, Error: "the agent reported it was blocked"}
 	case err == nil:
-	case errors.Is(err, context.DeadlineExceeded):
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(context.Cause(ctx), context.DeadlineExceeded):
 		done = proto.Done{Outcome: proto.OutcomeTimedOut, Summary: summary, Error: "deadline exceeded"}
 	case errors.Is(err, context.Canceled), errors.Is(err, errInterrupted):
 		select {
@@ -368,6 +370,7 @@ func (s *Session) call(ctx context.Context, req proto.ToolRequest) (string, bool
 	if req.Tool == proto.ToolAskUser {
 		// The control plane answers only once a person does: show who the session is waiting on.
 		s.status(proto.StateWaitingInput, askedQuestion(req.Input))
+		s.deadline.pause()
 	}
 	var final proto.ToolDecision
 wait:
@@ -379,8 +382,10 @@ wait:
 			switch d.Effect {
 			case proto.EffectApprove:
 				s.status(proto.StateWaitingApproval, fmt.Sprintf("%s: %s", req.Tool, d.Reason))
+				s.deadline.pause()
 			default:
 				final = d
+				s.deadline.resume(d.Deadline)
 				break wait
 			}
 		}
