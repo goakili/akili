@@ -300,7 +300,7 @@ func (s *Service) Continue(ctx context.Context, org, userID, id string, maxTurns
 		return nil, ErrNotContinuable
 	}
 	updates := map[string]any{"status": models.TaskQueued, "status_reason": "continued", "attempts": 0, "lease_until": nil,
-		"started_at": nil, "finished_at": nil, "result": "", "error": ""}
+		"started_at": nil, "finished_at": nil, "result": "", "error": "", "paused_at": nil, "paused_sec": 0}
 	// The workspace (worktree, uncommitted files) lives on the agent that ran the task.
 	if t.AgentID == nil && t.AssignedAgentID != nil {
 		updates["agent_id"] = *t.AssignedAgentID
@@ -375,8 +375,12 @@ func (s *Service) requeueOrFail(ctx context.Context, t *models.Task, reason stri
 		s.db.WithContext(ctx).Model(&models.ChatSession{}).Where("id = ?", *t.SessionID).Update("status", models.SessionClosed)
 	}
 	if t.Attempts < t.MaxAttempts {
-		s.db.WithContext(ctx).Model(t).Updates(map[string]any{"status": models.TaskQueued, "status_reason": reason,
-			"assigned_agent_id": nil, "session_id": nil, "lease_until": nil})
+		updates := map[string]any{"status": models.TaskQueued, "status_reason": reason, "assigned_agent_id": nil, "session_id": nil, "lease_until": nil}
+		if t.PausedAt != nil {
+			// Whatever the lost run waited on is gone with it; the next run's clock must run.
+			updates["paused_at"], updates["paused_sec"] = nil, t.PausedSec+int(time.Since(*t.PausedAt)/time.Second)
+		}
+		s.db.WithContext(ctx).Model(t).Updates(updates)
 		t.Status = models.TaskQueued
 		s.audit.Best(ctx, audit.Entry{OrganizationID: t.OrganizationID, ActorType: audit.ActorSystem, Action: "task.requeue", TargetType: "task", TargetID: t.ID,
 			Metadata: map[string]any{"reason": reason, "attempt": t.Attempts}})
@@ -604,10 +608,11 @@ func (s *Service) sweep(ctx context.Context) {
 		s.requeueOrFail(ctx, t, "lease expired")
 	}
 	var active []models.Task
-	s.db.WithContext(ctx).Where("status IN ? AND started_at IS NOT NULL AND timeout_sec > 0", []string{models.TaskAssigned, models.TaskRunning}).Limit(500).Find(&active)
+	// Paused tasks wait on a person; their clock is stopped.
+	s.db.WithContext(ctx).Where("status IN ? AND started_at IS NOT NULL AND timeout_sec > 0 AND paused_at IS NULL", []string{models.TaskAssigned, models.TaskRunning}).Limit(500).Find(&active)
 	for i := range active {
 		t := &active[i]
-		if now.After(t.StartedAt.Add(time.Duration(t.TimeoutSec) * time.Second)) {
+		if at, ok := t.Deadline(); ok && now.After(at) {
 			if t.SessionID != nil && t.AssignedAgentID != nil {
 				_ = s.bus.SendCommand(ctx, *t.AssignedAgentID, bus.Command{Type: bus.CmdInterrupt, SessionID: *t.SessionID})
 				_ = s.hub.Close(ctx, t.OrganizationID, *t.SessionID, "")

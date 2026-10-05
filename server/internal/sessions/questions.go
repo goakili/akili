@@ -59,6 +59,7 @@ func (h *Hub) askUser(ctx context.Context, s *models.ChatSession, req proto.Tool
 	if err := h.db.WithContext(ctx).Create(&q).Error; err != nil {
 		return deny("could not record the question")
 	}
+	h.pauseTask(ctx, s.TaskID)
 	h.bus.EmitData(ctx, s.OrganizationID, bus.Event{Type: EvQuestionCreated, SessionID: s.ID, AgentID: s.AgentID, TaskID: deref(s.TaskID)}, q)
 	h.addEvent(ctx, s, EvQuestionCreated, q)
 	link := "/sessions/" + s.ID
@@ -107,6 +108,7 @@ func (h *Hub) Answer(ctx context.Context, org, questionID, userID string, choice
 	reopen := func() {
 		h.db.WithContext(ctx).Model(&models.Question{}).Where("id = ?", q.ID).
 			Updates(map[string]any{"status": models.QuestionPending, "choice": nil, "answer": "", "answered_by": nil, "answered_at": nil})
+		h.pauseTask(ctx, q.TaskID)
 	}
 	if err := h.audit.Record(ctx, audit.Entry{OrganizationID: org, ActorType: audit.ActorUser, ActorID: userID,
 		Action: "question.answered", TargetType: "question", TargetID: q.ID, Metadata: map[string]any{
@@ -115,7 +117,7 @@ func (h *Hub) Answer(ctx context.Context, org, questionID, userID string, choice
 		return nil, fmt.Errorf("audit unavailable: %w", err)
 	}
 	d := proto.ToolDecision{RequestID: q.RequestID, Effect: proto.EffectAllow, Reason: "answered",
-		Result: &proto.RemoteResult{Output: answerText(&q)}}
+		Result: &proto.RemoteResult{Output: answerText(&q)}, Deadline: h.resumeTask(ctx, q.SessionID, q.TaskID)}
 	if err := h.bus.SendCommandData(ctx, q.AgentID, bus.Command{Type: bus.CmdToolDecision, SessionID: q.SessionID}, d); err != nil {
 		// The agent cannot receive it now; leave the question open rather than lose the answer.
 		reopen()
@@ -158,7 +160,8 @@ func (h *Hub) expireQuestion(ctx context.Context, q *models.Question, why string
 			"otherwise stop and start your final message with \"BLOCKED:\" followed by the question.", why, r.Label)
 	}
 	if err := h.bus.SendCommandData(ctx, q.AgentID, bus.Command{Type: bus.CmdToolDecision, SessionID: q.SessionID},
-		proto.ToolDecision{RequestID: q.RequestID, Effect: proto.EffectAllow, Reason: "expired", Result: &proto.RemoteResult{Output: out}}); err != nil {
+		proto.ToolDecision{RequestID: q.RequestID, Effect: proto.EffectAllow, Reason: "expired", Result: &proto.RemoteResult{Output: out},
+			Deadline: h.resumeTask(ctx, q.SessionID, q.TaskID)}); err != nil {
 		logger.Debug("question expired; agent not reachable", "question", q.ID, "error", err)
 	}
 }

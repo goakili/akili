@@ -369,6 +369,10 @@ export interface Task extends Base {
   attempts: number
   max_attempts: number
   lease_until: ISODate | null
+  /** Set while the task waits on a person; the timeout clock is stopped. */
+  paused_at: ISODate | null
+  /** Seconds spent waiting on people so far (not counted toward the timeout). */
+  paused_sec: number
   started_at: ISODate | null
   finished_at: ISODate | null
   result: string
