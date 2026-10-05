@@ -249,15 +249,15 @@ pending() { [ "$(api GET '/approvals?status=pending' | json "len(d['data'])")" -
 wait_for "shell approval" 60 pending
 APPROVAL=$(api GET '/approvals?status=pending' | json "d['data'][0]['id']")
 api POST "/approvals/$APPROVAL/approve" '{}' >/dev/null
-refused() { api GET "/audit?action=git.push_refused" | json "d['data']['total']" | grep -v >/dev/null "^0$"; }
+refused() { api GET "/audit?action=git.push_refused" | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))" | grep -v >/dev/null "^0$"; }
 wait_for "refused push in the audit log" 60 refused
-api GET "/audit?action=git.push_refused" | json "d['data']['items'][0]['metadata']['refs']" | grep >/dev/null "refs/heads/main" || fail "refused push not recorded"
+api GET "/audit?action=git.push_refused" | json "d['data'][0]['metadata']['refs']" | grep >/dev/null "refs/heads/main" || fail "refused push not recorded"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -u "$GUSER:$GPASS" "$GITEA/api/v1/repos/$GUSER/demo-svc/contents/evil.txt?ref=main")" = "404" ] || fail "a push to main got through"
 shell_out() { api GET "/sessions/$SES" | json "[e['payload'].get('output','') for e in d['data']['events'] if e['type']=='tool.result' and e['payload'].get('tool')=='shell']"; }
 OUT=""
 for _ in $(seq 30); do OUT=$(shell_out); [ "$OUT" != "[]" ] && break; sleep 1; done
 echo "$OUT" | grep >/dev/null "akili: push to refs/heads/main refused" || fail "git did not show the refusal to the agent: $OUT"
-api GET "/audit?action=git.push" | json "d['data']['total']" | grep -v >/dev/null "^0$" || fail "allowed push not audited"
+api GET "/audit?action=git.push" | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))" | grep -v >/dev/null "^0$" || fail "allowed push not audited"
 
 step "Push guard: a commit with a spoofed author is refused, even on the session's own branch"
 SPOOF="write: spoof.txt :: spoof\nrun: git add -A \u0026\u0026 git -c user.name=CEO -c user.email=ceo@e2e.local commit -qm spoof \u0026\u0026 git push origin HEAD:refs/heads/akili/$SES"

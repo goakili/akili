@@ -22,6 +22,7 @@ import (
 	"github.com/goakili/akili/server/internal/crypto"
 	"github.com/goakili/akili/server/internal/middlewares"
 	"github.com/goakili/akili/server/internal/models"
+	"github.com/goakili/akili/server/internal/storage/pagination"
 	"github.com/goakili/akili/server/internal/tasks"
 	"github.com/gorilla/websocket"
 	"github.com/jkaninda/logger"
@@ -38,11 +39,12 @@ func (h *Handlers) ListChanges(c *okapi.Context) error {
 			q = q.Where(f+" = ?", v)
 		}
 	}
-	var out []models.Change
-	if err := q.Order("created_at DESC").Limit(queryInt(c, "limit", 200)).Find(&out).Error; err != nil {
+	p := pageParams(c)
+	out, total, err := pagination.Find[models.Change](q, p, "created_at DESC, id DESC")
+	if err != nil {
 		return c.AbortInternalServerError("list failed", err)
 	}
-	return ok(c, out)
+	return paged(c, out, total, p)
 }
 
 // GetChange returns one change plan with its call outcomes.
@@ -266,9 +268,12 @@ func (h *Handlers) ListTerminals(c *okapi.Context) error {
 	if a := c.Query("agent_id"); a != "" {
 		q = q.Where("agent_id = ?", a)
 	}
-	var out []models.TerminalSession
-	q.Order("created_at DESC").Limit(queryInt(c, "limit", 100)).Find(&out)
-	return ok(c, out)
+	p := pageParams(c)
+	out, total, err := pagination.Find[models.TerminalSession](q, p, "created_at DESC, id DESC")
+	if err != nil {
+		return c.AbortInternalServerError("list failed", err)
+	}
+	return paged(c, out, total, p)
 }
 
 // GetTerminal returns one terminal session (without the recording).

@@ -10,6 +10,7 @@ import { useCatalog } from '../stores/catalog'
 import { useCoder } from '../stores/coder'
 import { useToast } from '../stores/toast'
 import { usd, relTime, countdown, duration } from '../lib/format'
+import { fetchUntil } from '../lib/paged'
 import { useNow } from '../lib/now'
 import Badge from '../components/Badge.vue'
 import Icon, { type IconName } from '../components/Icon'
@@ -41,9 +42,9 @@ async function load() {
   try {
     const [o, t, a, ch] = await Promise.all([
       api.overview(),
-      api.listTasks({ limit: 8 }),
-      api.listApprovals({ status: 'pending', limit: 20 }),
-      api.listChanges({ status: 'pending', limit: 20 }, { quiet: true }).catch(() => null),
+      api.listTasks({ size: 8 }),
+      api.listApprovals({ status: 'pending', size: 20 }),
+      api.listChanges({ status: 'pending', size: 20 }, { quiet: true }).catch(() => null),
       catalog.loadAgents(true),
     ])
     ov.value = o
@@ -73,7 +74,7 @@ async function loadCoding() {
   if (!coder.projects.length) return
   try {
     const since = Date.now() - 7 * 86400_000
-    prTasks.value = ((await api.listTasks({ limit: 300 }, { quiet: true })) ?? []).filter((t) => t.pr_url && new Date(t.created_at).getTime() >= since)
+    prTasks.value = await fetchUntil((page) => api.pageTasks({ has_pr: true, page, size: 200 }, { quiet: true }), (t) => new Date(t.created_at).getTime() < since)
   } catch {
     /* optional card */
   }

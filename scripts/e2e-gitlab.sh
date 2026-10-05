@@ -193,9 +193,9 @@ api POST "/sessions/$SES/messages" '{"text":"write: evil.txt :: evil\ncommit: ev
 pending() { [ "$(api GET '/approvals?status=pending' | json "len(d['data'])")" -ge 1 ]; }
 wait_for "shell approval" 60 pending
 api POST "/approvals/$(api GET '/approvals?status=pending' | json "d['data'][0]['id']")/approve" '{}' >/dev/null
-refused() { api GET "/audit?action=git.push_refused" | json "d['data']['total']" | grep -v >/dev/null "^0$"; }
+refused() { api GET "/audit?action=git.push_refused" | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))" | grep -v >/dev/null "^0$"; }
 wait_for "refused push in the audit log" 60 refused
-api GET "/audit?action=git.push_refused" | json "d['data']['items'][0]['metadata']['refs']" | grep >/dev/null "refs/heads/main" || fail "refused push not recorded"
+api GET "/audit?action=git.push_refused" | json "d['data'][0]['metadata']['refs']" | grep >/dev/null "refs/heads/main" || fail "refused push not recorded"
 [ "$(gl_code "/projects/$GLP/repository/files/evil.txt?ref=main")" = "404" ] || fail "a push to main got through Akili"
 git clone -q "http://oauth2:$PTOKEN@127.0.0.1:$GL_PORT/$NS/inventory-api.git" "$WORK/direct" 2>/dev/null || fail "direct clone with the project token"
 (cd "$WORK/direct" && echo direct >direct.txt && git add direct.txt && git -c user.name=t -c user.email=t@e2e.local commit -qm direct && ! git push -q origin HEAD:main 2>"$WORK/direct.err") || fail "GitLab let the Developer token push to the protected main branch"

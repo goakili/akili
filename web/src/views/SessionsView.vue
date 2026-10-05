@@ -9,10 +9,12 @@ import { useCatalog } from '../stores/catalog'
 import { useLive } from '../stores/live'
 import { num, relTime, usd } from '../lib/format'
 import { useNow } from '../lib/now'
+import { usePaged } from '../lib/paged'
 import Badge from '../components/Badge.vue'
 import Modal from '../components/Modal.vue'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
+import InfiniteScroll from '../components/InfiniteScroll.vue'
 import SkeletonRows from '../components/SkeletonRows.vue'
 import Icon from '../components/Icon'
 
@@ -23,23 +25,13 @@ const route = useRoute()
 const router = useRouter()
 const now = useNow()
 
-const sessions = ref<ChatSession[]>([])
-const loading = ref(true)
 const mode = ref<'' | 'chat' | 'task'>('')
+const list = usePaged((page) => api.pageSessions({ mode: mode.value || undefined, page }))
+const { items: sessions, loading, loadingMore, hasMore } = list
 const showNew = ref(false)
 const newAgent = ref('')
 const newTitle = ref('')
 const creating = ref(false)
-
-async function load() {
-  try {
-    sessions.value = (await api.listSessions({ mode: mode.value || undefined, limit: 200 })) ?? []
-  } catch {
-    /* toasted */
-  } finally {
-    loading.value = false
-  }
-}
 
 const chatable = computed(() =>
   catalog.agents.filter((a) => a.status !== 'pending' && a.status !== 'revoked').sort((a, b) => Number(b.status === 'online') - Number(a.status === 'online')),
@@ -74,15 +66,14 @@ async function create() {
 
 function setMode(m: '' | 'chat' | 'task') {
   mode.value = m
-  loading.value = true
-  load()
+  list.reload()
 }
 
 let t: ReturnType<typeof setTimeout> | null = null
 let off: (() => void) | null = null
 const RELEVANT = new Set(['session.created', 'session.closed', 'session.state', 'message'])
 onMounted(() => {
-  load()
+  list.reload()
   catalog.loadAgents()
   if (route.query.new && auth.isOperator) openNew()
   off = live.on((ev) => {
@@ -93,7 +84,7 @@ onMounted(() => {
       return
     }
     if (t) clearTimeout(t)
-    t = setTimeout(load, 1000)
+    t = setTimeout(list.refresh, 1000)
   })
 })
 onUnmounted(() => {
@@ -153,6 +144,7 @@ const open = (id: string) => router.push(`/sessions/${id}`)
           </tbody>
         </table>
       </div>
+      <InfiniteScroll :has-more="hasMore" :loading="loadingMore" @more="list.more" />
     </div>
 
     <Modal :open="showNew" title="New chat" @close="closeNew">

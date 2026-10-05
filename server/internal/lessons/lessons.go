@@ -16,6 +16,7 @@ import (
 	"github.com/goakili/akili/proto"
 	"github.com/goakili/akili/server/internal/audit"
 	"github.com/goakili/akili/server/internal/models"
+	"github.com/goakili/akili/server/internal/storage/pagination"
 	"gorm.io/gorm"
 )
 
@@ -95,8 +96,8 @@ type Filter struct {
 	AgentID string
 }
 
-// List returns lessons, newest first.
-func (s *Service) List(ctx context.Context, org string, f Filter) ([]models.Lesson, error) {
+// List returns one page of lessons, newest first, and the number of matching lessons.
+func (s *Service) List(ctx context.Context, org string, f Filter, p pagination.Page) ([]models.Lesson, int64, error) {
 	q := s.db.WithContext(ctx).Where("organization_id = ?", org)
 	if f.Status != "" {
 		q = q.Where("status = ?", f.Status)
@@ -104,8 +105,7 @@ func (s *Service) List(ctx context.Context, org string, f Filter) ([]models.Less
 	if f.AgentID != "" {
 		q = q.Where("agent_id = ?", f.AgentID)
 	}
-	var out []models.Lesson
-	return out, q.Order("created_at DESC").Limit(500).Find(&out).Error
+	return pagination.Find[models.Lesson](q, p, "created_at DESC, id DESC")
 }
 
 // Create adds an operator-written lesson, approved at once. agentID nil applies it to every agent.

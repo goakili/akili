@@ -31,7 +31,7 @@ const busy = ref<string | null>(null)
 async function load() {
   loading.value = true
   try {
-    items.value = (await api.listApprovals({ status: 'pending', limit: 6 }, { quiet: true })) ?? []
+    items.value = (await api.listApprovals({ status: 'pending', size: 6 }, { quiet: true })) ?? []
     catalog.loadAgents()
   } catch {
     /* the badge count still shows */

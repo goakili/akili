@@ -157,7 +157,7 @@ step "Approved: rolled back to v2 and verified healthy (the rollback opens no ne
 done_change() { [ "$(api GET /changes/$CHG | json "d['data']['status']")" = "succeeded" ]; }
 wait_for "rollback change" 60 done_change
 [ "$(active_tag)" = "v2" ] || fail "active release after rollback is $(active_tag)"
-[ "$(api GET '/audit?action=miabi.rollback' | json "d['data']['items'][0]['metadata']['workspace']")" = "staging" ] || fail "rollback not audited with its workspace"
+[ "$(api GET '/audit?action=miabi.rollback' | json "d['data'][0]['metadata']['workspace']")" = "staging" ] || fail "rollback not audited with its workspace"
 task_done() { [ "$(api GET /tasks/$T1 | json "d['data']['status']")" = "succeeded" ]; }
 wait_for "verification task" 60 task_done
 sleep 3
@@ -248,7 +248,7 @@ expect_task 'tool: miabi_pipeline_run {"workspace":"staging","name":"build-api"}
 expect_task 'tool: miabi_databases {"workspace":"staging"}' "pg-main: postgres 17, running, health healthy"
 expect_task 'tool: miabi_db_backup {"workspace":"staging","database":"pg-main","comment":"before change"}' "backup 1 of pg-main/app: completed"
 expect_task 'tool: miabi_db_backups {"workspace":"staging","database":"pg-main"}' "backup 1: completed"
-[ "$(api GET '/audit?action=miabi.db_backup' | json "d['data']['total']")" = "1" ] || fail "backup not audited"
+[ "$(api GET '/audit?action=miabi.db_backup' | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" = "1" ] || fail "backup not audited"
 
 step "Restore is critical: refused by the operator template; with a critical-risk policy it waits for a human"
 OUT=$(run_task 'tool: miabi_db_restore {"workspace":"staging","database":"pg-main","backup":1}')
@@ -302,7 +302,7 @@ MPID=$(api POST /policies "$MP" | json "d['data']['id']")
 api PATCH /agents/$AGENT "{\"policy_id\":\"$MPID\",\"autonomy\":2}" >/dev/null
 expect_task 'tool: mcp__miabi__list_workspaces {}' '"name": "prod"'
 expect_task 'tool: mcp__miabi__list_apps {"workspace":"staging"}' '"image": "example/api"'
-[ "$(api GET '/audit?action=mcp.call' | json "d['data']['total']")" -ge 2 ] || fail "MCP calls not audited"
+[ "$(api GET '/audit?action=mcp.call' | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" -ge 2 ] || fail "MCP calls not audited"
 LA=$(api GET /mcp-servers/$MCPS/tools | json "[t['id'] for t in d['data'] if t['name']=='list_apps'][0]")
 api PUT /mcp-servers/$MCPS/tools/$LA '{"enabled":false,"risk":"low"}' >/dev/null
 expect_task 'tool: mcp__miabi__list_apps {"workspace":"staging"}' "mcp__miabi__list_apps tool, which is not available"

@@ -10,6 +10,7 @@ import { useLive } from '../stores/live'
 import { useCoder } from '../stores/coder'
 import { relTime, usd } from '../lib/format'
 import { useNow } from '../lib/now'
+import { fetchAll, usePaged } from '../lib/paged'
 import Badge from '../components/Badge.vue'
 import NewTaskModal from '../components/NewTaskModal.vue'
 import ProjectChip from '../components/ProjectChip.vue'
@@ -17,6 +18,7 @@ import PrLink from '../components/PrLink.vue'
 import TriggerChip from '../components/TriggerChip.vue'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
+import InfiniteScroll from '../components/InfiniteScroll.vue'
 import SkeletonRows from '../components/SkeletonRows.vue'
 import Icon, { type IconName } from '../components/Icon'
 
@@ -28,7 +30,14 @@ const route = useRoute()
 const router = useRouter()
 const now = useNow()
 
-const tasks = ref<Task[]>([])
+const ACTIVE = 'draft,queued,assigned,running'
+const FINISHED = 'succeeded,failed,cancelled,timed_out'
+const isActive = (t: Task) => ACTIVE.split(',').includes(t.status)
+/** Open work is small by nature and always shown in full; finished tasks load as the page scrolls. */
+const active = ref<Task[]>([])
+const finished = usePaged((page) => api.pageTasks({ status: FINISHED, page }))
+const { loadingMore, hasMore } = finished
+const tasks = computed(() => [...active.value, ...finished.items.value])
 /** task id → number of pending approvals */
 const waiting = ref<Map<string, number>>(new Map())
 const loading = ref(true)
@@ -53,7 +62,7 @@ const COLUMNS: { key: ColKey; title: string; icon: IconName; tone: string }[] = 
 
 async function loadApprovals() {
   try {
-    const a = (await api.listApprovals({ status: 'pending', limit: 200 }, { quiet: true })) ?? []
+    const a = await fetchAll((page) => api.pageApprovals({ status: 'pending', page, size: 200 }, { quiet: true }))
     const m = new Map<string, number>()
     for (const x of a) if (x.task_id) m.set(x.task_id, (m.get(x.task_id) ?? 0) + 1)
     waiting.value = m
@@ -64,8 +73,8 @@ async function loadApprovals() {
 
 async function load() {
   try {
-    const [t] = await Promise.all([api.listTasks({ limit: 200 }), loadApprovals()])
-    tasks.value = t ?? []
+    const [a] = await Promise.all([fetchAll((page) => api.pageTasks({ status: ACTIVE, page, size: 200 })), finished.reload(), loadApprovals()])
+    active.value = a
   } catch {
     /* toasted */
   } finally {
@@ -86,6 +95,11 @@ const filtered = computed(() => {
       projectLabel(t).toLowerCase().includes(q),
   )
 })
+
+/** The list view keeps the server's newest-first order across open and finished tasks. */
+const listed = computed(() => [...filtered.value].sort((a, b) => b.created_at.localeCompare(a.created_at)))
+/** Finished columns only hold the pages loaded so far. */
+const countLabel = (k: ColKey) => `${byColumn.value[k].length}${hasMore.value && (k === 'done' || k === 'failed') ? '+' : ''}`
 
 function column(t: Task): ColKey {
   if (t.status === 'queued' || t.status === 'draft') return 'queued'
@@ -130,9 +144,15 @@ function onCreated(t: Task) {
 }
 
 function upsert(t: Task) {
-  const i = tasks.value.findIndex((x) => x.id === t.id)
-  if (i >= 0) tasks.value[i] = t
-  else tasks.value.unshift(t)
+  if (isActive(t)) {
+    finished.remove(t.id)
+    const i = active.value.findIndex((x) => x.id === t.id)
+    if (i >= 0) active.value[i] = t
+    else active.value.unshift(t)
+    return
+  }
+  active.value = active.value.filter((x) => x.id !== t.id)
+  finished.upsert(t)
 }
 
 let off: (() => void) | null = null
@@ -189,7 +209,7 @@ const open = (id: string) => router.push(`/tasks/${id}`)
         <div class="column-head">
           <Icon :name="c.icon" :style="{ color: c.tone }" />
           <span :id="`col-${c.key}`">{{ c.title }}</span>
-          <span class="count" :aria-label="`${byColumn[c.key].length} tasks`">{{ loading ? '…' : byColumn[c.key].length }}</span>
+          <span class="count" :aria-label="`${countLabel(c.key)} tasks`">{{ loading ? '…' : countLabel(c.key) }}</span>
         </div>
         <template v-if="loading">
           <div v-for="i in 2" :key="i" class="task-card" aria-hidden="true"><span class="skel" style="width: 80%" /><span class="skel" style="width: 50%; margin-top: 10px" /></div>
@@ -226,7 +246,7 @@ const open = (id: string) => router.push(`/tasks/${id}`)
           <tbody>
             <SkeletonRows v-if="loading" :cols="7" />
             <tr v-else-if="!filtered.length"><td colspan="7"><EmptyState title="No matching tasks" icon="search" compact>Try a different search.</EmptyState></td></tr>
-            <tr v-for="t in loading ? [] : filtered" :key="t.id" class="clickable" tabindex="0" @click="open(t.id)" @keydown.enter="open(t.id)">
+            <tr v-for="t in loading ? [] : listed" :key="t.id" class="clickable" tabindex="0" @click="open(t.id)" @keydown.enter="open(t.id)">
               <td style="max-width: 420px">
                 <RouterLink :to="`/tasks/${t.id}`" class="cell-title truncate" style="display: block" @click.stop>{{ t.title || t.goal }}</RouterLink>
                 <div v-if="t.project_id" class="row code-row" style="gap: 6px; margin-top: 4px">
@@ -246,6 +266,8 @@ const open = (id: string) => router.push(`/tasks/${id}`)
         </table>
       </div>
     </div>
+
+    <InfiniteScroll v-if="!loading && tasks.length" :has-more="hasMore" :loading="loadingMore" @more="finished.more" />
 
     <NewTaskModal :open="showNew" :initial="newInitial" @close="closeNew" @created="onCreated" />
   </div>

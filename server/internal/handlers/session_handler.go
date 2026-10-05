@@ -13,6 +13,7 @@ import (
 	"github.com/goakili/akili/server/internal/middlewares"
 	"github.com/goakili/akili/server/internal/models"
 	"github.com/goakili/akili/server/internal/sessions"
+	"github.com/goakili/akili/server/internal/storage/pagination"
 	"github.com/jkaninda/okapi"
 )
 
@@ -31,11 +32,12 @@ func (h *Handlers) ListSessions(c *okapi.Context) error {
 	if pid := c.Query("project_id"); pid != "" {
 		q = q.Where("project_id = ?", pid)
 	}
-	var out []models.ChatSession
-	if err := q.Order("updated_at DESC").Limit(queryInt(c, "limit", 100)).Find(&out).Error; err != nil {
+	p := pageParams(c)
+	out, total, err := pagination.Find[models.ChatSession](q, p, "updated_at DESC, id DESC")
+	if err != nil {
 		return c.AbortInternalServerError("list failed", err)
 	}
-	return ok(c, out)
+	return paged(c, out, total, p)
 }
 
 // SessionRequest starts a chat session.
@@ -191,11 +193,12 @@ func (h *Handlers) ListApprovals(c *okapi.Context) error {
 	if st := c.Query("status"); st != "" {
 		q = q.Where("status = ?", st)
 	}
-	var out []models.Approval
-	if err := q.Order("created_at DESC").Limit(queryInt(c, "limit", 200)).Find(&out).Error; err != nil {
+	p := pageParams(c)
+	out, total, err := pagination.Find[models.Approval](q, p, "created_at DESC, id DESC")
+	if err != nil {
 		return c.AbortInternalServerError("list failed", err)
 	}
-	return ok(c, out)
+	return paged(c, out, total, p)
 }
 
 // DecisionRequest carries an optional note.

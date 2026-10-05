@@ -133,7 +133,7 @@ if AKILI_JOIN_TOKEN=$TOKEN "$WORK/akili-agent" enroll --url "$BASE" --ca-cert "$
   fail "an agent without a client certificate enrolled"
 fi
 grep -q "requires an agent client certificate" "$WORK/agent.log" || fail "the refusal did not explain the missing certificate"
-[ "$(api GET "/audit?action=agent.enroll" | json "d['data']['total']")" = "0" ] || fail "the refused enrollment consumed the token"
+[ "$(api GET "/audit?action=agent.enroll" | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" = "0" ] || fail "the refused enrollment consumed the token"
 export AKILI_CLIENT_CERT_FILE="$WORK/client.pem" AKILI_CLIENT_KEY_FILE="$WORK/client.key"
 # The CA as base64 PEM (as a single-line form field would pass it); run then uses the saved copy.
 AKILI_CA_CERT_PEM="$(base64 <"$WORK/ca.pem" | tr -d '\n')" AKILI_JOIN_TOKEN=$TOKEN "$WORK/akili-agent" enroll --url "$BASE" --state-dir "$WORK/st" --workdir "$WORK/wk" >>"$WORK/agent.log" 2>&1 || fail "enrollment with a client certificate failed"
@@ -171,8 +171,8 @@ forged=$("${CURL[@]}" -o /dev/null -w '%{redirect_url}' "$API/auth/oidc/callback
 [[ "$forged" == *"sso_error="* ]] || fail "a forged callback was not refused: $forged"
 api POST /users '{"email":"bob@example.com","name":"Bob","role":"admin","password":"bob-password-123456"}' >/dev/null
 [ "$("${CURL[@]}" -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"email":"bob@example.com","password":"bob-password-123456"}' "$API/auth/login")" = "401" ] || fail "a non-owner used a password while SSO is mandatory"
-[ "$(api GET "/audit?action=auth.sso_login" | json "d['data']['total']")" -ge 2 ] || fail "SSO logins not audited"
-[ "$(api GET "/audit?action=auth.sso_denied" | json "d['data']['total']")" -ge 4 ] || fail "SSO refusals not audited"
+[ "$(api GET "/audit?action=auth.sso_login" | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" -ge 2 ] || fail "SSO logins not audited"
+[ "$(api GET "/audit?action=auth.sso_denied" | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" -ge 4 ] || fail "SSO refusals not audited"
 
 step "SIEM: the audit trail reaches the file and the signed webhook"
 TOTAL=$(api GET /audit/verify | json "d['data']['checked']")

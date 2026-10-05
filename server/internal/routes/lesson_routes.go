@@ -22,7 +22,8 @@ func (r *Router) lessonRoutes() []okapi.RouteDefinition {
 			Middlewares: r.guard(models.RoleViewer),
 			Handler:     r.h.ListLessons,
 			Summary:     "List lessons (?status=proposed|approved|rejected&agent_id=)",
-			Response:    &dto.Response[[]models.Lesson]{},
+			Response:    &dto.PageResponse[models.Lesson]{},
+			Options:     pageDocs(),
 		},
 		{
 			Method:      http.MethodPost,

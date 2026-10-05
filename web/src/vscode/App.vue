@@ -83,8 +83,8 @@ async function load() {
   loadError.value = ''
   try {
     const [s, t, a] = await Promise.all([
-      api.listSessions({ project_id: pid, mode: 'chat', limit: 50 }),
-      api.listTasks({ project_id: pid, limit: 50 }, { quiet: true }),
+      api.listSessions({ project_id: pid, mode: 'chat', size: 50 }),
+      api.listTasks({ project_id: pid, size: 50 }, { quiet: true }),
       api.listAgents({ quiet: true }),
     ])
     if (project.value?.id !== pid) return

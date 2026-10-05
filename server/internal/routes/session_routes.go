@@ -22,7 +22,8 @@ func (r *Router) sessionRoutes() []okapi.RouteDefinition {
 			Middlewares: r.guard(models.RoleViewer),
 			Handler:     r.h.ListSessions,
 			Summary:     "List sessions",
-			Response:    &dto.Response[[]models.ChatSession]{},
+			Response:    &dto.PageResponse[models.ChatSession]{},
+			Options:     pageDocs(),
 		},
 		{
 			Method:      http.MethodPost,

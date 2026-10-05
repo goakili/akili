@@ -40,7 +40,8 @@ type TaskRequest struct {
 // ListTasks lists tasks.
 func (h *Handlers) ListTasks(c *okapi.Context) error {
 	ctx := c.Request().Context()
-	out, err := h.Tasks.List(ctx, middlewares.OrgID(c), c.Query("status"), queryInt(c, "limit", 200), c.Query("project_id"))
+	p := pageParams(c)
+	out, total, err := h.Tasks.List(ctx, middlewares.OrgID(c), tasks.ListFilter{Status: c.Query("status"), ProjectID: c.Query("project_id"), HasPR: c.Query("has_pr") == "true"}, p)
 	if err != nil {
 		return c.AbortInternalServerError("list failed", err)
 	}
@@ -52,7 +53,7 @@ func (h *Handlers) ListTasks(c *okapi.Context) error {
 	for i := range out {
 		out[i].PlanIDs = links[out[i].ID]
 	}
-	return ok(c, out)
+	return paged(c, out, total, p)
 }
 
 // CreateTask queues a task.

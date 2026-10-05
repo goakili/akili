@@ -308,6 +308,8 @@ export interface SessionEvent {
 export interface Approval extends Base {
   session_id: string
   task_id: string | null
+  /** Set for change_run approvals: the change plan the approval decides. */
+  change_id?: string | null
   agent_id: string
   request_id: string
   tool: string
@@ -502,11 +504,22 @@ export interface AuditLog {
   hash: string
 }
 
-export interface AuditPage {
-  items: AuditLog[] | null
-  total: number
-  page: number
-  size: number
+export type TaskQuery = { status?: string; project_id?: string; has_pr?: boolean } & PageQuery
+export type SessionQuery = { agent_id?: string; task_id?: string; project_id?: string; mode?: string } & PageQuery
+export type ChangeQuery = { status?: string; agent_id?: string; session_id?: string; task_id?: string } & PageQuery
+
+/** One page of a list. `next` is the page number to ask for next; null on the last page. */
+export interface Page<T> {
+  items: T[]
+  next: number | null
+  /** Rows matching the query, when the server reported it (only while a next page exists). */
+  total: number | null
+}
+
+/** Paging query parameters: a 0-based page and a page size (server default 50, at most 200). */
+export type PageQuery = {
+  page?: number
+  size?: number
 }
 
 export interface VerifyResult {
@@ -1148,6 +1161,8 @@ export interface RequestOptions {
   /** Do not redirect to /login on 401. */
   noAuthRedirect?: boolean
   signal?: AbortSignal
+  /** Return the whole JSON envelope instead of its data (for paged lists). */
+  envelope?: boolean
 }
 
 type Hooks = {
@@ -1204,6 +1219,7 @@ async function parse<T>(res: Response, opts: RequestOptions): Promise<T> {
     }
     throw err
   }
+  if (opts.envelope) return payload as T
   const env = payload as { success?: boolean; data?: T } | null
   return (env && 'data' in env ? env.data : (payload as T)) as T
 }
@@ -1259,12 +1275,19 @@ async function getText(path: string, opts: RequestOptions = {}): Promise<string>
 }
 
 const get = <T>(p: string, o?: RequestOptions) => request<T>('GET', p, undefined, o)
+
+/** GET one page of a list. The server sends `pageable` only while a next page exists. */
+async function getPage<T>(p: string, o?: RequestOptions): Promise<Page<T>> {
+  const env = await request<{ data?: T[] | null; pageable?: { next_page: number; total_elements: number } } | null>('GET', p, undefined, { ...o, envelope: true })
+  const items = env?.data ?? []
+  return env?.pageable ? { items, next: env.pageable.next_page, total: env.pageable.total_elements } : { items, next: null, total: null }
+}
 const post = <T>(p: string, b?: unknown, o?: RequestOptions) => request<T>('POST', p, b ?? {}, o)
 const put = <T>(p: string, b: unknown, o?: RequestOptions) => request<T>('PUT', p, b, o)
 const patch = <T>(p: string, b: unknown, o?: RequestOptions) => request<T>('PATCH', p, b, o)
 const del = <T>(p: string, o?: RequestOptions) => request<T>('DELETE', p, undefined, o)
 
-function qs(params: Record<string, string | number | undefined | null>): string {
+function qs(params: Record<string, string | number | boolean | undefined | null>): string {
   const u = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== '') u.set(k, String(v))
@@ -1320,8 +1343,8 @@ export const api = {
   deleteAgent: (id: string) => del<MessageResponse>(`/agents/${enc(id)}`),
 
   // sessions
-  listSessions: (p: { agent_id?: string; task_id?: string; project_id?: string; mode?: string; limit?: number } = {}) =>
-    get<ChatSession[] | null>('/sessions' + qs(p)),
+  listSessions: (p: SessionQuery = {}) => get<ChatSession[] | null>('/sessions' + qs(p)),
+  pageSessions: (p: SessionQuery = {}, o?: RequestOptions) => getPage<ChatSession>('/sessions' + qs(p), o),
   createSession: (agent_id: string, title = '', project_id = '') =>
     post<ChatSession>('/sessions', project_id ? { agent_id, title, project_id } : { agent_id, title }),
   getSession: (id: string, o?: RequestOptions) => get<SessionDetail>(`/sessions/${enc(id)}`, o),
@@ -1334,13 +1357,14 @@ export const api = {
   eventsStreamURL: (session?: string | null) => `${API_BASE}/events/stream${session ? `?session=${enc(session)}` : ''}`,
 
   // approvals
-  listApprovals: (p: { status?: string; limit?: number } = {}, o?: RequestOptions) =>
-    get<Approval[] | null>('/approvals' + qs(p), o),
+  listApprovals: (p: { status?: string } & PageQuery = {}, o?: RequestOptions) => get<Approval[] | null>('/approvals' + qs(p), o),
+  pageApprovals: (p: { status?: string } & PageQuery = {}, o?: RequestOptions) => getPage<Approval>('/approvals' + qs(p), o),
   approve: (id: string, note = '') => post<Approval>(`/approvals/${enc(id)}/approve`, { note }),
   deny: (id: string, note = '') => post<Approval>(`/approvals/${enc(id)}/deny`, { note }),
 
   // tasks
-  listTasks: (p: { status?: string; limit?: number; project_id?: string } = {}, o?: RequestOptions) => get<Task[] | null>('/tasks' + qs(p), o),
+  listTasks: (p: TaskQuery = {}, o?: RequestOptions) => get<Task[] | null>('/tasks' + qs(p), o),
+  pageTasks: (p: TaskQuery = {}, o?: RequestOptions) => getPage<Task>('/tasks' + qs(p), o),
   createTask: (b: TaskInput) => post<Task>('/tasks', b),
   getTask: (id: string, o?: RequestOptions) => get<Task>(`/tasks/${enc(id)}`, o),
   cancelTask: (id: string) => post<Task>(`/tasks/${enc(id)}/cancel`),
@@ -1412,8 +1436,8 @@ export const api = {
   testProvider: (id: string) => post<TestResult>(`/providers/${enc(id)}/test`),
 
   // operations: change plans, alert routes, terminals
-  listChanges: (p: { status?: string; agent_id?: string; session_id?: string; task_id?: string; limit?: number } = {}, o?: RequestOptions) =>
-    get<Change[] | null>('/changes' + qs(p), o),
+  listChanges: (p: ChangeQuery = {}, o?: RequestOptions) => get<Change[] | null>('/changes' + qs(p), o),
+  pageChanges: (p: ChangeQuery = {}, o?: RequestOptions) => getPage<Change>('/changes' + qs(p), o),
   getChange: (id: string, o?: RequestOptions) => get<Change>(`/changes/${enc(id)}`, o),
   listAlertRoutes: (o?: RequestOptions) => get<AlertRoute[] | null>('/alert-routes', o),
   createAlertRoute: (b: AlertRouteInput) => post<AlertRouteCreated>('/alert-routes', b),
@@ -1424,7 +1448,9 @@ export const api = {
   createMiabiWatch: (b: MiabiWatchInput, o?: RequestOptions) => post<MiabiWatch>('/miabi-watches', b, o),
   updateMiabiWatch: (id: string, b: MiabiWatchInput, o?: RequestOptions) => put<MiabiWatch>(`/miabi-watches/${enc(id)}`, b, o),
   deleteMiabiWatch: (id: string) => del<MessageResponse>(`/miabi-watches/${enc(id)}`),
-  listTerminals: (p: { agent_id?: string; limit?: number } = {}, o?: RequestOptions) => get<TerminalSession[] | null>('/terminals' + qs(p), o),
+  listTerminals: (p: { agent_id?: string } & PageQuery = {}, o?: RequestOptions) => get<TerminalSession[] | null>('/terminals' + qs(p), o),
+  pageTerminals: (p: { agent_id?: string } & PageQuery = {}, o?: RequestOptions) => getPage<TerminalSession>('/terminals' + qs(p), o),
+  getTerminal: (id: string, o?: RequestOptions) => get<TerminalSession>(`/terminals/${enc(id)}`, o),
   terminalRecording: (id: string, o?: RequestOptions) => getText(`/terminals/${enc(id)}/recording`, o),
   /** The terminal WebSocket, on this origin (ws: or wss: to match the page). */
   terminalURL: (agentId: string, cols: number, rows: number) => {
@@ -1466,7 +1492,7 @@ export const api = {
   deleteChatIdentity: (id: string) => del<MessageResponse>(`/chat/identities/${enc(id)}`),
 
   // lessons
-  listLessons: (p: { status?: LessonStatus; agent_id?: string } = {}, o?: RequestOptions) => get<Lesson[] | null>('/lessons' + qs(p), o),
+  pageLessons: (p: { status?: LessonStatus; agent_id?: string } & PageQuery = {}, o?: RequestOptions) => getPage<Lesson>('/lessons' + qs(p), o),
   createLesson: (b: { text: string; agent_id?: string }) => post<Lesson>('/lessons', b),
   approveLesson: (id: string, b: { text: string; note: string }) => post<Lesson>(`/lessons/${enc(id)}/approve`, b),
   rejectLesson: (id: string, note = '') => post<Lesson>(`/lessons/${enc(id)}/reject`, { note }),
@@ -1475,8 +1501,7 @@ export const api = {
   // system
   overview: (o?: RequestOptions) => get<Overview>('/overview', o),
   usage: (days = 30) => get<UsageRow[] | null>('/usage' + qs({ days })),
-  audit: (p: { page?: number; size?: number; action?: string; actor_id?: string; target_id?: string }) =>
-    get<AuditPage>('/audit' + qs(p)),
+  pageAudit: (p: { action?: string; actor_id?: string; target_id?: string } & PageQuery, o?: RequestOptions) => getPage<AuditLog>('/audit' + qs(p), o),
   verifyAudit: () => get<VerifyResult>('/audit/verify'),
   security: (o?: RequestOptions) => get<SecurityStatus>('/security', o),
   setKillSwitch: (enabled: boolean) => post<{ enabled: boolean }>('/system/kill-switch', { enabled }),

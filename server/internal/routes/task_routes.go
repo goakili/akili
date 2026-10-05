@@ -22,7 +22,11 @@ func (r *Router) taskRoutes() []okapi.RouteDefinition {
 			Middlewares: r.guard(models.RoleViewer),
 			Handler:     r.h.ListTasks,
 			Summary:     "List tasks",
-			Response:    &dto.Response[[]models.Task]{},
+			Response:    &dto.PageResponse[models.Task]{},
+			Options: append(pageDocs(),
+				okapi.DocQueryParam("status", "string", "comma-separated statuses", false),
+				okapi.DocQueryParam("project_id", "string", "tasks of one project", false),
+				okapi.DocQueryParam("has_pr", "boolean", "only tasks that opened a pull request", false)),
 		},
 		{
 			Method:      http.MethodPost,

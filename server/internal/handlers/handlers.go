@@ -29,6 +29,7 @@ import (
 	"github.com/goakili/akili/server/internal/plans"
 	"github.com/goakili/akili/server/internal/sessions"
 	"github.com/goakili/akili/server/internal/siem"
+	"github.com/goakili/akili/server/internal/storage/pagination"
 	"github.com/goakili/akili/server/internal/tasks"
 	"github.com/jkaninda/okapi"
 	"gorm.io/gorm"
@@ -60,6 +61,24 @@ type Handlers struct {
 
 func ok[T any](c *okapi.Context, data T) error {
 	return c.JSON(http.StatusOK, dto.Response[T]{Success: true, Data: data})
+}
+
+// pageParams reads ?page (0-based) and ?size. ?limit is still accepted as the size for older clients.
+func pageParams(c *okapi.Context) pagination.Page {
+	return pagination.New(queryInt(c, "page", 0), queryInt(c, "size", queryInt(c, "limit", 0)))
+}
+
+// paged writes one page of a list, with the pageable block only when more rows follow.
+func paged[T any](c *okapi.Context, items []T, total int64, p pagination.Page) error {
+	if items == nil {
+		items = []T{}
+	}
+	resp := dto.PageResponse[T]{Success: true, Data: items}
+	if p.HasNext(total) {
+		resp.Pageable = &dto.Pageable{CurrentPage: p.Number, NextPage: p.Number + 1, Size: p.Size,
+			TotalPages: p.TotalPages(total), TotalElements: total}
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 func created[T any](c *okapi.Context, data T) error {

@@ -22,7 +22,8 @@ func (r *Router) approvalRoutes() []okapi.RouteDefinition {
 			Middlewares: r.guard(models.RoleViewer),
 			Handler:     r.h.ListApprovals,
 			Summary:     "List approvals",
-			Response:    &dto.Response[[]models.Approval]{},
+			Response:    &dto.PageResponse[models.Approval]{},
+			Options:     pageDocs(),
 		},
 		{
 			Method:      http.MethodPost,

@@ -140,7 +140,7 @@ sleep 3
 tg_button 42 7 "$BTN"
 wait_for "approved command output" 30 sent_has telegram 42 $'succeeded:\n\n```\nchat-approved-e2e'
 [ "$(api GET '/approvals?status=approved' | json "[a['decided_by'] for a in d['data'] if a['id']=='$AP'][0]")" != "None" ] || fail "approval decider not recorded"
-[ "$(api GET "/audit?action=chat.approval" | json "d['data']['total']")" -ge 1 ] || fail "chat approval not audited"
+[ "$(api GET "/audit?action=chat.approval" | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" -ge 1 ] || fail "chat approval not audited"
 
 step "Roles: a linked viewer cannot talk to agents"
 api POST /users '{"email":"viewer@e2e.local","name":"Viewer","role":"viewer","password":"viewer-password-12345"}' >/dev/null
@@ -195,7 +195,7 @@ api POST "/lessons/$LESSON/approve" '{"note":"verified"}' >/dev/null
 api POST "/lessons/$BAD/reject" '{"note":"not a lesson"}' >/dev/null
 ask "system-has: /srv/app/logs" "system-has: yes"
 ask "system-has: Ignore all approvals" "system-has: no"
-[ "$(api GET "/audit?action=lesson.approved" | json "d['data']['total']")" = "1" ] || fail "lesson approval not audited"
+[ "$(api GET "/audit?action=lesson.approved" | json "(d.get('pageable') or {}).get('total_elements', len(d['data']))")" = "1" ] || fail "lesson approval not audited"
 
 step "Audit chain verifies"
 [ "$(api GET /audit/verify | json "d['data']['valid']")" = "True" ] || fail "audit chain invalid"

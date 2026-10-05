@@ -6,6 +6,7 @@
 package routes
 
 import (
+	"fmt"
 	"io/fs"
 	"net/http"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/goakili/akili/server/internal/config"
 	"github.com/goakili/akili/server/internal/handlers"
 	"github.com/goakili/akili/server/internal/middlewares"
+	"github.com/goakili/akili/server/internal/storage/pagination"
 	"github.com/goakili/akili/server/internal/web"
 	"github.com/jkaninda/okapi"
 )
@@ -63,4 +65,12 @@ func (r *Router) group(name, desc string) *okapi.Group {
 	g := r.v1.Group("").WithTagInfo(okapi.GroupTag{Name: name, Description: desc})
 	g.WithBearerAuth()
 	return g
+}
+
+// pageDocs documents the paging query parameters of a list route.
+func pageDocs() []okapi.RouteOption {
+	return []okapi.RouteOption{
+		okapi.DocQueryParamWithDefault("page", "integer", "0-based page; the response has a pageable block while a next page exists", false, 0),
+		okapi.DocQueryParamWithDefault("size", "integer", fmt.Sprintf("rows per page, at most %d", pagination.MaxSize), false, pagination.DefaultSize),
+	}
 }

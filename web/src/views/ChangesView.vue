@@ -1,16 +1,18 @@
 <!-- SPDX-FileCopyrightText: 2026 Jonas Kaninda -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, type Change, type ChangeStatus } from '../api'
 import { useCatalog } from '../stores/catalog'
 import { useLive } from '../stores/live'
 import { fmtDate, relTime } from '../lib/format'
 import { useNow } from '../lib/now'
+import { usePaged } from '../lib/paged'
 import Badge from '../components/Badge.vue'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
+import InfiniteScroll from '../components/InfiniteScroll.vue'
 import SkeletonRows from '../components/SkeletonRows.vue'
 import Icon from '../components/Icon'
 
@@ -33,19 +35,9 @@ const FILTERS: { value: ChangeStatus | ''; label: string }[] = [
 
 const status = computed<ChangeStatus | ''>(() => (FILTERS.find((f) => f.value && f.value === route.query.status)?.value ?? '') as ChangeStatus | '')
 const agentFilter = computed(() => (typeof route.query.agent === 'string' ? route.query.agent : ''))
-const items = ref<Change[]>([])
-const loading = ref(true)
-
-async function load() {
-  loading.value = true
-  try {
-    items.value = (await api.listChanges({ status: status.value || undefined, agent_id: agentFilter.value || undefined })) ?? []
-  } catch {
-    /* toasted */
-  } finally {
-    loading.value = false
-  }
-}
+const paged = usePaged((page) => api.pageChanges({ status: status.value || undefined, agent_id: agentFilter.value || undefined, page }))
+const { items, loading, loadingMore, hasMore } = paged
+const load = paged.reload
 
 function setStatus(s: ChangeStatus | '') {
   items.value = []
@@ -82,7 +74,7 @@ onMounted(() => {
   off = live.on((ev) => {
     if (ev.type === 'change.updated' && ev.data) upsert(ev.data as Change)
   })
-  offRe = live.onReconnect(load)
+  offRe = live.onReconnect(paged.refresh)
 })
 onUnmounted(() => {
   off?.()
@@ -141,6 +133,7 @@ onUnmounted(() => {
           </tbody>
         </table>
       </div>
+      <InfiniteScroll :has-more="hasMore" :loading="loadingMore" @more="paged.more" />
     </div>
   </div>
 </template>
