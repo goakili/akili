@@ -19,6 +19,7 @@ import (
 	"github.com/goakili/akili/server/internal/audit"
 	"github.com/goakili/akili/server/internal/bus"
 	"github.com/goakili/akili/server/internal/crypto"
+	"github.com/goakili/akili/server/internal/llm"
 	"github.com/goakili/akili/server/internal/models"
 	"github.com/goakili/akili/server/internal/notify"
 	"github.com/goakili/akili/server/internal/plans"
@@ -190,8 +191,9 @@ func (h *Hub) BuildOpen(ctx context.Context, sessionID, agentID string) (proto.S
 	}
 	open = proto.SessionOpen{
 		SessionID: s.ID, Mode: s.Mode, System: s.System, Policy: signed, Autonomy: agent.Autonomy,
-		MaxTurns: 40, ToolNames: s.ToolNames, Project: spec,
+		ToolNames: s.ToolNames, Project: spec,
 	}
+	open.ContextTokens = h.historyTokens(ctx, &agent, s.System, s.ToolNames)
 	// MCP tools travel with their current risk (an admin may have changed it since the session began).
 	for _, name := range s.ToolNames {
 		if proto.IsMCPTool(name) {
@@ -224,6 +226,28 @@ func (h *Hub) BuildOpen(ctx context.Context, sessionID, agentID string) (proto.S
 		}
 	}
 	return open, nil
+}
+
+// historyTokens sizes the agent's history bound from the context window of the provider the gateway
+// will use: the agent's own, or the organization default.
+func (h *Hub) historyTokens(ctx context.Context, agent *models.Agent, system string, toolNames []string) int {
+	var p models.ModelProvider
+	q := h.db.WithContext(ctx).Where("organization_id = ?", agent.OrganizationID)
+	if agent.ProviderID != nil {
+		q = q.Where("id = ?", *agent.ProviderID)
+	} else {
+		q = q.Where("is_default")
+	}
+	if q.First(&p).Error != nil {
+		return 0
+	}
+	prefix := len(system)
+	for _, name := range toolNames {
+		if t, ok := proto.LookupTool(name); ok {
+			prefix += len(t.Name) + len(t.Description) + len(t.InputSchema)
+		}
+	}
+	return llm.HistoryTokens(p.ContextTokens, p.MaxTokens, prefix)
 }
 
 func minAutonomy(a, b proto.Autonomy) proto.Autonomy {

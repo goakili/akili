@@ -46,6 +46,21 @@ type Provider interface {
 	Stream(ctx context.Context, req Request, onDelta DeltaFunc) (Result, error)
 }
 
+// DefaultContextTokens is the context window assumed when a provider does not set one.
+const DefaultContextTokens = 200_000
+
+// minHistoryTokens keeps a usable history even when a provider's settings leave little room.
+const minHistoryTokens = 16_000
+
+// HistoryTokens is the part of a model's context window left for the conversation history after the
+// output and the fixed prefix (system prompt, tool definitions, about 3 characters per token).
+func HistoryTokens(contextTokens, maxOutput, prefixChars int) int {
+	if contextTokens <= 0 {
+		contextTokens = DefaultContextTokens
+	}
+	return max(contextTokens-maxOutput-prefixChars/3-2_000, minHistoryTokens)
+}
+
 // Price is USD per million tokens.
 type Price struct {
 	Input, Output float64

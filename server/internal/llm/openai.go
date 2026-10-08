@@ -150,7 +150,7 @@ func (o *OpenAICompatible) Stream(ctx context.Context, req Request, onDelta Delt
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	if resp.StatusCode >= 300 {
-		return Result{}, fmt.Errorf("openai-compatible: %s: %s", resp.Status, truncate(string(raw), 500))
+		return Result{}, &StatusError{Code: resp.StatusCode, Msg: "openai-compatible: " + resp.Status + ": " + truncate(string(raw), 500)}
 	}
 	var out struct {
 		Choices []struct {

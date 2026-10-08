@@ -26,9 +26,9 @@ type TaskRequest struct {
 		Selector    []string        `json:"selector"`
 		Priority    int             `json:"priority"`
 		Autonomy    *proto.Autonomy `json:"autonomy" description:"0-3; default L2 for project tasks, L1 otherwise"`
-		BudgetUSD   float64         `json:"budget_usd"`
-		MaxTurns    int             `json:"max_turns"`
-		TimeoutSec  int             `json:"timeout_sec"`
+		BudgetUSD   float64         `json:"budget_usd" minimum:"0" description:"model spend cap in USD; 0 = no cap"`
+		MaxTurns    int             `json:"max_turns" minimum:"0" description:"model turn limit; 0 = no limit"`
+		TimeoutSec  int             `json:"timeout_sec" minimum:"0" description:"run time limit (time waiting on a person is not counted); 0 = no limit"`
 		MaxAttempts int             `json:"max_attempts"`
 		ProjectID   *string         `json:"project_id" description:"work on a project's repository (branch, commits, pull request)"`
 		PlanIDs     []string        `json:"plan_ids" maxItems:"10" description:"project plans the task works on; they must be active and in the task's project"`
@@ -122,7 +122,7 @@ func (h *Handlers) RetryTask(c *okapi.Context) error {
 // ContinueTaskRequest continues a stopped task.
 type ContinueTaskRequest struct {
 	Body struct {
-		MaxTurns int `json:"max_turns" minimum:"0" maximum:"1000" description:"new turn limit for the continued run; 0 keeps the current one"`
+		MaxTurns int `json:"max_turns" minimum:"0" maximum:"1000" description:"turn limit for the continued run; 0 = no limit"`
 	} `json:"body"`
 }
 

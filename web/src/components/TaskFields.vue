@@ -203,11 +203,12 @@ const selectedAgent = computed(() => catalog.agents.find((a) => a.id === form.va
         <div class="field">
           <label :for="`${p}-timeout`">Timeout (sec)</label>
           <input :id="`${p}-timeout`" v-model.number="form.timeout_sec" class="input" type="number" min="0" step="60" />
+          <span class="hint">0 = no timeout.</span>
         </div>
         <div class="field">
           <label :for="`${p}-turns`">Max turns</label>
           <input :id="`${p}-turns`" v-model.number="form.max_turns" class="input" type="number" min="0" />
-          <span class="hint">0 = default (40, or 80 for project tasks).</span>
+          <span class="hint">0 = no cap.</span>
         </div>
         <div class="field">
           <label :for="`${p}-attempts`">Max attempts</label>

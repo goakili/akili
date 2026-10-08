@@ -31,12 +31,6 @@ import (
 // Lease is how long an assigned task may go without a progress frame before it is considered lost.
 const Lease = 3 * time.Minute
 
-// Turn limits applied when a task does not set one. Coding tasks edit many files, so they get more.
-const (
-	DefaultMaxTurns        = 40
-	DefaultProjectMaxTurns = 80
-)
-
 // Event types.
 const (
 	EvTaskUpdated = "task.updated"
@@ -139,15 +133,9 @@ func (s *Service) Create(ctx context.Context, org, userID string, in Input) (*mo
 	if in.MaxAttempts <= 0 {
 		in.MaxAttempts = 2
 	}
-	if in.TimeoutSec <= 0 {
-		in.TimeoutSec = 3600
-	}
-	if in.MaxTurns <= 0 {
-		in.MaxTurns = DefaultMaxTurns
-		if in.ProjectID != nil {
-			in.MaxTurns = DefaultProjectMaxTurns
-		}
-	}
+	// Zero budget, turn limit and timeout mean no cap: large tasks must not die half-way and need a
+	// manual continue. Leases still catch lost agents, and agent budgets and the kill switch still apply.
+	in.BudgetUSD, in.MaxTurns, in.TimeoutSec = max(in.BudgetUSD, 0), max(in.MaxTurns, 0), max(in.TimeoutSec, 0)
 	if in.Selector == nil {
 		in.Selector = []string{}
 	}
@@ -290,7 +278,8 @@ func (s *Service) Retry(ctx context.Context, org, userID, id string) (*models.Ta
 var ErrNotContinuable = errors.New("only failed, timed-out or cancelled tasks that ran can be continued")
 
 // Continue requeues a stopped task on the agent that ran it. The next run starts from the previous
-// run's conversation, so the agent picks up where it stopped. maxTurns > 0 replaces the turn limit.
+// run's conversation, so the agent picks up where it stopped. maxTurns replaces the turn limit (0 = no
+// limit), and a spent budget is lifted: otherwise the continued run would stop where the last one did.
 func (s *Service) Continue(ctx context.Context, org, userID, id string, maxTurns int) (*models.Task, error) {
 	t, err := s.Get(ctx, org, id)
 	if err != nil {
@@ -305,8 +294,10 @@ func (s *Service) Continue(ctx context.Context, org, userID, id string, maxTurns
 	if t.AgentID == nil && t.AssignedAgentID != nil {
 		updates["agent_id"] = *t.AssignedAgentID
 	}
-	if maxTurns > 0 {
-		updates["max_turns"] = maxTurns
+	updates["max_turns"] = max(maxTurns, 0)
+	liftBudget := t.BudgetUSD > 0 && t.CostUSD >= t.BudgetUSD
+	if liftBudget {
+		updates["budget_usd"] = 0
 	}
 	res := s.db.WithContext(ctx).Model(&models.Task{}).Where("id = ? AND organization_id = ? AND status = ?", t.ID, org, t.Status).Updates(updates)
 	if res.Error != nil {
@@ -316,7 +307,8 @@ func (s *Service) Continue(ctx context.Context, org, userID, id string, maxTurns
 		return nil, ErrNotContinuable
 	}
 	s.audit.Best(ctx, audit.Entry{OrganizationID: org, ActorType: audit.ActorUser, ActorID: userID, Action: "task.continue", TargetType: "task", TargetID: t.ID,
-		Metadata: map[string]any{"previous_session_id": *t.SessionID, "previous_status": t.Status, "max_turns": maxTurns}})
+		Metadata: map[string]any{"previous_session_id": *t.SessionID, "previous_status": t.Status, "max_turns": maxTurns,
+			"budget_lifted": liftBudget, "previous_budget_usd": t.BudgetUSD}})
 	if t, err = s.Get(ctx, org, id); err != nil {
 		return nil, err
 	}

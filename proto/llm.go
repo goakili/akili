@@ -161,4 +161,10 @@ const (
 	CodeBudgetExhausted = "budget_exhausted"
 	CodeNoProvider      = "no_provider"
 	CodeSessionClosed   = "session_closed"
+	// CodeProviderError is a failed model call that may succeed when retried (overload, rate limit, network).
+	CodeProviderError = "provider_error"
+	// CodeProviderRejected means the provider refused the request itself; resending it will not help.
+	CodeProviderRejected = "provider_rejected"
+	// CodeContextTooLong means the conversation no longer fits the model's context window.
+	CodeContextTooLong = "context_too_long"
 )

@@ -202,7 +202,7 @@ func (h *Handlers) AlertWebhook(c *okapi.Context) error {
 		}
 		host := a.Host(route.HostLabel)
 		in := tasks.Input{Title: a.Title(host), Goal: a.Goal(route.Instructions), AgentID: route.AgentID, Selector: route.Selector,
-			Priority: severityPriority(a.Severity), Autonomy: route.Autonomy, TimeoutSec: 1800, MaxTurns: 60, MaxAttempts: 1,
+			Priority: severityPriority(a.Severity), Autonomy: route.Autonomy, TimeoutSec: 1800, MaxAttempts: 1,
 			Trigger: "alert", TriggerRef: ref}
 		if agentID := h.agentForHost(ctx, route.OrganizationID, host); agentID != "" {
 			in.AgentID, in.Selector = &agentID, nil

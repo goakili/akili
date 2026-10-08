@@ -48,6 +48,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/integrations', name: 'integrations', component: () => import('./views/IntegrationsView.vue'), meta: { title: 'Integrations', minRole: 'admin' } },
   { path: '/vscode/authorize', name: 'vscode-authorize', component: () => import('./views/VSCodeAuthorizeView.vue'), meta: { title: 'Sign in to your editor', bare: true } },
   { path: '/about', name: 'about', component: () => import('./views/AboutView.vue'), meta: { title: 'About' } },
+  { path: '/providers/:id', name: 'provider', component: () => import('./views/ProviderDetailView.vue'), props: true, meta: { title: 'Model provider', minRole: 'admin', parent: { label: 'Model providers', to: '/settings?tab=providers' } } },
   { path: '/settings', name: 'settings', component: () => import('./views/SettingsView.vue'), meta: { title: 'Settings' } },
   { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('./views/NotFoundView.vue'), meta: { title: 'Not found' } },
 ]

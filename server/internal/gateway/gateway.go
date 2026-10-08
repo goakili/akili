@@ -129,7 +129,14 @@ func (g *Gateway) serveLLM(w http.ResponseWriter, r *http.Request, agentID strin
 		logger.Warn("model call failed", "agent", agentID, "session", s.ID, "provider", row.Kind, "error", err)
 		g.audit.Best(ctx, audit.Entry{OrganizationID: s.OrganizationID, ActorType: audit.ActorAgent, ActorID: agentID,
 			Action: "llm.error", TargetType: "session", TargetID: s.ID, Metadata: map[string]any{"model": row.Model, "error": err.Error()}})
-		fail("provider_error", "model call failed: "+err.Error())
+		code := proto.CodeProviderError
+		switch {
+		case llm.ContextTooLong(err):
+			code = proto.CodeContextTooLong
+		case llm.Rejected(err):
+			code = proto.CodeProviderRejected
+		}
+		fail(code, "model call failed: "+err.Error())
 		return
 	}
 	cost := llm.Cost(res.Usage, llm.PriceFor(row.Model, llm.Price{Input: row.InputPriceMTok, Output: row.OutputPriceMTok}))

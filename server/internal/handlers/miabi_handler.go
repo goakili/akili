@@ -177,7 +177,7 @@ func (h *Handlers) MiabiTrigger(ctx context.Context, trig *miabi.Trigger) *model
 	}
 	w := trig.Watch
 	t, err := h.Tasks.Create(ctx, w.OrganizationID, "", tasks.Input{Title: trig.Title, Goal: trig.Goal, AgentID: w.AgentID, Selector: w.Selector,
-		Priority: 80, Autonomy: w.Autonomy, TimeoutSec: 2400, MaxTurns: 60, MaxAttempts: 1, Trigger: "miabi", TriggerRef: trig.Ref})
+		Priority: 80, Autonomy: w.Autonomy, TimeoutSec: 2400, MaxAttempts: 1, Trigger: "miabi", TriggerRef: trig.Ref})
 	if err != nil {
 		logger.Warn("Miabi event could not create a task", "watch", w.ID, "error", err)
 		return nil
