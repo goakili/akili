@@ -253,7 +253,7 @@ func (h *Handlers) CreateProject(c *okapi.Context, req *ProjectRequest) error {
 			autonomy = proto.Autonomy(*a)
 		}
 		t, err := h.Tasks.Create(ctx, middlewares.OrgID(c), middlewares.UserID(c), tasks.Input{Title: "Scaffold " + p.Name + " (" + tpl.Name + ")",
-			Goal: tpl.Goal, ProjectID: &p.ID, Autonomy: autonomy, TimeoutSec: 3600, MaxTurns: 80, Trigger: "template", TriggerRef: tpl.ID})
+			Goal: tpl.Goal, ProjectID: &p.ID, Autonomy: autonomy, Trigger: "template", TriggerRef: tpl.ID})
 		if err != nil {
 			return c.AbortBadRequest("project created, but the scaffold task failed: " + err.Error())
 		}
@@ -332,7 +332,7 @@ func (h *Handlers) AddMaintenance(c *okapi.Context, req *PresetRequest) error {
 	sreq := &ScheduleRequest{}
 	sreq.Body.Name, sreq.Body.Cron, sreq.Body.Enabled = p.Name+": "+preset.Name, cronExpr, enabled
 	sreq.Body.Template = models.TaskTemplate{Title: preset.Name + " — " + p.Name, Goal: preset.Goal, ProjectID: &p.ID, Autonomy: autonomy,
-		MaxTurns: 80, TimeoutSec: 3600, MaxAttempts: 1}
+		TimeoutSec: 3600, MaxAttempts: 1}
 	return h.CreateSchedule(c, sreq)
 }
 
@@ -372,7 +372,7 @@ func (h *Handlers) ForgeWebhook(c *okapi.Context) error {
 		return message(c, "a task for this issue already exists")
 	}
 	t, err := h.Tasks.Create(ctx, trig.Project.OrganizationID, "", tasks.Input{Title: "Issue #" + strconv.Itoa(trig.Number) + ": " + trig.Title,
-		Goal: coder.IssueGoal(trig), ProjectID: &trig.Project.ID, Autonomy: proto.AutonomyL2, TimeoutSec: 3600, MaxTurns: 80,
+		Goal: coder.IssueGoal(trig), ProjectID: &trig.Project.ID, Autonomy: proto.AutonomyL2,
 		Trigger: "issue", TriggerRef: trig.Ref})
 	if err != nil {
 		logger.Warn("issue webhook could not create a task", "ref", trig.Ref, "error", err)

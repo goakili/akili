@@ -23,6 +23,8 @@ interface Item {
   minRole?: Role
   /** For /settings?tab=… entries: the tabs that make this item active. */
   tabs?: string[]
+  /** Detail pages outside /settings that belong to this item (path prefix). */
+  detail?: string
 }
 
 const SECTIONS: { label: string; items: Item[] }[] = [
@@ -52,7 +54,7 @@ const SECTIONS: { label: string; items: Item[] }[] = [
   {
     label: 'System',
     items: [
-      { to: '/settings?tab=providers', label: 'Model providers', icon: 'cpu', minRole: 'admin', tabs: ['providers'] },
+      { to: '/settings?tab=providers', label: 'Model providers', icon: 'cpu', minRole: 'admin', tabs: ['providers'], detail: '/providers/' },
       { to: '/integrations', label: 'Integrations', icon: 'plug', minRole: 'admin' },
       { to: '/mcp', label: 'MCP servers', icon: 'network', minRole: 'admin' },
       { to: '/alerts', label: 'Alerts', icon: 'siren', minRole: 'admin' },
@@ -76,6 +78,7 @@ function target(i: Item): string {
 }
 
 function isActive(i: Item): boolean {
+  if (i.detail && route.path.startsWith(i.detail)) return true
   if (i.tabs) {
     if (route.path !== '/settings') return false
     const tab = String(route.query.tab ?? '')

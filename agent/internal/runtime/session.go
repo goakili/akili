@@ -57,6 +57,10 @@ type Session struct {
 	defs   []proto.ToolDef
 
 	history []proto.Message
+	// trimmed is how many leading history messages are sent with bulky content elided (see view).
+	trimmed int
+	// contextChars overrides the context bound after the provider reported the context too long.
+	contextChars int
 
 	mu        sync.Mutex
 	pending   map[string]chan proto.ToolDecision
@@ -95,9 +99,6 @@ func NewSession(cfg Config, conn Conn, llm Completer, open proto.SessionOpen) (*
 		if spec, ok := proto.LookupTool(name); ok {
 			s.defs = append(s.defs, spec.Def())
 		}
-	}
-	if s.open.MaxTurns <= 0 {
-		s.open.MaxTurns = 40
 	}
 	return s, nil
 }
@@ -252,7 +253,7 @@ var errInterrupted = errors.New("interrupted by operator")
 // toward MaxTurns, so a model writing a large file in parts is not charged for its retries.
 const maxCutOffTurns = 10
 
-// ErrTurnLimit is returned when the model is still working after MaxTurns turns.
+// ErrTurnLimit is returned when the model is still working after MaxTurns turns (0 = no limit).
 var ErrTurnLimit = errors.New("turn limit reached")
 
 // turn runs the model/tool loop for one user message and returns the final assistant text.
@@ -273,10 +274,9 @@ func (s *Session) turn(parent context.Context, user proto.Message) (string, erro
 	}
 	var last string
 	cutOff := 0
-	for turns := 0; turns < s.open.MaxTurns; turns++ {
+	for turns := 0; s.open.MaxTurns <= 0 || turns < s.open.MaxTurns; turns++ {
 		s.status(proto.StateThinking, "")
-		ev, err := s.llm.Complete(ctx, proto.LLMRequest{SessionID: s.open.SessionID, System: s.open.System, Messages: s.history, Tools: s.defs},
-			func(kind, d string) { _ = s.conn.Send(proto.TypeDelta, proto.Delta{Text: d, Kind: kind}) })
+		ev, err := s.complete(ctx)
 		if err != nil {
 			if ctx.Err() != nil && parent.Err() == nil {
 				return last, errInterrupted

@@ -225,6 +225,7 @@ type ProviderRequest struct {
 		Model           string  `json:"model" required:"true"`
 		Effort          string  `json:"effort"`
 		MaxTokens       int     `json:"max_tokens"`
+		ContextTokens   int     `json:"context_tokens" minimum:"0" description:"the model's context window in tokens; 0 = 200000"`
 		APIKey          string  `json:"api_key"`
 		IsDefault       bool    `json:"is_default"`
 		InputPriceMTok  float64 `json:"input_price_mtok"`
@@ -259,7 +260,7 @@ func (h *Handlers) saveProvider(c *okapi.Context, p *models.ModelProvider, req *
 		return c.AbortBadRequest(msg)
 	}
 	p.Name, p.Kind, p.BaseURL, p.Model, p.Effort, p.MaxTokens = b.Name, b.Kind, strings.TrimRight(b.BaseURL, "/"), b.Model, b.Effort, b.MaxTokens
-	p.IsDefault, p.InputPriceMTok, p.OutputPriceMTok = b.IsDefault, b.InputPriceMTok, b.OutputPriceMTok
+	p.IsDefault, p.InputPriceMTok, p.OutputPriceMTok, p.ContextTokens = b.IsDefault, b.InputPriceMTok, b.OutputPriceMTok, max(b.ContextTokens, 0)
 	if p.MaxTokens <= 0 {
 		p.MaxTokens = 32000
 	}
@@ -293,6 +294,55 @@ func (h *Handlers) CreateProvider(c *okapi.Context, req *ProviderRequest) error 
 	}
 	h.record(c, "provider.create", "provider", p.ID, map[string]any{"name": p.Name, "kind": p.Kind, "model": p.Model})
 	return created(c, p)
+}
+
+// ProviderAgent is an agent whose model calls go to a provider.
+type ProviderAgent struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	// ViaDefault is set for agents without their own provider that use the organization default.
+	ViaDefault bool `json:"via_default"`
+}
+
+// ProviderUsage totals a provider's model calls.
+type ProviderUsage struct {
+	Calls        int64   `json:"calls"`
+	InputTokens  int64   `json:"input_tokens"`
+	OutputTokens int64   `json:"output_tokens"`
+	CostUSD      float64 `json:"cost_usd"`
+}
+
+// ProviderDetail is a provider with the agents using it and its last 30 days of usage.
+type ProviderDetail struct {
+	models.ModelProvider
+	Agents   []ProviderAgent `json:"agents"`
+	Usage30d ProviderUsage   `json:"usage_30d"`
+}
+
+// GetProvider returns one provider (never its key).
+func (h *Handlers) GetProvider(c *okapi.Context) error {
+	org := middlewares.OrgID(c)
+	var p models.ModelProvider
+	if err := h.DB.First(&p, "id = ? AND organization_id = ?", c.Param("id"), org).Error; err != nil {
+		return c.AbortNotFound("provider not found")
+	}
+	out := ProviderDetail{ModelProvider: p, Agents: []ProviderAgent{}}
+	var agents []models.Agent
+	q := h.DB.Select("id", "name", "status", "provider_id").Where("organization_id = ? AND status <> ?", org, models.AgentRevoked)
+	if p.IsDefault {
+		q = q.Where("provider_id = ? OR provider_id IS NULL", p.ID)
+	} else {
+		q = q.Where("provider_id = ?", p.ID)
+	}
+	q.Order("name").Find(&agents)
+	for _, a := range agents {
+		out.Agents = append(out.Agents, ProviderAgent{ID: a.ID, Name: a.Name, Status: a.Status, ViaDefault: a.ProviderID == nil})
+	}
+	h.DB.Model(&models.Usage{}).Where("organization_id = ? AND provider_id = ? AND created_at >= ?", org, p.ID, time.Now().UTC().AddDate(0, 0, -30)).
+		Select("COUNT(*) AS calls, COALESCE(SUM(input_tokens),0) AS input_tokens, COALESCE(SUM(output_tokens),0) AS output_tokens, COALESCE(SUM(cost_usd),0) AS cost_usd").
+		Scan(&out.Usage30d)
+	return ok(c, out)
 }
 
 // UpdateProvider edits a provider.

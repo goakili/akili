@@ -37,8 +37,8 @@ export function taskFormFrom(t?: Partial<TaskTemplate> | null): TaskForm {
     selector: selector.join(', '),
     // Project tasks default to L2 (edits, commits and PRs unattended; host shell still asks).
     autonomy: t?.autonomy ?? (t?.project_id ? 2 : 1),
-    budget_usd: t?.budget_usd ?? 1,
-    timeout_sec: t?.timeout_sec ?? 3600,
+    budget_usd: t?.budget_usd ?? 0,
+    timeout_sec: t?.timeout_sec ?? 0,
     max_turns: t?.max_turns ?? 0,
     max_attempts: t?.max_attempts ?? 2,
     priority: t?.priority ?? 0,

@@ -215,6 +215,7 @@ type ModelProvider struct {
 	Model           string  `gorm:"size:120;not null" json:"model"`
 	Effort          string  `gorm:"size:20" json:"effort"`
 	MaxTokens       int     `json:"max_tokens"`
+	ContextTokens   int     `gorm:"not null;default:0" json:"context_tokens"`
 	APIKeyEnc       string  `gorm:"type:text" json:"-"`
 	HasKey          bool    `gorm:"-" json:"has_key"`
 	IsDefault       bool    `json:"is_default"`
@@ -723,13 +724,13 @@ type Task struct {
 	FinishedAt      *time.Time     `json:"finished_at"`
 	// PausedAt is set while the task waits on a person (an approval or a question); PausedSec is the
 	// waiting time so far. Neither counts toward TimeoutSec.
-	PausedAt  *time.Time `json:"paused_at"`
-	PausedSec int        `gorm:"not null;default:0" json:"paused_sec"`
-	Result          string         `gorm:"type:text" json:"result"`
-	Error           string         `gorm:"type:text" json:"error"`
-	ScheduleID      *string        `gorm:"size:40;index" json:"schedule_id"`
-	CreatedBy       string         `gorm:"size:40" json:"created_by"`
-	CostUSD         float64        `json:"cost_usd"`
+	PausedAt   *time.Time `json:"paused_at"`
+	PausedSec  int        `gorm:"not null;default:0" json:"paused_sec"`
+	Result     string     `gorm:"type:text" json:"result"`
+	Error      string     `gorm:"type:text" json:"error"`
+	ScheduleID *string    `gorm:"size:40;index" json:"schedule_id"`
+	CreatedBy  string     `gorm:"size:40" json:"created_by"`
+	CostUSD    float64    `json:"cost_usd"`
 	// Coding tasks.
 	ProjectID *string `gorm:"size:40;index" json:"project_id"`
 	Branch    string  `gorm:"size:200" json:"branch"`

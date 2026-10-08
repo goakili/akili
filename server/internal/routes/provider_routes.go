@@ -34,6 +34,15 @@ func (r *Router) providerRoutes() []okapi.RouteDefinition {
 			Request:     &handlers.ProviderRequest{},
 		},
 		{
+			Method:      http.MethodGet,
+			Path:        "/providers/{id}",
+			Group:       g,
+			Middlewares: r.guard(models.RoleAdmin),
+			Handler:     r.h.GetProvider,
+			Summary:     "Get a provider, the agents using it and its last 30 days of usage",
+			Response:    &dto.Response[handlers.ProviderDetail]{},
+		},
+		{
 			Method:      http.MethodPut,
 			Path:        "/providers/{id}",
 			Group:       g,

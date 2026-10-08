@@ -384,7 +384,7 @@ onUnmounted(() => {
             <dt>Attempts</dt><dd>{{ task.attempts }} of {{ task.max_attempts }}</dd>
             <dt>Limits</dt>
             <dd>
-              {{ task.max_turns }} turns · {{ durationSec(task.timeout_sec) }} timeout
+              {{ task.max_turns ? `${task.max_turns} turns` : 'no turn cap' }} · {{ task.timeout_sec ? `${durationSec(task.timeout_sec)} timeout` : 'no timeout' }}
               <div v-if="task.paused_at || task.paused_sec" class="xs muted">
                 {{ task.paused_at ? 'Timeout paused while it waits on you' : `+${durationSec(task.paused_sec)} spent waiting on people (not counted)` }}
               </div>

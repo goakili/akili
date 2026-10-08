@@ -31,7 +31,8 @@ func NewLLM(open func() (net.Conn, error)) *LLM {
 	}}}
 }
 
-// FinalError is a gateway error the agent must not retry (budget, kill switch, closed session).
+// FinalError is a gateway error the agent must not retry as is (budget, kill switch, closed session,
+// a request the provider refused).
 type FinalError struct {
 	Code, Message string
 }
@@ -77,7 +78,8 @@ func (l *LLM) Complete(ctx context.Context, req proto.LLMRequest, onDelta func(k
 				}
 				return &ev, nil
 			case proto.LLMEventError:
-				if ev.Code == proto.CodeBudgetExhausted || ev.Code == proto.CodeSessionClosed || ev.Code == proto.CodeNoProvider {
+				switch ev.Code {
+				case proto.CodeBudgetExhausted, proto.CodeSessionClosed, proto.CodeNoProvider, proto.CodeProviderRejected, proto.CodeContextTooLong:
 					return nil, &FinalError{Code: ev.Code, Message: ev.Error}
 				}
 				return nil, errors.New(ev.Error)

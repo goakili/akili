@@ -204,6 +204,8 @@ export interface ModelProvider extends Base {
   model: string
   effort: Effort
   max_tokens: number
+  /** Context window in tokens; 0 = 200,000. */
+  context_tokens: number
   has_key: boolean
   is_default: boolean
   input_price_mtok: number
@@ -1086,6 +1088,19 @@ export interface PolicyInput {
   document: PolicyDocument
 }
 
+export interface ProviderAgent {
+  id: string
+  name: string
+  status: string
+  /** Uses this provider as the organization default (no provider of its own). */
+  via_default: boolean
+}
+
+export interface ProviderDetail extends ModelProvider {
+  agents: ProviderAgent[]
+  usage_30d: { calls: number; input_tokens: number; output_tokens: number; cost_usd: number }
+}
+
 export interface ProviderInput {
   name: string
   kind: ProviderKind
@@ -1093,6 +1108,8 @@ export interface ProviderInput {
   model: string
   effort: Effort
   max_tokens: number
+  /** Context window in tokens; 0 = 200,000. */
+  context_tokens: number
   api_key: string
   is_default: boolean
   input_price_mtok: number
@@ -1458,6 +1475,7 @@ export const api = {
 
   // providers (admin)
   listProviders: (o?: RequestOptions) => get<ModelProvider[] | null>('/providers', o),
+  getProvider: (id: string, o?: RequestOptions) => get<ProviderDetail>(`/providers/${enc(id)}`, o),
   createProvider: (b: ProviderInput) => post<ModelProvider>('/providers', b),
   updateProvider: (id: string, b: ProviderInput) => put<ModelProvider>(`/providers/${enc(id)}`, b),
   deleteProvider: (id: string) => del<MessageResponse>(`/providers/${enc(id)}`),

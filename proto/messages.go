@@ -141,11 +141,14 @@ type SessionOpen struct {
 	History   []Message `json:"history,omitempty"`
 	// Policy is the signed bundle the agent enforces locally, in addition to the control plane's
 	// authoritative check of every tool request.
-	Policy    SignedPolicy `json:"policy"`
-	Autonomy  Autonomy     `json:"autonomy"`
-	MaxTurns  int          `json:"max_turns"`
-	Deadline  *time.Time   `json:"deadline,omitempty"`
-	ToolNames []string     `json:"tool_names,omitempty"` // tools to offer the model (subset of the catalog)
+	Policy   SignedPolicy `json:"policy"`
+	Autonomy Autonomy     `json:"autonomy"`
+	MaxTurns int          `json:"max_turns"`
+	// ContextTokens is how many tokens of history fit the model's context once the system prompt,
+	// tools and output are reserved; 0 lets the agent use its default.
+	ContextTokens int        `json:"context_tokens,omitempty"`
+	Deadline      *time.Time `json:"deadline,omitempty"`
+	ToolNames     []string   `json:"tool_names,omitempty"` // tools to offer the model (subset of the catalog)
 	// MCPTools are the MCP tools among ToolNames, with the risk the control plane assigned, so the
 	// agent can describe them to the model and check them against its signed policy.
 	MCPTools []DynamicTool `json:"mcp_tools,omitempty"`
