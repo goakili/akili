@@ -596,8 +596,10 @@ func (s *Service) Spec(ctx context.Context, sess *models.ChatSession, agent *mod
 	if co := gitid.CoAuthor(s.requester(ctx, sess)); co != "" {
 		trailers = append(trailers, co)
 	}
+	var org models.Organization
+	s.db.WithContext(ctx).Select("sandbox_root").First(&org, "id = ?", sess.OrganizationID)
 	return &proto.ProjectSpec{ID: p.ID, Slug: p.Slug, Name: p.Name, Repo: p.FullName(), DefaultBranch: p.DefaultBranch, Branch: sess.Branch,
-		SandboxImage: p.SandboxImage, GitName: id.Name, GitEmail: id.Email, Trailers: trailers}, p, nil
+		SandboxImage: p.SandboxImage, SandboxRoot: org.SandboxRoot, GitName: id.Name, GitEmail: id.Email, Trailers: trailers}, p, nil
 }
 
 // requester is the active user who started sess, or nil (scheduled and webhook tasks may have none).

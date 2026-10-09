@@ -69,5 +69,24 @@ func (r *Router) systemRoutes() []okapi.RouteDefinition {
 			Summary:     "Engage or release the organization kill switch",
 			Request:     &handlers.KillSwitchRequest{},
 		},
+		{
+			Method:      http.MethodGet,
+			Path:        "/system/sandbox",
+			Group:       g,
+			Middlewares: r.guard(models.RoleAdmin),
+			Handler:     r.h.GetSandboxSettings,
+			Summary:     "How project sandboxes run",
+			Response:    &dto.Response[handlers.SandboxSettings]{},
+		},
+		{
+			Method:      http.MethodPut,
+			Path:        "/system/sandbox",
+			Group:       g,
+			Middlewares: r.guard(models.RoleAdmin),
+			Handler:     okapi.H(r.h.SetSandboxSettings),
+			Summary:     "Run project sandboxes as root or as an unprivileged user",
+			Request:     &handlers.SandboxSettingsRequest{},
+			Response:    &dto.Response[handlers.SandboxSettings]{},
+		},
 	}
 }

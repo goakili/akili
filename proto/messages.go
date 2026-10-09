@@ -168,8 +168,10 @@ type ProjectSpec struct {
 	Branch        string `json:"branch"` // the session's working branch, akili/...
 	// SandboxImage is the container image sandbox_exec runs in ("" = sandbox unavailable).
 	SandboxImage string `json:"sandbox_image,omitempty"`
-	GitName      string `json:"git_name"`
-	GitEmail     string `json:"git_email"`
+	// SandboxRoot runs sandbox_exec as root, an organization setting. Off, it runs unprivileged.
+	SandboxRoot bool   `json:"sandbox_root,omitempty"`
+	GitName     string `json:"git_name"`
+	GitEmail    string `json:"git_email"`
 	// Trailers ("Key: value") are appended to every commit, linking it to its task or session.
 	Trailers []string `json:"trailers,omitempty"`
 }

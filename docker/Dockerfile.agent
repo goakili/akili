@@ -12,12 +12,12 @@ WORKDIR /src/agent
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=${VERSION}" -o /out/akili-agent ./cmd/akili-agent
 
 FROM alpine:3
-# Tools the agent commonly shells out to. The agent runs unprivileged.
+# Tools the agent commonly shells out to.
 RUN apk add --no-cache ca-certificates bash curl git jq procps coreutils findutils grep \
- && adduser -D -u 10001 -h /var/lib/akili-agent akili \
- && install -d -o akili -g akili -m 0700 /var/lib/akili-agent
+ && install -d -m 0700 /var/lib/akili-agent
 COPY --from=build /out/akili-agent /usr/local/bin/akili-agent
-USER 10001
+# Root inside the container: the container is the boundary, and the agent must be able to install
+# packages and manage the files it works on. Policy and approvals still gate every tool call.
 ENV AKILI_STATE_DIR=/var/lib/akili-agent
 VOLUME /var/lib/akili-agent
 ENTRYPOINT ["akili-agent"]
