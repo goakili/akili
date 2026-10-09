@@ -153,6 +153,40 @@ func (h *Handlers) SetKillSwitch(c *okapi.Context, req *KillSwitchRequest) error
 	return ok(c, map[string]bool{"enabled": req.Body.Enabled})
 }
 
+// SandboxSettings is how project sandboxes (sandbox_exec) run.
+type SandboxSettings struct {
+	// Root runs sandboxes as root. They keep --cap-drop=ALL and no-new-privileges either way.
+	Root bool `json:"root"`
+}
+
+// SandboxSettingsRequest changes the sandbox settings.
+type SandboxSettingsRequest struct {
+	Body SandboxSettings `json:"body"`
+}
+
+// GetSandboxSettings returns the organization's sandbox settings.
+func (h *Handlers) GetSandboxSettings(c *okapi.Context) error {
+	var o models.Organization
+	if err := h.DB.Select("sandbox_root").First(&o, "id = ?", middlewares.OrgID(c)).Error; err != nil {
+		return c.AbortNotFound("organization not found")
+	}
+	return ok(c, SandboxSettings{Root: o.SandboxRoot})
+}
+
+// SetSandboxSettings changes how sandboxes run. It applies to sessions opened afterwards.
+func (h *Handlers) SetSandboxSettings(c *okapi.Context, req *SandboxSettingsRequest) error {
+	ctx := c.Request().Context()
+	org := middlewares.OrgID(c)
+	// Running sandboxes as root lowers their isolation, so the change must be on the record first.
+	if err := h.Audit.Record(ctx, auditEntry(c, "settings.sandbox", map[string]any{"root": req.Body.Root})); err != nil {
+		return c.AbortInternalServerError("audit unavailable", err)
+	}
+	if err := h.DB.Model(&models.Organization{}).Where("id = ?", org).Update("sandbox_root", req.Body.Root).Error; err != nil {
+		return c.AbortInternalServerError("update failed", err)
+	}
+	return ok(c, req.Body)
+}
+
 // Health is the liveness/readiness response.
 type Health struct {
 	Status  string `json:"status"`

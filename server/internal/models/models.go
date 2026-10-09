@@ -31,12 +31,14 @@ type Base struct {
 
 // Organization is a tenant. v2 runs a single organization, but every table is scoped.
 type Organization struct {
-	ID         string    `gorm:"primaryKey;size:40" json:"id"`
-	Name       string    `gorm:"size:120;not null" json:"name"`
-	Slug       string    `gorm:"size:120;uniqueIndex" json:"slug"`
-	KillSwitch bool      `json:"kill_switch"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID         string `gorm:"primaryKey;size:40" json:"id"`
+	Name       string `gorm:"size:120;not null" json:"name"`
+	Slug       string `gorm:"size:120;uniqueIndex" json:"slug"`
+	KillSwitch bool   `json:"kill_switch"`
+	// SandboxRoot runs project sandboxes as root (still without capabilities); off by default.
+	SandboxRoot bool      `gorm:"not null;default:false" json:"sandbox_root"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // Roles, lowest to highest.

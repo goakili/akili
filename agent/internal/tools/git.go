@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -265,10 +266,12 @@ func (e *Executor) sandboxExec(ctx context.Context, in proto.SandboxExecInput) (
 	if in.TimeoutSec > 0 {
 		timeout = min(time.Duration(in.TimeoutSec)*time.Second, maxSandboxTimeout)
 	}
+	user, restore := sandboxUser(p)
+	defer restore()
 	name := "akili-sbx-" + strings.ToLower(rand.Text()[:12])
 	args := []string{"run", "--rm", "--name", name,
 		"--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=1024", "--memory=4g", "--cpus=2",
-		"--user", strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid()),
+		"--user", user,
 		"-v", p.Dir + ":/workspace", "-v", p.Cache + ":/cache", "-w", "/workspace",
 		"-e", "HOME=/cache/home", "-e", "GOCACHE=/cache/go-build", "-e", "GOMODCACHE=/cache/gomod", "-e", "GOFLAGS=-buildvcs=false",
 		"-e", "npm_config_cache=/cache/npm", "-e", "PIP_CACHE_DIR=/cache/pip", "-e", "CARGO_HOME=/cache/cargo", "-e", "CI=true",
@@ -312,4 +315,34 @@ func (e *Executor) sandboxExec(ctx context.Context, in proto.SandboxExecInput) (
 		return res, err
 	}
 	return res + fmt.Sprintf("\n[exit 0 after %s]", dur), nil
+}
+
+// sandboxNonRoot is the user sandboxes run as when the agent itself runs as root (the Docker image).
+const sandboxNonRoot = 10001
+
+// sandboxUser returns the --user for a sandbox and a func to call when it exits. Sandboxes run as root
+// only when the organization allows it. Otherwise a root agent lends the workspace and cache to an
+// unprivileged user for the run, then takes them back so its own git commands do not trip git's
+// ownership check.
+func sandboxUser(p *Project) (string, func()) {
+	if p.Spec.SandboxRoot {
+		return "0:0", func() {}
+	}
+	uid, gid := os.Getuid(), os.Getgid()
+	if uid != 0 {
+		return strconv.Itoa(uid) + ":" + strconv.Itoa(gid), func() {}
+	}
+	chownAll(sandboxNonRoot, p.Dir, p.Cache)
+	return strconv.Itoa(sandboxNonRoot) + ":" + strconv.Itoa(sandboxNonRoot), func() { chownAll(0, p.Dir, p.Cache) }
+}
+
+func chownAll(id int, dirs ...string) {
+	for _, dir := range dirs {
+		_ = filepath.WalkDir(dir, func(path string, _ fs.DirEntry, err error) error {
+			if err == nil {
+				_ = os.Lchown(path, id, id)
+			}
+			return nil
+		})
+	}
 }
