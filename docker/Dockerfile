@@ -1,5 +1,5 @@
 # Akili control plane: UI + API in one binary, plus the agent binaries it serves to install-agent.sh.
-FROM node:22-alpine AS web
+FROM node:24-alpine AS web
 WORKDIR /src/web
 COPY web/package*.json ./
 RUN npm ci
@@ -24,7 +24,7 @@ RUN cd server && CGO_ENABLED=0 go build -trimpath -tags "${GO_TAGS}" \
 
 # The Miabi CLI, for the Miabi MCP preset (`miabi mcp`). Cross-compiled, so arm64 builds natively.
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS miabi
-ARG MIABI_CLI_VERSION=v0.17.0
+ARG MIABI_CLI_VERSION=v0.20.5
 ARG TARGETOS TARGETARCH
 WORKDIR /src
 RUN go mod init build && go get github.com/miabi-io/cli@${MIABI_CLI_VERSION} && \
