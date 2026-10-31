@@ -36,7 +36,7 @@ var Templates = []Template{
 		Name:         "Go service (Okapi)",
 		Description:  "A Go HTTP API on github.com/jkaninda/okapi with route definitions, OpenAPI docs, health checks, tests, a Dockerfile and CI.",
 		SandboxImage: "golang:1.27",
-		Goal: `Scaffold a production-ready Go HTTP service in this repository using github.com/jkaninda/okapi v1.0.0.
+		Goal: `Scaffold a production-ready Go HTTP service in this repository using github.com/jkaninda/okapi v1.2.0.
 
 Requirements:
 - go.mod with module path matching the repository; Go 1.27.

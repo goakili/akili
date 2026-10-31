@@ -1,6 +1,6 @@
 module github.com/goakili/akili/server
 
-go 1.27.1
+go 1.27.3
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.84.0
@@ -14,7 +14,7 @@ require (
 	github.com/hashicorp/yamux v0.1.2
 	github.com/jkaninda/go-utils v0.1.4
 	github.com/jkaninda/logger v0.0.5
-	github.com/jkaninda/okapi v1.1.0
+	github.com/jkaninda/okapi v1.2.0
 	github.com/jkaninda/wstunnel v0.0.2
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.23.0
