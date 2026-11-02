@@ -6,7 +6,7 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.84.0
 	github.com/boombuler/barcode v1.1.0
 	github.com/coreos/go-oidc/v3 v3.21.0
-	github.com/go-jose/go-jose/v4 v4.1.6
+	github.com/go-jose/go-jose/v4 v4.1.7
 	github.com/goakili/akili/proto v0.0.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/goposta/posta-go v0.1.0
@@ -14,7 +14,7 @@ require (
 	github.com/hashicorp/yamux v0.1.2
 	github.com/jkaninda/go-utils v0.1.4
 	github.com/jkaninda/logger v0.0.5
-	github.com/jkaninda/okapi v1.2.0
+	github.com/jkaninda/okapi v1.2.1
 	github.com/jkaninda/wstunnel v0.0.2
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.23.0
@@ -43,7 +43,7 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/jkaninda/njia v0.0.3 // indirect
+	github.com/jkaninda/njia v0.0.4 // indirect
 	github.com/mattn/go-sqlite3 v1.14.52 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
