@@ -57,8 +57,8 @@ github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/getkin/kin-openapi v0.152.0 h1:XRVo77lMRyOGMHf1paMu9lxX3wzuQDZeprssZJnz/x8=
 github.com/getkin/kin-openapi v0.152.0/go.mod h1:1+BHDzstro+P5CKtPy1X4PfofnFgmRe6uvMy9+r9fKY=
-github.com/go-jose/go-jose/v4 v4.1.6 h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4=
-github.com/go-jose/go-jose/v4 v4.1.6/go.mod h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=
+github.com/go-jose/go-jose/v4 v4.1.7 h1:Nac/98uT5LPkfbiFuYa8ktf62a2VxwQ4xbq1GK8pV5E=
+github.com/go-jose/go-jose/v4 v4.1.7/go.mod h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
 github.com/go-logr/logr v1.4.2 h1:6pFjapn8bFcIbiKo3XT4j/BhANplGihG6tvd+8rYgrY=
 github.com/go-logr/logr v1.4.2/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
@@ -108,10 +108,10 @@ github.com/jkaninda/go-utils v0.1.4 h1:ZdNlI+yLWc4/S0qKcCNQIPj+6lHSdJcGaxtRADAif
 github.com/jkaninda/go-utils v0.1.4/go.mod h1:Aa54jEAcDykc3CnOdreqZG80UfSZOvrYecyusu+oPb4=
 github.com/jkaninda/logger v0.0.5 h1:fTHKgDsHtuN8rkSBvwe6QStfi8yIdm8O3r0g99dRDTY=
 github.com/jkaninda/logger v0.0.5/go.mod h1:ZUXJ2BdxDPG6e8t6mbKhc2ZFaFi2Iuy/4ukquFrPkFE=
-github.com/jkaninda/njia v0.0.3 h1:7DBKbp/Y/r5DYTEZd7z7oWuNDfnxAzifs2EZ2ux5WNg=
-github.com/jkaninda/njia v0.0.3/go.mod h1:YZe9FDA9bqnvKJ/PC3nT8LDOOa6a29KQtLF6XVSRODg=
-github.com/jkaninda/okapi v1.2.0 h1:YP5ceJGqitCKgU++m9YE5m38I+MRfbYTF3xyypQqbwo=
-github.com/jkaninda/okapi v1.2.0/go.mod h1:Ru9pmaFnmfR9DIAVLrm/O5lq313f12uFZ0alpk1RikU=
+github.com/jkaninda/njia v0.0.4 h1:q6m7RyAlCwPx5VooHHA71FO5KNQ8GfcMzx5YDyfmr6M=
+github.com/jkaninda/njia v0.0.4/go.mod h1:YZe9FDA9bqnvKJ/PC3nT8LDOOa6a29KQtLF6XVSRODg=
+github.com/jkaninda/okapi v1.2.1 h1:cTvfDwO4dknew4QEqebHAEbryZcAtzpdfFOpXEgyQu8=
+github.com/jkaninda/okapi v1.2.1/go.mod h1:RTX7E5LMWFLezxYp1im/L50PQSmrxOKiXo6f3C/Xk/Q=
 github.com/jkaninda/wstunnel v0.0.2 h1:ljsi8z3OWdWhHN1/1x+rFWYCcN0kgv8LdP57KgVOWfI=
 github.com/jkaninda/wstunnel v0.0.2/go.mod h1:BTwnAUbTEMP0pZCE3VaN9YU+ALLvtNKSYKhXoD/gfkY=
 github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
