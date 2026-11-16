@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 // Package dto holds the API envelopes and the error handler that produces them.
 package dto
@@ -26,21 +27,18 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// Response is the success envelope.
 type Response[T any] struct {
 	Success bool `json:"success"`
 	Data    T    `json:"data"`
 }
 
-// PageResponse is one page of a list. Pageable is present only when a next page exists, so a
-// client keeps loading until it is absent.
+// PageResponse carries Pageable only when a next page exists, so a client keeps loading until it is absent.
 type PageResponse[T any] struct {
 	Success  bool      `json:"success"`
 	Data     []T       `json:"data"`
 	Pageable *Pageable `json:"pageable,omitempty"`
 }
 
-// Pageable describes the page just returned and where the next one starts.
 type Pageable struct {
 	CurrentPage   int   `json:"current_page"`
 	NextPage      int   `json:"next_page"`
@@ -49,26 +47,22 @@ type Pageable struct {
 	TotalElements int64 `json:"total_elements"`
 }
 
-// ErrorInfo describes an error.
 type ErrorInfo struct {
 	StatusCode int    `json:"status_code"`
 	Code       string `json:"code"`
 	Message    string `json:"message"`
 }
 
-// ErrorResponse is the error envelope.
 type ErrorResponse struct {
 	Success bool      `json:"success"`
 	Error   ErrorInfo `json:"error"`
 }
 
-// Message is a simple message payload.
 type Message struct {
 	Message string `json:"message"`
 }
 
-// ErrorHandler renders every error as the envelope. Internal error details are logged by Okapi and
-// not echoed for 5xx responses.
+// ErrorHandler renders every error as the envelope; 5xx details are logged, never echoed.
 func ErrorHandler() okapi.ErrorHandler {
 	return func(c *okapi.Context, code int, message string, err error) error {
 		if code < 500 && err != nil && (message == "" || message == http.StatusText(code)) {

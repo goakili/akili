@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package miabi
 
@@ -254,7 +255,6 @@ func (s *Service) runWorkspaceOp(ctx context.Context, sess *models.ChatSession, 
 	return "", false, nil
 }
 
-// waitStatus polls until a run reaches a terminal status.
 func waitStatus[T any](ctx context.Context, poll, timeout time.Duration, cur *T, get func() (*T, error), status func(*T) string) (*T, error) {
 	deadline := time.Now().Add(timeout)
 	for {
@@ -384,8 +384,7 @@ func (s *Service) database(ctx context.Context, sess *models.ChatSession, t *tar
 		if bk.Status != "completed" {
 			return "", fmt.Errorf("backup %d is %s, not completed", bk.Number, bk.Status)
 		}
-		// Recorded before acting: a restore overwrites data, so its intent must be on the trail even
-		// if the call never returns.
+		// Recorded before acting: a restore overwrites data, so its intent must be on the trail even if the call never returns.
 		s.recordOp(ctx, sess, "miabi.db_restore", t, map[string]any{"database": inst.Name, "db": db.Name, "backup": bk.Number})
 		if err := c.RestoreBackup(ctx, inst.ID, db.ID, bk.ID); err != nil {
 			return "", err

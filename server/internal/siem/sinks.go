@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package siem
 
@@ -38,8 +39,7 @@ import (
 	"time"
 )
 
-// WebhookSink POSTs batches as JSON ({"events":[...]}) or NDJSON (one event per line, e.g. for
-// Splunk HEC or Vector). With a secret, the body is signed: X-Akili-Signature: sha256=<hmac hex>.
+// WebhookSink POSTs batches as JSON or NDJSON; with a secret, the body is signed as X-Akili-Signature: sha256=<hmac hex>.
 type WebhookSink struct {
 	URL           string
 	Secret        string
@@ -48,10 +48,8 @@ type WebhookSink struct {
 	Client        *http.Client
 }
 
-// Name implements Sink.
 func (w *WebhookSink) Name() string { return "webhook" }
 
-// Send implements Sink.
 func (w *WebhookSink) Send(ctx context.Context, events []Event) error {
 	var body []byte
 	ctype := "application/json"
@@ -100,8 +98,7 @@ func (w *WebhookSink) Send(ctx context.Context, events []Event) error {
 	return nil
 }
 
-// SyslogSink sends RFC 5424 messages whose MSG is the event JSON. TCP and TLS use octet-counting
-// framing (RFC 6587/5425); UDP sends one datagram per event.
+// SyslogSink sends RFC 5424 messages; TCP and TLS use octet-counting framing (RFC 6587/5425), UDP one datagram per event.
 type SyslogSink struct {
 	Network  string // udp | tcp | tls
 	Addr     string
@@ -127,7 +124,6 @@ func NewSyslogSink(raw string) (*SyslogSink, error) {
 	return &SyslogSink{Network: u.Scheme, Addr: u.Host, Hostname: host, TLS: &tls.Config{MinVersion: tls.VersionTLS12}}, nil
 }
 
-// Name implements Sink.
 func (s *SyslogSink) Name() string { return "syslog" }
 
 func (s *SyslogSink) dial(ctx context.Context) (net.Conn, error) {
@@ -144,7 +140,7 @@ func (s *SyslogSink) dial(ctx context.Context) (net.Conn, error) {
 	}
 }
 
-// Send implements Sink. A failed write drops the connection so the next attempt redials.
+// Send drops the connection on a failed write so the next attempt redials.
 func (s *SyslogSink) Send(ctx context.Context, events []Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -175,8 +171,7 @@ func (s *SyslogSink) Send(ctx context.Context, events []Event) error {
 	return nil
 }
 
-// format builds <PRI>1 TIMESTAMP HOST APP PROCID MSGID [SD] MSG. Facility is authpriv (10);
-// severity is notice (5) for denials and failures, informational (6) otherwise.
+// format builds an RFC 5424 line: facility authpriv (10), severity notice (5) for denials and failures, else informational (6).
 func (s *SyslogSink) format(e *Event) ([]byte, error) {
 	body, err := json.Marshal(e)
 	if err != nil {
@@ -197,17 +192,14 @@ func (s *SyslogSink) format(e *Event) ([]byte, error) {
 	return []byte(fmt.Sprintf("<%d>1 %s %s akili - %s - %s", 10*8+sev, e.CreatedAt.UTC().Format(time.RFC3339Nano), host, msgID, body)), nil
 }
 
-// FileSink appends JSON lines to a file, or writes them to stdout when the path is "-" (for a log
-// shipper such as Fluent Bit or Vector).
+// FileSink appends JSON lines to a file, or to stdout when the path is "-".
 type FileSink struct {
 	Path string
 	mu   sync.Mutex
 }
 
-// Name implements Sink.
 func (f *FileSink) Name() string { return "file" }
 
-// Send implements Sink.
 func (f *FileSink) Send(_ context.Context, events []Event) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package models holds the GORM models. They double as API response types; secrets are tagged
-// json:"-" so they never leave the server.
+// Package models holds the GORM models; secrets are tagged json:"-" so they never leave the server.
 package models
 
 import (
@@ -65,7 +65,6 @@ const (
 	RoleOwner    = "owner"
 )
 
-// RoleRank orders roles for RequireRole.
 func RoleRank(r string) int {
 	switch r {
 	case RoleViewer:
@@ -80,7 +79,6 @@ func RoleRank(r string) int {
 	return 0
 }
 
-// User is a human operator.
 type User struct {
 	Base
 	Email        string     `gorm:"size:255;uniqueIndex;not null" json:"email"`
@@ -90,12 +88,10 @@ type User struct {
 	Active       bool       `gorm:"not null;default:true" json:"active"`
 	LastLoginAt  *time.Time `json:"last_login_at"`
 	// SSOSubject pins the identity provider account ("issuer|sub") after the first SSO login.
-	SSOSubject string `gorm:"size:255;index" json:"-"`
-	// Email notifications (sent through the default Posta integration, when there is one).
-	EmailApprovals bool `gorm:"not null;default:true" json:"email_approvals"`
-	EmailTasks     bool `gorm:"not null;default:true" json:"email_tasks"`
-	// ForgeLogin and CoAuthorEmail are opt-in: they credit the user on the public commits and pull
-	// requests of the agent sessions they start.
+	SSOSubject     string `gorm:"size:255;index" json:"-"`
+	EmailApprovals bool   `gorm:"not null;default:true" json:"email_approvals"`
+	EmailTasks     bool   `gorm:"not null;default:true" json:"email_tasks"`
+	// ForgeLogin and CoAuthorEmail are opt-in: they credit the user on agent commits and pull requests.
 	ForgeLogin    string `gorm:"size:64" json:"forge_login"`
 	CoAuthorEmail string `gorm:"size:254" json:"co_author_email"`
 	// TOTPSecret is sealed by the crypto box; it is set but not yet enabled while setup is pending.
@@ -120,21 +116,18 @@ type APIKey struct {
 	RevokedAt  *time.Time `json:"revoked_at"`
 }
 
-// API key scopes.
 const (
 	ScopeRead  = "read"
 	ScopeWrite = "write"
 )
 
-// Agent statuses.
 const (
-	AgentPending = "pending" // created, not yet enrolled
+	AgentPending = "pending"
 	AgentOnline  = "online"
 	AgentOffline = "offline"
 	AgentRevoked = "revoked"
 )
 
-// Agent is an enrolled (or pending) akili-agent.
 type Agent struct {
 	Base
 	Name          string         `gorm:"size:120;not null" json:"name"`
@@ -164,7 +157,6 @@ type Agent struct {
 	GitIdentity *GitIdentity `gorm:"-" json:"git_identity,omitempty"`
 }
 
-// GitIdentity is a git author/committer.
 type GitIdentity struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
@@ -172,7 +164,6 @@ type GitIdentity struct {
 
 func (i GitIdentity) String() string { return i.Name + " <" + i.Email + ">" }
 
-// HasLabels reports whether the agent carries every label in want.
 func (a *Agent) HasLabels(want []string) bool {
 	have := map[string]bool{}
 	for _, l := range a.Labels {
@@ -207,7 +198,6 @@ type Skill struct {
 	Hash        string `gorm:"size:64" json:"hash"`
 }
 
-// Policy is a versioned capability policy.
 type Policy struct {
 	Base
 	Name        string       `gorm:"size:120;not null" json:"name"`
@@ -217,7 +207,6 @@ type Policy struct {
 	Builtin     bool         `json:"builtin"`
 }
 
-// Provider kinds.
 const (
 	ProviderAnthropic = "anthropic"
 	ProviderOpenAI    = "openai" // OpenAI-compatible (OpenAI, Ollama, vLLM, ...)
@@ -247,7 +236,6 @@ func (p *ModelProvider) AfterFind(*gorm.DB) error {
 	return nil
 }
 
-// Integration kinds: git forges, the Miabi PaaS and Posta (email notifications).
 const (
 	ForgeGitea  = "gitea"
 	ForgeGitHub = "github"
@@ -256,14 +244,12 @@ const (
 	KindPosta   = "posta"
 )
 
-// Integration auth types.
 const (
-	AuthToken     = "token"      // a personal/bot access token
+	AuthToken     = "token"
 	AuthGitHubApp = "github_app" // GitHub App installation tokens, minted per use (short-lived)
 )
 
-// Integration is a connection to a git forge. Secrets are encrypted at rest and never returned; the
-// agent never sees them either: git traffic and forge API calls go through the control plane.
+// Integration secrets are never returned, not even to the agent: git and forge API calls go through the control plane.
 type Integration struct {
 	Base
 	Name     string `gorm:"size:120;not null" json:"name"`
@@ -278,12 +264,9 @@ type Integration struct {
 	CACert string `gorm:"type:text" json:"ca_cert"`
 	// Sender is the From address of a Posta integration, e.g. "Akili <akili@example.com>".
 	Sender string `gorm:"size:320" json:"sender"`
-	// Default marks the integration used when none is named: Miabi tool calls, Posta notification
-	// email (one per kind and organization).
-	Default bool `gorm:"column:is_default;not null;default:false" json:"default"`
-	// Token auth.
-	TokenEnc string `gorm:"type:text" json:"-"`
-	// GitHub App auth.
+	// Default marks the integration used when none is named (one per kind and organization).
+	Default        bool   `gorm:"column:is_default;not null;default:false" json:"default"`
+	TokenEnc       string `gorm:"type:text" json:"-"`
 	AppID          int64  `json:"app_id,omitempty"`
 	InstallationID int64  `json:"installation_id,omitempty"`
 	PrivateKeyEnc  string `gorm:"type:text" json:"-"`
@@ -298,7 +281,6 @@ type Integration struct {
 	CreatedBy           string `gorm:"size:40" json:"created_by"`
 }
 
-// IsForge reports whether kind is a git forge.
 func IsForge(kind string) bool {
 	return kind == ForgeGitea || kind == ForgeGitHub || kind == ForgeGitLab
 }
@@ -309,7 +291,6 @@ func (i *Integration) AfterFind(*gorm.DB) error {
 	return nil
 }
 
-// Project is a repository agents work on.
 type Project struct {
 	Base
 	Name          string `gorm:"size:120;not null" json:"name"`
@@ -333,10 +314,8 @@ type Project struct {
 	CreatedBy    string `gorm:"size:40" json:"created_by"`
 }
 
-// FullName is owner/repo.
 func (p *Project) FullName() string { return p.Owner + "/" + p.Repo }
 
-// ChangeCall is one call of a change plan with its outcome.
 type ChangeCall struct {
 	Phase       string          `json:"phase"` // step | verify | rollback
 	Tool        string          `json:"tool"`
@@ -352,8 +331,7 @@ type ChangeCall struct {
 	DurationMs  int64           `json:"duration_ms,omitempty"`
 }
 
-// Change is a change plan proposed by an agent, approved by a human as a whole, then executed with
-// verification and automatic rollback.
+// Change is a change plan approved by a human as a whole, then executed with verification and automatic rollback.
 type Change struct {
 	Base
 	SessionID  string       `gorm:"size:40;index;not null" json:"session_id"`
@@ -379,8 +357,7 @@ type AlertRoute struct {
 	Enabled     bool     `json:"enabled"`
 	AgentID     *string  `gorm:"size:40" json:"agent_id"`
 	Selector    []string `gorm:"type:jsonb;serializer:json" json:"selector"`
-	// HostLabel names the alert label holding the affected host (default "instance"); an agent whose
-	// name or hostname matches it is targeted directly.
+	// HostLabel names the alert label holding the affected host (default "instance"); a matching agent is targeted directly.
 	HostLabel string            `gorm:"size:60" json:"host_label"`
 	Match     map[string]string `gorm:"type:jsonb;serializer:json" json:"match"` // required label values
 	Autonomy  proto.Autonomy    `json:"autonomy"`
@@ -413,8 +390,7 @@ type MiabiWatch struct {
 	CreatedBy    string         `gorm:"size:40" json:"created_by"`
 }
 
-// MiabiWorkspace is a workspace a Miabi integration's key can reach. Only enabled ones are usable
-// by agents and followed for events.
+// MiabiWorkspace is a workspace a Miabi key can reach; only enabled ones are used by agents and followed for events.
 type MiabiWorkspace struct {
 	Base
 	IntegrationID string `gorm:"size:40;uniqueIndex:miabi_ws;not null" json:"integration_id"`
@@ -433,9 +409,7 @@ type MiabiWorkspace struct {
 	SyncedAt    *time.Time `json:"synced_at"`
 }
 
-// MCPServer is an MCP server the control plane connects to; its tools become remote tools named
-// "mcp__<name>__<tool>". Stdio servers run as child processes of the control plane, limited to the
-// commands in AKILI_MCP_COMMANDS.
+// MCPServer tools become remote tools named "mcp__<name>__<tool>"; stdio commands are limited to AKILI_MCP_COMMANDS.
 type MCPServer struct {
 	Base
 	Name      string   `gorm:"size:32;uniqueIndex;not null" json:"name"`
@@ -443,8 +417,7 @@ type MCPServer struct {
 	Command   string   `gorm:"size:200" json:"command"`
 	Args      []string `gorm:"type:jsonb;serializer:json" json:"args"`
 	URL       string   `gorm:"size:500" json:"url"`
-	// EnvEnc holds the encrypted environment (stdio) or headers (http) as a JSON object; only the
-	// names are shown (EnvKeys).
+	// EnvEnc holds the encrypted env (stdio) or headers (http) as JSON; only the names are shown (EnvKeys).
 	EnvEnc  string   `gorm:"type:text" json:"-"`
 	EnvKeys []string `gorm:"type:jsonb;serializer:json" json:"env_keys"`
 	// IntegrationID makes a Miabi preset: MIABI_SERVER and MIABI_TOKEN come from the integration.
@@ -469,15 +442,13 @@ type MCPTool struct {
 	Risk        string          `gorm:"size:10" json:"risk"` // low | medium | high | critical; empty until set
 }
 
-// Lesson statuses.
 const (
 	LessonProposed = "proposed"
 	LessonApproved = "approved"
 	LessonRejected = "rejected"
 )
 
-// Lesson is a durable note for future sessions ("soul"). Agents only propose; a lesson reaches
-// system prompts after an operator approves it, so injected text cannot quietly change behaviour.
+// Lesson reaches system prompts only after an operator approves it, so injected text cannot quietly change behaviour.
 type Lesson struct {
 	Base
 	AgentID    *string    `gorm:"size:40;index" json:"agent_id"` // nil: applies to every agent
@@ -491,14 +462,12 @@ type Lesson struct {
 	Note       string     `gorm:"size:500" json:"note"`
 }
 
-// Chat channel kinds.
 const (
 	ChatSlack    = "slack"
 	ChatTelegram = "telegram"
 	ChatSignal   = "signal"
 )
 
-// ChatChannel is a chat platform connection (a Slack app, a Telegram bot, a Signal number).
 type ChatChannel struct {
 	Base
 	Name    string `gorm:"size:120;not null" json:"name"`
@@ -554,7 +523,6 @@ type ChatConversation struct {
 	SessionID  *string `gorm:"size:40;index" json:"session_id"`
 }
 
-// TerminalSession is a recorded interactive terminal on an agent.
 type TerminalSession struct {
 	Base
 	AgentID   string     `gorm:"size:40;index;not null" json:"agent_id"`
@@ -570,7 +538,6 @@ type TerminalSession struct {
 	Recording string `gorm:"type:text" json:"-"`
 }
 
-// Session statuses and modes.
 const (
 	SessionOpen   = "open"
 	SessionClosed = "closed"
@@ -592,14 +559,12 @@ type ChatSession struct {
 	InputTokens    int        `json:"input_tokens"`
 	OutputTokens   int        `json:"output_tokens"`
 	CostUSD        float64    `json:"cost_usd"`
-	// System and ToolNames are fixed when the session first opens: providers bind reasoning to the
-	// exact prompt and tool set, so they must not change for the life of the conversation.
+	// System and ToolNames are fixed at first open: providers bind reasoning to the exact prompt and tool set.
 	System    string   `gorm:"type:text" json:"-"`
 	ToolNames []string `gorm:"type:jsonb;serializer:json" json:"tool_names"`
 }
 
-// SessionMessage is one persisted conversation turn. The history is append-only: it is replayed to
-// the provider exactly as stored.
+// SessionMessage history is append-only: it is replayed to the provider exactly as stored.
 type SessionMessage struct {
 	ID        uint          `gorm:"primaryKey" json:"id"`
 	SessionID string        `gorm:"size:40;index;not null" json:"session_id"`
@@ -608,8 +573,7 @@ type SessionMessage struct {
 	CreatedAt time.Time     `json:"created_at"`
 }
 
-// Attachment is an image a user attached to a session. Messages reference it by id, so the bytes stay
-// out of the history that is replayed to agents on every reopen.
+// Attachment bytes stay out of the message history, which is replayed to agents on every reopen.
 type Attachment struct {
 	Base
 	SessionID string `gorm:"size:40;index;not null" json:"session_id"`
@@ -628,16 +592,13 @@ type SessionEvent struct {
 	CreatedAt time.Time       `json:"created_at"`
 }
 
-// Question statuses.
 const (
 	QuestionPending  = "pending"
 	QuestionAnswered = "answered"
 	QuestionExpired  = "expired"
 )
 
-// Question is an agent's ask_user call: a choice between options that is the user's to make. The
-// person picks an option or answers in their own words. Question and options come from the model,
-// so they are untrusted text: answering one never approves a tool call.
+// Question text comes from the model and is untrusted: answering one never approves a tool call.
 type Question struct {
 	Base
 	SessionID string                `gorm:"size:40;index;not null" json:"session_id"`
@@ -655,8 +616,7 @@ type Question struct {
 	ExpiresAt  time.Time  `json:"expires_at"`
 }
 
-// Deadline is when the task times out, not counting time spent waiting on a person. ok is false
-// without a timeout, before the task started, or while it waits (the clock is stopped).
+// Deadline excludes time spent waiting on a person; ok is false without a timeout, before start, or while waiting.
 func (t *Task) Deadline() (at time.Time, ok bool) {
 	if t.TimeoutSec <= 0 || t.StartedAt == nil || t.PausedAt != nil {
 		return time.Time{}, false
@@ -674,7 +634,6 @@ func (q *Question) Recommended() *proto.AskUserOption {
 	return nil
 }
 
-// Approval statuses.
 const (
 	ApprovalPending  = "pending"
 	ApprovalApproved = "approved"
@@ -714,12 +673,10 @@ const (
 	TaskTimedOut  = "timed_out"
 )
 
-// TaskTerminal reports whether a status is final.
 func TaskTerminal(s string) bool {
 	return s == TaskSucceeded || s == TaskFailed || s == TaskCancelled || s == TaskTimedOut
 }
 
-// Task is a unit of autonomous work assigned to an agent.
 type Task struct {
 	Base
 	Title           string         `gorm:"size:200;not null" json:"title"`
@@ -740,8 +697,7 @@ type Task struct {
 	LeaseUntil      *time.Time     `json:"lease_until"`
 	StartedAt       *time.Time     `json:"started_at"`
 	FinishedAt      *time.Time     `json:"finished_at"`
-	// PausedAt is set while the task waits on a person (an approval or a question); PausedSec is the
-	// waiting time so far. Neither counts toward TimeoutSec.
+	// PausedAt is set while the task waits on a person; PausedSec is the wait so far. Neither counts toward TimeoutSec.
 	PausedAt   *time.Time `json:"paused_at"`
 	PausedSec  int        `gorm:"not null;default:0" json:"paused_sec"`
 	Result     string     `gorm:"type:text" json:"result"`
@@ -749,11 +705,10 @@ type Task struct {
 	ScheduleID *string    `gorm:"size:40;index" json:"schedule_id"`
 	CreatedBy  string     `gorm:"size:40" json:"created_by"`
 	CostUSD    float64    `json:"cost_usd"`
-	// Coding tasks.
-	ProjectID *string `gorm:"size:40;index" json:"project_id"`
-	Branch    string  `gorm:"size:200" json:"branch"`
-	PRNumber  int     `json:"pr_number"`
-	PRURL     string  `gorm:"size:500" json:"pr_url"`
+	ProjectID  *string    `gorm:"size:40;index" json:"project_id"`
+	Branch     string     `gorm:"size:200" json:"branch"`
+	PRNumber   int        `json:"pr_number"`
+	PRURL      string     `gorm:"size:500" json:"pr_url"`
 	// Trigger records what created the task (manual, schedule, issue).
 	Trigger    string `gorm:"size:40" json:"trigger"`
 	TriggerRef string `gorm:"size:300" json:"trigger_ref"`
@@ -761,7 +716,6 @@ type Task struct {
 	PlanIDs []string `gorm:"-" json:"plan_ids,omitempty"`
 }
 
-// TaskTemplate is what a schedule creates.
 type TaskTemplate struct {
 	Title       string         `json:"title"`
 	Goal        string         `json:"goal"`
@@ -776,7 +730,6 @@ type TaskTemplate struct {
 	ProjectID   *string        `json:"project_id,omitempty"`
 }
 
-// Schedule creates tasks on a cron expression.
 type Schedule struct {
 	Base
 	Name      string       `gorm:"size:120;not null" json:"name"`
@@ -788,7 +741,6 @@ type Schedule struct {
 	CreatedBy string       `gorm:"size:40" json:"created_by"`
 }
 
-// Usage records one model call.
 type Usage struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
 	OrganizationID string    `gorm:"size:40;index;not null" json:"organization_id"`
@@ -819,7 +771,6 @@ type AuditLog struct {
 	Hash           string         `gorm:"size:64;not null" json:"hash"`
 }
 
-// ErrAuditAppendOnly is returned by any attempt to change or delete an audit row through GORM.
 var ErrAuditAppendOnly = errors.New("audit_logs is append-only")
 
 // BeforeUpdate refuses updates: the audit log is append-only.
@@ -835,17 +786,6 @@ type UpgradeStep struct {
 	AppliedAt time.Time
 }
 
-// License is the installed Enterprise license. The signed token is authoritative; the other columns
-// are for display and are re-derived from it on every start.
-type License struct {
-	ID        uint      `gorm:"primaryKey" json:"-"`
-	LicenseID string    `gorm:"size:80" json:"license_id"`
-	Customer  string    `gorm:"size:200" json:"customer"`
-	Token     string    `gorm:"type:text;not null" json:"-"`
-	NotAfter  time.Time `json:"not_after"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 // Setting is a key/value row for control-plane state (e.g. the encrypted policy-signing key).
 type Setting struct {
 	Key       string `gorm:"primaryKey;size:80"`
@@ -859,7 +799,7 @@ func All() []any {
 		&Organization{}, &User{}, &APIKey{}, &Agent{}, &JoinToken{}, &Skill{}, &Policy{}, &ModelProvider{},
 		&ChatSession{}, &SessionMessage{}, &SessionEvent{}, &Attachment{}, &Approval{}, &Task{}, &Schedule{}, &Usage{},
 		&AuditLog{}, &Setting{}, &UpgradeStep{}, &Integration{}, &Project{}, &Change{}, &AlertRoute{}, &TerminalSession{}, &MiabiWatch{},
-		&MiabiWorkspace{}, &MCPServer{}, &MCPTool{}, &Lesson{}, &ChatChannel{}, &ChatIdentity{}, &ChatLinkCode{}, &ChatConversation{}, &License{},
+		&MiabiWorkspace{}, &MCPServer{}, &MCPTool{}, &Lesson{}, &ChatChannel{}, &ChatIdentity{}, &ChatLinkCode{}, &ChatConversation{},
 		&ProjectPlan{}, &PlanPhase{}, &TaskPlan{}, &Question{},
 	}
 }
@@ -873,7 +813,6 @@ const (
 	PlanArchived   = "archived"
 )
 
-// Plan phase statuses.
 const (
 	PhaseTodo       = "todo"
 	PhaseInProgress = "in_progress"
@@ -881,9 +820,7 @@ const (
 	PhaseSkipped    = "skipped"
 )
 
-// ProjectPlan is a piece of work on a project, written by a person: a description and ordered
-// phases. Tasks are linked to plans and report progress on the phases. (Not a change plan: those are
-// approved tool calls, see Change.)
+// ProjectPlan is human-written work on a project (not a change plan: those are approved tool calls, see Change).
 type ProjectPlan struct {
 	Base
 	ProjectID   string `gorm:"size:40;index;not null" json:"project_id"`
@@ -897,7 +834,6 @@ type ProjectPlan struct {
 	ProposedSessionID *string `gorm:"size:40" json:"proposed_session_id,omitempty"`
 }
 
-// PlanPhase is one phase of a project plan.
 type PlanPhase struct {
 	Base
 	PlanID   string `gorm:"size:40;index;not null" json:"plan_id"`
@@ -914,27 +850,23 @@ type PlanPhase struct {
 	UpdatedBy string `gorm:"size:60" json:"updated_by"`
 }
 
-// TaskPlan links a task to a plan, with the plan as it was when the task was created: the agent
-// works from that snapshot, and the audit shows exactly what it was given.
+// TaskPlan snapshots the plan at task creation: the agent works from it and the audit shows exactly what it was given.
 type TaskPlan struct {
 	OrganizationID string `gorm:"size:40;index;not null" json:"organization_id"`
 	TaskID         string `gorm:"primaryKey;size:40" json:"task_id"`
 	PlanID         string `gorm:"primaryKey;size:40;index" json:"plan_id"`
-	// PhaseID focuses the task on one phase: the rest of the plan is context, and the agent may
-	// report progress on that phase only.
+	// PhaseID focuses the task on one phase: the agent may report progress on that phase only.
 	PhaseID   *string      `gorm:"size:40;index" json:"phase_id"`
 	Snapshot  PlanSnapshot `gorm:"type:jsonb;serializer:json" json:"snapshot"`
 	CreatedAt time.Time    `json:"created_at"`
 }
 
-// PlanSnapshot is a plan's content at one moment.
 type PlanSnapshot struct {
 	Title       string              `json:"title"`
 	Description string              `json:"description"`
 	Phases      []PlanSnapshotPhase `json:"phases"`
 }
 
-// PlanSnapshotPhase is one phase in a PlanSnapshot.
 type PlanSnapshotPhase struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`

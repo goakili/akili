@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package auth
 
@@ -49,16 +50,13 @@ type OIDC struct {
 	provider *oidc.Provider
 }
 
-// ErrSSODenied is returned when the identity provider vouched for someone Akili does not admit.
 var ErrSSODenied = errors.New("single sign-on refused")
 
-// NewOIDC returns the SSO flow. Discovery is lazy so an identity-provider outage does not stop the
-// control plane from starting (password break-glass keeps working).
+// NewOIDC discovers lazily so an identity-provider outage does not stop the control plane from starting.
 func NewOIDC(cfg config.OIDCConfig, publicURL string, db *gorm.DB, rdb *redis.Client, auth *Service) *OIDC {
 	return &OIDC{cfg: cfg, redirect: strings.TrimRight(publicURL, "/") + "/api/v1/auth/oidc/callback", db: db, rdb: rdb, auth: auth}
 }
 
-// Name is the login button label.
 func (o *OIDC) Name() string { return o.cfg.Name }
 
 func (o *OIDC) discover(ctx context.Context) (*oidc.Provider, error) {
@@ -108,8 +106,7 @@ type claims struct {
 	Name          string `json:"name"`
 }
 
-// Finish exchanges the code, verifies the ID token and returns the signed-in user with a session.
-// The state is single-use.
+// Finish exchanges the code and verifies the ID token; the state is single-use.
 func (o *OIDC) Finish(ctx context.Context, state, code string) (*models.User, string, time.Time, error) {
 	raw, err := o.rdb.GetDel(ctx, stateKey(state)).Bytes()
 	if err != nil {
@@ -179,7 +176,6 @@ func (o *OIDC) mappedRole(gs []string) string {
 	return best
 }
 
-// admit links the identity to a user, creating one on first sign-in.
 func (o *OIDC) admit(ctx context.Context, subject string, c claims, gs []string) (*models.User, error) {
 	email := strings.ToLower(strings.TrimSpace(c.Email))
 	if email == "" || c.Subject == "" {

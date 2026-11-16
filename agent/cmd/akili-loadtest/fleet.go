@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package main
 
@@ -42,7 +43,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// sim is one simulated agent: a real link.Agent with its own identity and workdir.
 type sim struct {
 	idx   int
 	name  string
@@ -56,8 +56,7 @@ type prepareStats struct {
 	firstErr                            atomic.Value
 }
 
-// prepare makes n agents ready to connect, reusing state directories whose identity the control
-// plane still knows, and creating (or re-enrolling) the rest.
+// prepare reuses state directories whose identity the control plane still knows and enrolls the rest.
 func prepare(ctx context.Context, cfg *config, api *apiClient, httpc *http.Client, policyID string, facts proto.HostFacts) ([]*sim, *prepareStats, error) {
 	existing, _, err := api.agents(ctx)
 	if err != nil {
@@ -218,8 +217,7 @@ func newSim(i int, name, dir string, st *state.State, url string, facts proto.Ho
 	return &sim{idx: i, name: name, dir: dir, st: st, agent: a}, nil
 }
 
-// run keeps one simulated agent connected until ctx ends, with the same backoff as link.Run, and
-// reports every connect, failure and loss to m.
+// run uses the same backoff as link.Run and reports every connect, failure and loss to m.
 func (s *sim) run(ctx context.Context, dialer *websocket.Dialer, m *metrics) {
 	backoff := time.Second
 	first := true

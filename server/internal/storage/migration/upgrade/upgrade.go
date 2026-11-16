@@ -1,41 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package upgrade runs one-off data-upgrade steps: backfills, renames and other changes AutoMigrate
-// cannot express. Schema changes belong on the models; this package is only for data.
-//
-// Each step lives in its own file, steps_YYYY_MM_DD_<name>.go, named for the day it is added, and
-// registers itself from init. Go runs init functions in filename order, so the date prefix is what
-// orders the steps. A step runs once, in one transaction with its record in upgrade_steps, so a
-// step that fails leaves nothing behind and runs again on the next start. Never edit or remove a
-// released step; add a new one.
-//
-// A new step, in steps_2026_11_02_agent_label_case.go:
-//
-//	// agentLabelCase lowercases agent labels, which are now matched case-sensitively.
-//	func agentLabelCase(ctx context.Context, tx *gorm.DB) error {
-//		return tx.WithContext(ctx).Exec(`UPDATE agents SET labels = lower(labels::text)::jsonb`).Error
-//	}
-//
-//	func init() {
-//		register(Step{Name: "agent_label_case", Version: "0.1.0", Run: agentLabelCase})
-//	}
+// Package upgrade runs one-off data steps: add steps_YYYY_MM_DD_<name>.go registering a Step from init; never edit a released step.
 package upgrade
 
 import (
@@ -48,7 +31,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Step is a single data-upgrade step.
 type Step struct {
 	// Name identifies the step in upgrade_steps; it never changes once released.
 	Name string
@@ -58,12 +40,11 @@ type Step struct {
 	Run func(ctx context.Context, tx *gorm.DB) error
 }
 
-// steps is the ordered registry, filled by each step file's init.
+// steps is filled by each step file's init, in filename (date) order.
 var steps []Step
 
 func register(s Step) { steps = append(steps, s) }
 
-// Run applies every step not yet recorded, in order.
 func Run(ctx context.Context, db *gorm.DB) error {
 	return run(ctx, db, steps)
 }

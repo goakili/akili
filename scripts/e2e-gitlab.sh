@@ -1,27 +1,7 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-#
-# This file is part of Akili.
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: AGPL-3.0-or-later
-# End-to-end test of coding work against a real GitLab CE: project and group access tokens, a
-# nested-group project, a task that writes, tests in the sandbox, commits, pushes and opens a merge
-# request, commit statuses, the diff, the push guard (Akili's and GitLab's own), repository creation
-# with a group token, and a real issue webhook. Uses the scripted provider; needs Docker and about
-# 4 GB of memory for GitLab, which takes a few minutes to boot. Opt-in: not part of e2e-all.
+# SPDX-License-Identifier: MIT
+# End-to-end test of coding work against a real GitLab CE; opt-in (about 4 GB, minutes to boot), not part of e2e-all.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

@@ -1,26 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package plans holds project plans: work on a project written as a description and ordered phases.
-// Tasks are linked to plans and receive them in their goal. Agents report progress on phases with
-// plan_phase_update and may propose new plans with plan_propose, which arrive as drafts a person
-// activates; they can't edit, activate or delete plans.
+// Package plans holds project plans; agents report phase progress and propose drafts but cannot edit, activate or delete plans.
 package plans
 
 import (
@@ -62,14 +60,12 @@ type Emitter interface {
 	EmitData(ctx context.Context, org string, ev bus.Event, data any)
 }
 
-// Service stores plans and their phases.
 type Service struct {
 	db    *gorm.DB
 	audit *audit.Logger
 	bus   Emitter
 }
 
-// New returns the service.
 func New(db *gorm.DB, a *audit.Logger, b Emitter) *Service { return &Service{db: db, audit: a, bus: b} }
 
 // PhaseInput is a phase as a person writes it. ID keeps an existing phase (and its status).
@@ -80,7 +76,6 @@ type PhaseInput struct {
 	DoneWhen string `json:"done_when,omitempty" description:"what finished means for this phase"`
 }
 
-// CreateInput is a new plan.
 type CreateInput struct {
 	Title       string       `json:"title"`
 	Description string       `json:"description"`
@@ -145,8 +140,7 @@ func validatePhases(phases []PhaseInput) error {
 	return nil
 }
 
-// Derive is the plan status its phases give it. Drafts and archived plans keep their status; a plan
-// is done when every phase is done or skipped, and in progress once any phase has moved.
+// Derive is the plan status its phases give it; drafts and archived plans keep their status.
 func Derive(current string, phases []models.PlanPhase) string {
 	if current == models.PlanDraft || current == models.PlanArchived {
 		return current
@@ -173,8 +167,7 @@ func Derive(current string, phases []models.PlanPhase) string {
 	return models.PlanActive
 }
 
-// MergePhases lines up a replacement phase list with the existing phases: known ids keep their row and
-// status, unknown or empty ids become new todo phases, and phases left out are deleted.
+// MergePhases lines up replacement phases: known ids keep row and status, unknown ids become todo, omitted phases are deleted.
 func MergePhases(existing []models.PlanPhase, in []PhaseInput) (keep []models.PlanPhase, create []PhaseInput, drop []string, positions []int) {
 	byID := map[string]models.PlanPhase{}
 	for _, st := range existing {
@@ -289,7 +282,6 @@ func (s *Service) Get(ctx context.Context, org, id string) (*Detail, error) {
 	return d, nil
 }
 
-// Create stores a plan with its phases.
 func (s *Service) Create(ctx context.Context, org, userID, projectID string, in CreateInput) (*Detail, error) {
 	return s.create(ctx, org, projectID, in, userID, nil)
 }
@@ -344,7 +336,6 @@ func (s *Service) create(ctx context.Context, org, projectID string, in CreateIn
 	return s.Get(ctx, org, p.ID)
 }
 
-// Update changes a plan's text, order or status.
 func (s *Service) Update(ctx context.Context, org, id string, in UpdateInput) (*models.ProjectPlan, error) {
 	p, err := s.plan(ctx, s.db, org, id)
 	if err != nil {
@@ -495,9 +486,7 @@ func (s *Service) setPhase(ctx context.Context, org, planID, phaseID, status, no
 	return &st, nil
 }
 
-// Attach links plans to a new task inside its creation transaction, with a snapshot of each. The
-// plans must belong to the task's project and be active or in progress. phaseID, when set, focuses
-// the task on that phase (its plan is linked too); the phase must still be open.
+// Attach links active plans of the task's project to a new task, with snapshots, inside its creation transaction.
 func Attach(ctx context.Context, tx *gorm.DB, org, projectID, taskID string, ids []string, phaseID string) error {
 	var focus *models.PlanPhase
 	if phaseID != "" {
@@ -573,8 +562,7 @@ func (s *Service) PlanIDs(ctx context.Context, org string, taskIDs []string) map
 	return out
 }
 
-// GoalSection renders the linked plans for the task's goal (the first user turn, not the system
-// prompt), from the snapshots taken when the task was created.
+// GoalSection renders the linked plans into the task's goal (first user turn, not the system prompt) from their snapshots.
 func GoalSection(links []models.TaskPlan) string {
 	if len(links) == 0 {
 		return ""
@@ -625,10 +613,11 @@ func (s *Service) RunRemote(ctx context.Context, sess *models.ChatSession, tool 
 	return s.phaseUpdate(ctx, sess, input)
 }
 
-func fail(msg string) proto.RemoteResult { return proto.RemoteResult{Output: "error: " + msg, IsError: true} }
+func fail(msg string) proto.RemoteResult {
+	return proto.RemoteResult{Output: "error: " + msg, IsError: true}
+}
 
-// propose stores an agent's plan for the session's project as a draft. Drafts can't be linked to
-// tasks, so nothing works on it until a person reviews and activates it.
+// propose stores an agent's plan as a draft, which no task can work on until a person activates it.
 func (s *Service) propose(ctx context.Context, sess *models.ChatSession, input json.RawMessage) proto.RemoteResult {
 	var in proto.PlanProposeInput
 	if err := json.Unmarshal(input, &in); err != nil {

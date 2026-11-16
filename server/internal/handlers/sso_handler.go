@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -37,7 +38,6 @@ import (
 
 const oidcStateCookie = "akili_oidc_state"
 
-// AuthProviders lists the sign-in methods, for the login page.
 type AuthProviders struct {
 	Password     bool   `json:"password"`
 	PasswordNote string `json:"password_note,omitempty"`
@@ -46,7 +46,6 @@ type AuthProviders struct {
 	SSOLoginURL  string `json:"sso_login_url,omitempty"`
 }
 
-// Providers reports which sign-in methods are enabled.
 func (h *Handlers) Providers(c *okapi.Context) error {
 	out := AuthProviders{Password: true}
 	if h.OIDC != nil {
@@ -58,7 +57,6 @@ func (h *Handlers) Providers(c *okapi.Context) error {
 	return ok(c, out)
 }
 
-// OIDCLogin redirects the browser to the identity provider.
 func (h *Handlers) OIDCLogin(c *okapi.Context) error {
 	if h.OIDC == nil {
 		return c.AbortNotFound("single sign-on is not configured")
@@ -72,15 +70,13 @@ func (h *Handlers) OIDCLogin(c *okapi.Context) error {
 		logger.Error("sso login failed", "error", err)
 		return c.AbortServiceUnavailable("the identity provider is unavailable")
 	}
-	// Lax, not Strict: the browser must send it on the top-level redirect back from the provider.
-	// Binding the state to this browser stops login CSRF (a victim finishing an attacker's login).
+	// Lax so the provider's top-level redirect carries it; binding the state to this browser stops login CSRF.
 	http.SetCookie(c.ResponseWriter(), &http.Cookie{Name: oidcStateCookie, Value: state, Path: "/api/v1/auth/oidc", MaxAge: 600,
 		HttpOnly: true, Secure: h.Cfg.CookieSecure, SameSite: http.SameSiteLaxMode})
 	http.Redirect(c.ResponseWriter(), c.Request(), target, http.StatusFound)
 	return nil
 }
 
-// OIDCCallback finishes sign-in and starts a session.
 func (h *Handlers) OIDCCallback(c *okapi.Context) error {
 	if h.OIDC == nil {
 		return c.AbortNotFound("single sign-on is not configured")
@@ -130,7 +126,6 @@ type SecurityStatus struct {
 	TLS       bool             `json:"tls"`
 }
 
-// Security returns the security configuration summary.
 func (h *Handlers) Security(c *okapi.Context) error {
 	ctx := c.Request().Context()
 	out := SecurityStatus{KMS: h.Box.Keyring().Provider(), SSO: h.OIDC != nil, AgentMTLS: h.Cfg.TLS.AgentMTLS, TLS: h.Cfg.TLS.Enabled(), SIEM: []siem.Status{}}

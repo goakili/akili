@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -33,7 +34,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// ListSessions lists sessions, optionally for one agent or task.
 func (h *Handlers) ListSessions(c *okapi.Context) error {
 	q := h.DB.Where("organization_id = ?", middlewares.OrgID(c))
 	if a := c.Query("agent_id"); a != "" {
@@ -56,7 +56,6 @@ func (h *Handlers) ListSessions(c *okapi.Context) error {
 	return paged(c, out, total, p)
 }
 
-// SessionRequest starts a chat session.
 type SessionRequest struct {
 	Body struct {
 		AgentID   string `json:"agent_id" required:"true"`
@@ -65,7 +64,6 @@ type SessionRequest struct {
 	} `json:"body"`
 }
 
-// CreateSession starts a chat with an agent.
 func (h *Handlers) CreateSession(c *okapi.Context, req *SessionRequest) error {
 	org := middlewares.OrgID(c)
 	a, err := h.Fleet.Get(c.Request().Context(), org, req.Body.AgentID)
@@ -88,7 +86,6 @@ func (h *Handlers) CreateSession(c *okapi.Context, req *SessionRequest) error {
 	return created(c, s)
 }
 
-// SessionDetail is a session with its history and timeline.
 type SessionDetail struct {
 	Session   *models.ChatSession     `json:"session"`
 	Messages  []models.SessionMessage `json:"messages"`
@@ -98,7 +95,6 @@ type SessionDetail struct {
 	Project   *models.Project         `json:"project,omitempty"`
 }
 
-// GetSession returns a session with messages, events, approvals and questions.
 func (h *Handlers) GetSession(c *okapi.Context) error {
 	s, err := h.Sessions.Get(c.Request().Context(), middlewares.OrgID(c), c.Param("id"))
 	if err != nil {
@@ -123,7 +119,6 @@ type MessageRequest struct {
 	} `json:"body"`
 }
 
-// PostMessage sends a message to the agent.
 func (h *Handlers) PostMessage(c *okapi.Context, req *MessageRequest) error {
 	if strings.TrimSpace(req.Body.Text) == "" && len(req.Body.Attachments) == 0 {
 		return c.AbortBadRequest("text or an image is required")
@@ -155,7 +150,6 @@ func (h *Handlers) UploadAttachment(c *okapi.Context) error {
 	return created(c, a)
 }
 
-// GetAttachment serves an attachment's image.
 func (h *Handlers) GetAttachment(c *okapi.Context) error {
 	a, err := h.Sessions.Attachment(c.Request().Context(), middlewares.OrgID(c), c.Param("id"), c.Param("attachment"))
 	if err != nil {
@@ -175,7 +169,6 @@ func (h *Handlers) InterruptSession(c *okapi.Context) error {
 	return message(c, "interrupted")
 }
 
-// CloseSession ends a session.
 func (h *Handlers) CloseSession(c *okapi.Context) error {
 	if err := h.Sessions.Close(c.Request().Context(), middlewares.OrgID(c), c.Param("id"), middlewares.UserID(c)); err != nil {
 		return mapErr(c, err)
@@ -183,7 +176,6 @@ func (h *Handlers) CloseSession(c *okapi.Context) error {
 	return message(c, "closed")
 }
 
-// StreamSession streams a session's live events over SSE.
 func (h *Handlers) StreamSession(c *okapi.Context) error {
 	s, err := h.Sessions.Get(c.Request().Context(), middlewares.OrgID(c), c.Param("id"))
 	if err != nil {
@@ -192,10 +184,7 @@ func (h *Handlers) StreamSession(c *okapi.Context) error {
 	return streamEvents(c, h.Bus.SubscribeSession(c.Request().Context(), s.ID), nil)
 }
 
-// StreamEvents streams the organization's live events over SSE. It is the only stream a browser tab
-// needs: browsers allow ~6 HTTP/1.1 connections per host, so one stream per open view would starve
-// ordinary requests after a few tabs. Token deltas are included only for the session named by
-// ?session=, the one the tab is showing.
+// StreamEvents is the one stream a tab needs (browsers allow ~6 HTTP/1.1 connections per host); token deltas only for ?session=.
 func (h *Handlers) StreamEvents(c *okapi.Context) error {
 	focus := c.Query("session")
 	return streamEvents(c, h.Bus.SubscribeOrg(c.Request().Context(), middlewares.OrgID(c)), func(ev busEvent) bool {
@@ -203,9 +192,6 @@ func (h *Handlers) StreamEvents(c *okapi.Context) error {
 	})
 }
 
-// ---- approvals -----------------------------------------------------------------------------------
-
-// ListApprovals lists approvals, pending first.
 func (h *Handlers) ListApprovals(c *okapi.Context) error {
 	q := h.DB.Where("organization_id = ?", middlewares.OrgID(c))
 	if st := c.Query("status"); st != "" {
@@ -219,7 +205,6 @@ func (h *Handlers) ListApprovals(c *okapi.Context) error {
 	return paged(c, out, total, p)
 }
 
-// DecisionRequest carries an optional note.
 type DecisionRequest struct {
 	Body struct {
 		Note string `json:"note" maxLength:"500"`
@@ -235,7 +220,6 @@ func (h *Handlers) Approve(c *okapi.Context, req *DecisionRequest) error {
 	return ok(c, ap)
 }
 
-// Deny refuses the tool call.
 func (h *Handlers) Deny(c *okapi.Context, req *DecisionRequest) error {
 	ap, err := h.Sessions.Decide(c.Request().Context(), middlewares.OrgID(c), c.Param("id"), middlewares.UserID(c), false, req.Body.Note)
 	if err != nil {

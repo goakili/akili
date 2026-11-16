@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -63,7 +64,6 @@ func (h *Handlers) channelView(ch models.ChatChannel) ChatChannelView {
 	return v
 }
 
-// ListChatChannels lists chat channels.
 func (h *Handlers) ListChatChannels(c *okapi.Context) error {
 	var rows []models.ChatChannel
 	h.DB.Where("organization_id = ?", middlewares.OrgID(c)).Order("name").Find(&rows)
@@ -120,7 +120,6 @@ func (h *Handlers) saveChannel(c *okapi.Context, ch *models.ChatChannel, req *Ch
 	return h.DB.Save(ch).Error
 }
 
-// CreateChatChannel adds a chat channel.
 func (h *Handlers) CreateChatChannel(c *okapi.Context, req *ChatChannelRequest) error {
 	ch := &models.ChatChannel{Base: models.Base{ID: models.NewID("chn"), OrganizationID: middlewares.OrgID(c)}, Enabled: true, CreatedBy: middlewares.UserID(c)}
 	if err := h.saveChannel(c, ch, req, true); err != nil {
@@ -131,7 +130,6 @@ func (h *Handlers) CreateChatChannel(c *okapi.Context, req *ChatChannelRequest) 
 	return created(c, h.channelView(*ch))
 }
 
-// UpdateChatChannel edits a chat channel.
 func (h *Handlers) UpdateChatChannel(c *okapi.Context, req *ChatChannelRequest) error {
 	var ch models.ChatChannel
 	if err := h.DB.First(&ch, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -157,7 +155,6 @@ func (h *Handlers) DeleteChatChannel(c *okapi.Context) error {
 	return message(c, "deleted")
 }
 
-// TestChatChannel checks a channel's credentials against the platform.
 func (h *Handlers) TestChatChannel(c *okapi.Context) error {
 	var ch models.ChatChannel
 	if err := h.DB.First(&ch, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -181,13 +178,11 @@ func (h *Handlers) TestChatChannel(c *okapi.Context) error {
 	return ok(c, out)
 }
 
-// ChatLinkCode is a one-time code to link a chat account.
 type ChatLinkCode struct {
 	Code      string    `json:"code"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// CreateChatLinkCode issues a link code for the caller.
 func (h *Handlers) CreateChatLinkCode(c *okapi.Context) error {
 	code, exp, err := h.Chat.NewLinkCode(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c))
 	if err != nil {
@@ -241,7 +236,6 @@ func (h *Handlers) slackChannel(c *okapi.Context) (*models.ChatChannel, []byte, 
 	return &ch, body, nil
 }
 
-// SlackEvents receives Slack Events API requests.
 func (h *Handlers) SlackEvents(c *okapi.Context) error {
 	ch, body, err := h.slackChannel(c)
 	if ch == nil {
@@ -261,7 +255,6 @@ func (h *Handlers) SlackEvents(c *okapi.Context) error {
 	return c.JSON(200, map[string]bool{"ok": true})
 }
 
-// SlackInteract receives Slack button presses.
 func (h *Handlers) SlackInteract(c *okapi.Context) error {
 	ch, body, err := h.slackChannel(c)
 	if ch == nil {
@@ -275,7 +268,6 @@ func (h *Handlers) SlackInteract(c *okapi.Context) error {
 	return c.JSON(200, map[string]bool{"ok": true})
 }
 
-// LessonRequest creates an operator lesson.
 type LessonRequest struct {
 	Body struct {
 		Text    string  `json:"text" required:"true"`
@@ -291,7 +283,6 @@ type LessonDecisionRequest struct {
 	} `json:"body"`
 }
 
-// ListLessons lists lessons.
 func (h *Handlers) ListLessons(c *okapi.Context) error {
 	p := pageParams(c)
 	out, total, err := h.Lessons.List(c.Request().Context(), middlewares.OrgID(c), lessons.Filter{Status: c.Query("status"), AgentID: c.Query("agent_id")}, p)
@@ -328,7 +319,6 @@ func lessonErr(c *okapi.Context, err error) error {
 	return c.AbortInternalServerError("lesson update failed", err)
 }
 
-// ApproveLesson approves a proposed lesson.
 func (h *Handlers) ApproveLesson(c *okapi.Context, req *LessonDecisionRequest) error {
 	l, err := h.Lessons.Decide(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), c.Param("id"), true, req.Body.Text, req.Body.Note)
 	if err != nil {
@@ -346,7 +336,6 @@ func (h *Handlers) RejectLesson(c *okapi.Context, req *LessonDecisionRequest) er
 	return ok(c, l)
 }
 
-// DeleteLesson removes a lesson.
 func (h *Handlers) DeleteLesson(c *okapi.Context) error {
 	if err := h.Lessons.Delete(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), c.Param("id")); err != nil {
 		return lessonErr(c, err)

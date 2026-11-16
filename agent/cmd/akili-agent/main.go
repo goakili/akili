@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Command akili-agent is the Akili agent: it enrolls with a control plane, keeps an outbound tunnel
-// to it, and runs the sessions and tasks it is given, within the policy it is given.
+// Command akili-agent enrolls with a control plane, keeps an outbound tunnel to it and runs its sessions.
 package main
 
 import (
@@ -192,8 +192,7 @@ func enroll(args []string) error {
 	return nil
 }
 
-// start serves sessions. cmd is the command it was invoked as: "run" is its deprecated name, kept
-// so existing systemd units, containers and scripts keep working.
+// start serves sessions; "run" is its deprecated name, kept for existing systemd units and scripts.
 func start(cmd string, args []string) error {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	stateDir := fs.String("state-dir", env("AKILI_STATE_DIR", defaultStateDir), "state directory")
@@ -214,8 +213,7 @@ func start(cmd string, args []string) error {
 	if err != nil {
 		return err
 	}
-	// A CA given at run time (a renewed self-signed CA, or one missing at enrollment) replaces the
-	// saved one, without re-enrolling.
+	// A CA given at run time replaces the saved one without re-enrolling.
 	if *caCert != "" || os.Getenv("AKILI_CA_CERT_PEM") != "" {
 		ca, err := state.InstallCA(*stateDir, *caCert, os.Getenv("AKILI_CA_CERT_PEM"))
 		if err != nil {
@@ -242,8 +240,7 @@ func start(cmd string, args []string) error {
 	return err
 }
 
-// shellEnv resolves the variable names an operator chose to pass to shell tools. Values are read
-// once at start; the names are logged, never the values.
+// shellEnv reads values once at start; only the names are logged, never the values.
 func shellEnv(names string) []string {
 	var out, passed []string
 	for _, n := range strings.Split(names, ",") {

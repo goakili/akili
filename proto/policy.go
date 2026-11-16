@@ -1,5 +1,22 @@
-// SPDX-FileCopyrightText: 2026 Jonas Kaninda
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jonas Kaninda.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package proto
 
@@ -12,14 +29,7 @@ import (
 	"strings"
 )
 
-// Autonomy is how much an agent may do without a human.
-//
-//	L0 suggest only: every tool call needs approval
-//	L1 auto-run Low
-//	L2 auto-run Low and Medium
-//	L3 auto-run up to High
-//
-// Critical always needs approval, at every level.
+// Autonomy L0-L3 auto-runs nothing, Low, up to Medium, or up to High; Critical always needs approval.
 type Autonomy int
 
 const (
@@ -29,7 +39,6 @@ const (
 	AutonomyL3
 )
 
-// autoMax is the highest risk each level runs without approval.
 func (a Autonomy) autoMax() Risk {
 	switch a {
 	case AutonomyL1:
@@ -43,7 +52,6 @@ func (a Autonomy) autoMax() Risk {
 	}
 }
 
-// Valid reports whether a is a defined level.
 func (a Autonomy) Valid() bool { return a >= AutonomyL0 && a <= AutonomyL3 }
 
 // Rule is an allow/deny pattern list. Deny always wins; an empty Allow allows nothing (default deny).
@@ -52,44 +60,34 @@ type Rule struct {
 	Deny  []string `json:"deny,omitempty"`
 }
 
-// Policy is the capability policy bound to an agent. It is evaluated by the control plane for every
-// tool request and, as a signed bundle, by the agent before asking.
+// Policy is evaluated by the control plane for every tool request and, as a signed bundle, by the agent.
 type Policy struct {
 	Name    string `json:"name"`
 	Version int    `json:"version"`
-	// Tools by name (glob).
-	Tools Rule `json:"tools"`
-	// Paths the file tools and shell cwd may touch. "$WORKDIR" expands to the agent workdir; "**"
-	// matches across directories.
+	Tools   Rule   `json:"tools"`
+	// Paths: "$WORKDIR" expands to the agent workdir; "**" matches across directories.
 	Paths Rule `json:"paths"`
-	// Commands a shell call may run, matched against the whole command line; "*" matches anything.
+	// Commands are matched against the whole command line; "*" matches anything.
 	Commands Rule `json:"commands"`
-	// Domains http_fetch may reach; "*.example.com" matches subdomains.
-	Domains Rule `json:"domains"`
-	// Services (systemd units) the service tools may touch, e.g. "nginx.service", "app-*".
-	Services Rule `json:"services,omitempty"`
-	// Containers (names) the docker tools may touch.
+	// Domains: "*.example.com" matches subdomains.
+	Domains    Rule `json:"domains"`
+	Services   Rule `json:"services,omitempty"`
 	Containers Rule `json:"containers,omitempty"`
-	// Apps (Miabi application names) the Miabi tools may touch.
-	Apps Rule `json:"apps,omitempty"`
-	// Terminal allows operators to open a recorded interactive terminal on the agent.
-	Terminal bool `json:"terminal,omitempty"`
+	Apps       Rule `json:"apps,omitempty"`
+	Terminal   bool `json:"terminal,omitempty"`
 	// MaxRisk caps what this agent may ever do, even with approval.
 	MaxRisk Risk `json:"max_risk"`
 	// RequireApproval lists tools (glob) that always need a human, regardless of autonomy.
 	RequireApproval []string `json:"require_approval,omitempty"`
-	// AllowShellMeta permits ; & | ` $( < > and newlines in shell commands. Off by default: with
-	// metacharacters, an allowed prefix like "ls *" would also match "ls; rm -rf /".
+	// AllowShellMeta is off by default because an allowed "ls *" would otherwise match "ls; rm -rf /".
 	AllowShellMeta bool `json:"allow_shell_meta,omitempty"`
 }
 
-// Call is a tool call to evaluate.
 type Call struct {
 	Tool  string
 	Input json.RawMessage
 }
 
-// Decision is the policy outcome for a call.
 type Decision struct {
 	Effect    string    `json:"effect"` // EffectAllow | EffectDeny | EffectApprove
 	Reason    string    `json:"reason"`
@@ -101,14 +99,12 @@ func deny(risk Risk, res Resources, format string, a ...any) Decision {
 	return Decision{Effect: EffectDeny, Reason: fmt.Sprintf(format, a...), Risk: risk, Resources: res}
 }
 
-// Evaluate decides a call under a policy, autonomy level and workdir. It is pure and deterministic,
-// so the agent and the control plane reach the same answer for the same inputs.
+// Evaluate is pure and deterministic, so the agent and the control plane reach the same answer.
 func Evaluate(p Policy, autonomy Autonomy, workdir string, call Call) Decision {
 	return EvaluateAt(p, autonomy, workdir, workdir, call)
 }
 
-// EvaluateAt is Evaluate with relative paths resolved against base (a project worktree inside the
-// workdir) while "$WORKDIR" in the policy still means the agent workdir.
+// EvaluateAt resolves relative paths against base (a project worktree) while "$WORKDIR" still means the agent workdir.
 func EvaluateAt(p Policy, autonomy Autonomy, workdir, base string, call Call) Decision {
 	spec, ok := LookupTool(call.Tool)
 	if !ok {
@@ -212,7 +208,6 @@ func hasShellMeta(cmd string) bool {
 	return strings.ContainsAny(cmd, ";&|`<>\n\r") || strings.Contains(cmd, "$(")
 }
 
-// globMatch: "*" matches any run of characters.
 func globMatch(pattern, s string) bool { return wildcard(pattern, s, false) }
 
 // commandMatch: "*" matches anything, including spaces and slashes.
@@ -233,8 +228,7 @@ func domainMatch(pattern, host string) bool {
 // pathMatch: "**" matches across "/", "*" and "?" stay within one segment.
 func pathMatch(pattern, p string) bool { return wildcard(path.Clean(pattern), p, true) }
 
-// wildcard matches with * and ?; when segmented, * and ? stop at "/" and ** crosses it.
-// A trailing "/**" also matches the directory itself.
+// wildcard: when segmented, * and ? stop at "/", ** crosses it, and a trailing "/**" matches the directory itself.
 func wildcard(pattern, s string, segmented bool) bool {
 	if segmented && strings.HasSuffix(pattern, "/**") && s == strings.TrimSuffix(pattern, "/**") {
 		return true
@@ -279,14 +273,12 @@ func wild(p, s string, seg bool) bool {
 	return len(s) == 0
 }
 
-// SignedPolicy is a policy bundle signed by the control plane. The agent verifies it against the key
-// pinned at enrollment before enforcing it.
+// SignedPolicy is verified by the agent against the key pinned at enrollment before it is enforced.
 type SignedPolicy struct {
 	Policy    json.RawMessage `json:"policy"`
 	Signature []byte          `json:"signature"`
 }
 
-// SignPolicy serialises and signs a policy.
 func SignPolicy(p Policy, key ed25519.PrivateKey) (SignedPolicy, error) {
 	b, err := json.Marshal(p)
 	if err != nil {
@@ -298,7 +290,6 @@ func SignPolicy(p Policy, key ed25519.PrivateKey) (SignedPolicy, error) {
 // ErrBadSignature means a policy bundle was not signed by the pinned control-plane key.
 var ErrBadSignature = errors.New("policy signature verification failed")
 
-// Verify checks the signature and returns the policy.
 func (s SignedPolicy) Verify(pub ed25519.PublicKey) (Policy, error) {
 	var p Policy
 	if len(pub) != ed25519.PublicKeySize || !ed25519.Verify(pub, s.Policy, s.Signature) {
@@ -310,14 +301,12 @@ func (s SignedPolicy) Verify(pub ed25519.PublicKey) (Policy, error) {
 	return p, nil
 }
 
-// PathAllowed reports whether the policy's path rule admits an absolute path. Agents call it again
-// on the real path after resolving symlinks, so a link inside the workdir cannot reach a denied path.
+// PathAllowed is called again on the symlink-resolved path, so a link in the workdir cannot reach a denied path.
 func (p Policy) PathAllowed(workdir, abs string) bool {
 	return matchRule(expandWorkdir(p.Paths, workdir), ResolvePath(workdir, abs), pathMatch)
 }
 
-// ProjectDir is where an agent keeps a project's worktree for a branch. Both sides compute it so the
-// control plane resolves relative paths exactly as the agent will.
+// ProjectDir is computed by both sides so the control plane resolves relative paths exactly as the agent does.
 func ProjectDir(workdir, slug, branch string) string {
 	return path.Join(workdir, "projects", slug, strings.ReplaceAll(branch, "/", "-"))
 }
@@ -327,8 +316,7 @@ func ProjectMirror(workdir, slug string) string {
 	return path.Join(workdir, "projects", slug, ".mirror.git")
 }
 
-// AllowsTool reports whether the policy lets the tool be called at all (by name and risk ceiling).
-// Individual calls are still evaluated in full; this only decides which tools to offer a model.
+// AllowsTool only decides which tools to offer a model; every call is still evaluated in full.
 func (p Policy) AllowsTool(name string) bool {
 	spec, ok := LookupTool(name)
 	return ok && spec.Risk <= p.MaxRisk && matchRule(p.Tools, name, globMatch)

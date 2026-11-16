@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package chat
 
@@ -45,7 +46,6 @@ import (
 // Leader reports whether this replica runs singleton loops (pollers and the reply relay).
 type Leader interface{ Leading() bool }
 
-// Service runs the chat gateways.
 type Service struct {
 	db     *gorm.DB
 	box    *crypto.Box
@@ -56,18 +56,15 @@ type Service struct {
 	leader Leader
 }
 
-// New returns the service.
 func New(db *gorm.DB, box *crypto.Box, b *bus.Bus, a *audit.Logger, hub *sessions.Hub, t *tasks.Service, l Leader) *Service {
 	return &Service{db: db, box: box, bus: b, audit: a, hub: hub, tasks: t, leader: l}
 }
 
-// LinkCodeTTL is how long a link code is valid.
 const LinkCodeTTL = 10 * time.Minute
 
 // Trigger marks tasks started from chat; TriggerRef is the conversation id.
 const Trigger = "chat"
 
-// PlatformFor builds the client for a channel.
 func (s *Service) PlatformFor(ch *models.ChatChannel) (Platform, error) {
 	token, err := s.box.Decrypt(ch.TokenEnc)
 	if err != nil {
@@ -88,8 +85,7 @@ func (s *Service) PlatformFor(ch *models.ChatChannel) (Platform, error) {
 	return nil, fmt.Errorf("unknown chat kind %q", ch.Kind)
 }
 
-// NewLinkCode returns a one-time code the user sends to the bot ("/link <code>") to link their chat
-// account. Only its hash is stored.
+// NewLinkCode returns a one-time code the user sends to the bot ("/link <code>"); only its hash is stored.
 func (s *Service) NewLinkCode(ctx context.Context, org, userID string) (string, time.Time, error) {
 	code := "AK-" + strings.ToUpper(rand.Text()[:10])
 	exp := time.Now().UTC().Add(LinkCodeTTL)
@@ -132,8 +128,7 @@ const helpText = `Akili commands:
 /unlink        unlink this chat account
 Anything else is sent to the agent.`
 
-// Handle processes one incoming message or button press. It never returns an error to the platform:
-// problems are answered in the chat.
+// Handle never returns an error to the platform: problems are answered in the chat.
 func (s *Service) Handle(ctx context.Context, ch *models.ChatChannel, in Incoming) {
 	if !auth.RateLimit(ctx, s.bus.Redis(), "chat:"+ch.ID+":"+in.UserID, 30, time.Minute, false) {
 		s.reply(ctx, ch, in.ChatID, Outgoing{Text: "Too many messages; wait a minute."})
@@ -217,8 +212,7 @@ func (s *Service) record(ctx context.Context, u *models.User, action string, ch 
 		TargetType: "chat_channel", TargetID: ch.ID, Metadata: meta})
 }
 
-// link binds the sender to the Akili user who generated the code. The code proves the Akili side,
-// sending it from this account proves the chat side.
+// link binds the sender to the code's Akili user: the code proves the Akili side, sending it proves the chat side.
 func (s *Service) link(ctx context.Context, ch *models.ChatChannel, in Incoming, code string) {
 	if !auth.RateLimit(ctx, s.bus.Redis(), "chat-link:"+ch.ID+":"+in.UserID, 5, 10*time.Minute, true) {
 		s.reply(ctx, ch, in.ChatID, Outgoing{Text: "Too many link attempts; try again later."})
@@ -453,7 +447,6 @@ func (s *Service) listApprovals(ctx context.Context, ch *models.ChatChannel, in 
 	}
 }
 
-// action handles a button press.
 func (s *Service) action(ctx context.Context, ch *models.ChatChannel, in Incoming, u *models.User) {
 	if id, verb, ok := parseApprovalAction(in.Action); ok {
 		s.decide(ctx, ch, in, u, id, verb == "approve")
@@ -552,8 +545,7 @@ func (s *Service) listQuestions(ctx context.Context, ch *models.ChatChannel, in 
 	}
 }
 
-// answerText handles /answer <id> <rest>: an option number picks that option, anything else is the
-// person's own words.
+// answerText handles /answer <id> <rest>: an option number picks that option, anything else is the person's own words.
 func (s *Service) answerText(ctx context.Context, ch *models.ChatChannel, in Incoming, u *models.User, id, rest string) {
 	if id == "" || rest == "" {
 		s.reply(ctx, ch, in.ChatID, Outgoing{Text: "Usage: /answer <id> <option number or your own words>"})

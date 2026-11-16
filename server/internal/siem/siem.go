@@ -1,27 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package siem forwards the audit trail to external systems (SIEM sinks).
-//
-// The leader replica tails audit_logs by id from a cursor stored per sink, so delivery is
-// at-least-once and survives replica restarts and sink outages: a sink that was down catches up.
-// Every event carries its hash and previous hash, so the receiver can verify the chain itself.
+// Package siem forwards the audit trail to SIEM sinks, at-least-once from a cursor stored per sink.
 package siem
 
 import (
@@ -36,7 +33,6 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// Event is one audit row as sent to a sink.
 type Event struct {
 	Source string `json:"source"`
 	models.AuditLog
@@ -61,7 +57,6 @@ type Status struct {
 	ErrorAt    *time.Time `json:"error_at,omitempty"`
 }
 
-// Forwarder moves audit rows to the configured sinks.
 type Forwarder struct {
 	db        *gorm.DB
 	sinks     []Sink
@@ -71,13 +66,11 @@ type Forwarder struct {
 	fromStart bool
 }
 
-// New returns a forwarder. fromStart sends the whole existing trail to a new sink; otherwise a new
-// sink starts at the current end.
+// New returns a forwarder; fromStart sends the whole existing trail to a new sink, otherwise it starts at the current end.
 func New(db *gorm.DB, leader Leader, fromStart bool, sinks ...Sink) *Forwarder {
 	return &Forwarder{db: db, sinks: sinks, leader: leader, batch: 500, interval: 2 * time.Second, fromStart: fromStart}
 }
 
-// Enabled reports whether any sink is configured.
 func (f *Forwarder) Enabled() bool { return len(f.sinks) > 0 }
 
 func settingKey(sink string) string { return "siem.cursor." + sink }

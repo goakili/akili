@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package auth
 
@@ -48,10 +49,8 @@ const (
 	totpPeriod = 30
 	totpDigits = 6
 	// totpSkew accepts the previous and next code, for clock drift.
-	totpSkew = 1
-	// TOTPIssuer names Akili in authenticator apps.
-	TOTPIssuer = "Akili"
-	// RecoveryCodeCount is how many single-use recovery codes a user gets.
+	totpSkew          = 1
+	TOTPIssuer        = "Akili"
 	RecoveryCodeCount = 10
 	// MFAChallengeTTL is how long a password-verified login waits for its second factor.
 	MFAChallengeTTL = 5 * time.Minute
@@ -60,7 +59,6 @@ const (
 	mfaUserWindow   = 15 * time.Minute
 )
 
-// Second-factor errors.
 var (
 	ErrInvalidCode     = errors.New("invalid authentication code")
 	ErrMFAChallenge    = errors.New("sign-in expired; enter your email and password again")
@@ -110,7 +108,6 @@ func isTOTPCode(code string) bool {
 	return true
 }
 
-// normalizeCode strips the spaces and dashes people type or paste with codes.
 func normalizeCode(code string) string {
 	return strings.ToLower(strings.NewReplacer(" ", "", "-", "", "\t", "").Replace(strings.TrimSpace(code)))
 }
@@ -124,7 +121,6 @@ func newRecoveryCodes() (plain, hashes []string) {
 	return plain, hashes
 }
 
-// TOTPSetup is what an authenticator app needs to add the account.
 type TOTPSetup struct {
 	Secret string `json:"secret"`
 	URI    string `json:"otpauth_uri"`
@@ -225,7 +221,6 @@ func (s *Service) EnableTOTP(ctx context.Context, u *models.User, code string) (
 	return plain, nil
 }
 
-// DisableTOTP removes the second factor and its recovery codes.
 func (s *Service) DisableTOTP(ctx context.Context, u *models.User) error {
 	err := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", u.ID).
 		Updates(map[string]any{"totp_enabled": false, "totp_secret": "", "totp_last_step": 0, "recovery_codes": "[]"}).Error
@@ -253,8 +248,7 @@ func (s *Service) mfaBlocked(ctx context.Context, u *models.User) bool {
 	return FailureBlocked(ctx, s.rdb, "mfa:"+u.ID, mfaUserFailures)
 }
 
-// VerifySecondFactor checks a TOTP or recovery code for u and consumes it. It returns the method used.
-// Failures count per user across sign-ins and settings, so guessing is bounded whatever the entry point.
+// VerifySecondFactor failures count per user across entry points, so guessing is bounded wherever it happens.
 func (s *Service) VerifySecondFactor(ctx context.Context, u *models.User, code string) (string, error) {
 	if !u.TOTPEnabled {
 		return "", ErrTOTPNotEnabled
@@ -334,7 +328,6 @@ func (s *Service) StartMFA(ctx context.Context, u *models.User) (string, time.Ti
 	return token, time.Now().UTC().Add(MFAChallengeTTL), nil
 }
 
-// CompleteMFA checks the second factor for a challenge and returns the user it belongs to.
 func (s *Service) CompleteMFA(ctx context.Context, token, code string) (*models.User, string, error) {
 	key := "akili:mfa:" + crypto.HashToken(token)
 	uid, err := s.rdb.Get(ctx, key).Result()

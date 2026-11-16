@@ -1,27 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package audit writes the append-only, hash-chained audit trail.
-//
-// Each row's hash covers its content and the previous row's hash, so editing or deleting any row
-// breaks every later hash. Writes are serialised with a Postgres advisory lock so the chain has a
-// single order even with several control-plane replicas.
+// Package audit writes the hash-chained audit trail, serialised by a Postgres advisory lock across replicas.
 package audit
 
 import (
@@ -37,14 +34,12 @@ import (
 	"gorm.io/gorm"
 )
 
-// Actor types.
 const (
 	ActorUser   = "user"
 	ActorAgent  = "agent"
 	ActorSystem = "system"
 )
 
-// Entry is one audited action.
 type Entry struct {
 	OrganizationID string
 	ActorType      string
@@ -56,12 +51,10 @@ type Entry struct {
 	Metadata       map[string]any
 }
 
-// Logger records audit entries.
 type Logger struct {
 	db *gorm.DB
 }
 
-// New returns an audit logger.
 func New(db *gorm.DB) *Logger { return &Logger{db: db} }
 
 // advisoryKey is an arbitrary constant naming the audit-chain lock.
@@ -104,8 +97,7 @@ func (l *Logger) Record(ctx context.Context, e Entry) error {
 	})
 }
 
-// Best records and logs a failure instead of returning it, for low-risk paths (reads, logins) where
-// an audit outage must not take the UI down.
+// Best logs an audit failure instead of returning it, for low-risk paths where an audit outage must not take the UI down.
 func (l *Logger) Best(ctx context.Context, e Entry) {
 	// The action already happened; its record must not be lost because the request ended.
 	if err := l.Record(context.WithoutCancel(ctx), e); err != nil {
@@ -137,7 +129,6 @@ func hashRow(r *models.AuditLog) (string, error) {
 	return crypto.SHA256Hex([]byte(s)), nil
 }
 
-// VerifyResult reports a chain check.
 type VerifyResult struct {
 	Valid    bool   `json:"valid"`
 	Checked  int    `json:"checked"`
@@ -145,7 +136,6 @@ type VerifyResult struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
-// Verify walks the whole chain in order.
 func (l *Logger) Verify(ctx context.Context) (VerifyResult, error) {
 	res := VerifyResult{Valid: true}
 	prev := ""

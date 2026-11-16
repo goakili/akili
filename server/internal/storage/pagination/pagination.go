@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 // Package pagination pages list queries by offset (page and size, Miabi style).
 package pagination
@@ -34,7 +35,6 @@ type Page struct {
 	Size   int
 }
 
-// New clamps a requested page to valid bounds.
 func New(number, size int) Page {
 	if number < 0 {
 		number = 0
@@ -45,14 +45,11 @@ func New(number, size int) Page {
 	return Page{Number: number, Size: min(size, MaxSize)}
 }
 
-// HasNext reports whether rows remain after this page.
 func (p Page) HasNext(total int64) bool { return int64(p.Number+1)*int64(p.Size) < total }
 
-// TotalPages is the number of pages total rows fill.
 func (p Page) TotalPages(total int64) int { return int((total + int64(p.Size) - 1) / int64(p.Size)) }
 
-// Find counts the rows q matches and loads one page of them. order must end on a unique column so
-// rows do not move between pages.
+// Find counts and loads one page; order must end on a unique column so rows do not move between pages.
 func Find[T any](q *gorm.DB, p Page, order string) ([]T, int64, error) {
 	var total int64
 	if err := q.Session(&gorm.Session{}).Model(new(T)).Count(&total).Error; err != nil {

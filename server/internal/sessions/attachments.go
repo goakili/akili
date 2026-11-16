@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package sessions
 
@@ -31,11 +32,9 @@ import (
 	"github.com/goakili/akili/server/internal/models"
 )
 
-// ErrNotImage is returned for uploads that are not an accepted image type.
 var ErrNotImage = errors.New("only PNG, JPEG, GIF and WebP images are accepted")
 
-// SaveAttachment stores an image for a session. The media type is sniffed from the bytes, never taken
-// from the client.
+// SaveAttachment sniffs the media type from the bytes, never trusting the client's.
 func (h *Hub) SaveAttachment(ctx context.Context, org, sessionID, userID string, data []byte) (*models.Attachment, error) {
 	s, err := h.Get(ctx, org, sessionID)
 	if err != nil {
@@ -70,8 +69,7 @@ func (h *Hub) Attachment(ctx context.Context, org, sessionID, id string) (*model
 	return &a, nil
 }
 
-// imageRefs turns attachment ids posted with a message into image references, refusing ids that are
-// not this session's.
+// imageRefs refuses attachment ids that are not this session's.
 func (h *Hub) imageRefs(ctx context.Context, s *models.ChatSession, ids []string) ([]proto.ImageSource, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -99,9 +97,7 @@ func (h *Hub) imageRefs(ctx context.Context, s *models.ChatSession, ids []string
 	return refs, nil
 }
 
-// ResolveImages fills in the bytes of a session's image blocks for a provider call. History comes from
-// the agent, so only this session's attachments are loaded and any bytes the agent sent are replaced;
-// an image that cannot be resolved becomes a text note instead.
+// ResolveImages replaces any image bytes the agent sent with this session's own attachments, since history comes from the agent.
 func (h *Hub) ResolveImages(ctx context.Context, s *models.ChatSession, msgs []proto.Message) []proto.Message {
 	var ids []string
 	for _, m := range msgs {

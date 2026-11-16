@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package miabi
 
@@ -29,7 +30,6 @@ import (
 	"time"
 )
 
-// Overview is a workspace's dashboard summary.
 type Overview struct {
 	Apps []struct {
 		ID     int64  `json:"id"`
@@ -45,7 +45,6 @@ type Overview struct {
 	RecentEvents []Event `json:"recent_events"`
 }
 
-// Overview reads the workspace summary.
 func (c *Client) Overview(ctx context.Context) (*Overview, error) {
 	var o Overview
 	return &o, c.do(ctx, http.MethodGet, c.ws()+"/overview", nil, &o)
@@ -57,7 +56,6 @@ type Quota struct {
 	Limit int   `json:"limit"`
 }
 
-// Usage is the workspace's plan and quota use.
 type Usage struct {
 	PlanName          string `json:"plan_name"`
 	Apps              Quota  `json:"apps"`
@@ -67,13 +65,11 @@ type Usage struct {
 	StorageMB         Quota  `json:"storage_mb"`
 }
 
-// Usage reads quota use.
 func (c *Client) Usage(ctx context.Context) (*Usage, error) {
 	var u Usage
 	return &u, c.do(ctx, http.MethodGet, c.ws()+"/usage", nil, &u)
 }
 
-// Alert is a Miabi alert.
 type Alert struct {
 	ID          int64     `json:"id"`
 	Category    string    `json:"category"`
@@ -121,7 +117,6 @@ type LogicalDatabase struct {
 	Status string `json:"status"`
 }
 
-// Backup is one database backup.
 type Backup struct {
 	ID          int64      `json:"id"`
 	Number      int        `json:"number"`
@@ -135,7 +130,6 @@ type Backup struct {
 	FinishedAt  *time.Time `json:"finished_at"`
 }
 
-// Databases lists the database instances.
 func (c *Client) Databases(ctx context.Context) ([]DatabaseInstance, error) {
 	var ds []DatabaseInstance
 	return ds, c.do(ctx, http.MethodGet, c.ws()+"/databases", nil, &ds)
@@ -155,19 +149,16 @@ func (c *Client) DatabaseByName(ctx context.Context, name string) (*DatabaseInst
 	return nil, fmt.Errorf("%w: no Miabi database named %q in workspace %s", ErrNotFound, name, c.workspace)
 }
 
-// DatabaseStatus reads an instance's live status.
 func (c *Client) DatabaseStatus(ctx context.Context, id int64) (*LiveStatus, error) {
 	var st LiveStatus
 	return &st, c.do(ctx, http.MethodGet, fmt.Sprintf("%s/databases/%d/status", c.ws(), id), nil, &st)
 }
 
-// LogicalDatabases lists the databases on an instance.
 func (c *Client) LogicalDatabases(ctx context.Context, id int64) ([]LogicalDatabase, error) {
 	var ls []LogicalDatabase
 	return ls, c.do(ctx, http.MethodGet, fmt.Sprintf("%s/databases/%d/databases", c.ws(), id), nil, &ls)
 }
 
-// Backups lists a logical database's backups.
 func (c *Client) Backups(ctx context.Context, instance, db int64) ([]Backup, error) {
 	var bs []Backup
 	return bs, c.do(ctx, http.MethodGet, fmt.Sprintf("%s/databases/%d/databases/%d/backups", c.ws(), instance, db), nil, &bs)
@@ -179,8 +170,7 @@ func (c *Client) CreateBackup(ctx context.Context, instance, db int64, comment s
 	return &b, c.do(ctx, http.MethodPost, fmt.Sprintf("%s/databases/%d/databases/%d/backups", c.ws(), instance, db), map[string]any{"comment": comment}, &b)
 }
 
-// RestoreBackup restores a backup (Miabi blocks until it finishes). Never "force": that drops the
-// database first.
+// RestoreBackup never uses "force", which drops the database first; Miabi blocks until it finishes.
 func (c *Client) RestoreBackup(ctx context.Context, instance, db, backup int64) error {
 	return c.do(ctx, http.MethodPost, fmt.Sprintf("%s/databases/%d/databases/%d/backups/%d/restore", c.ws(), instance, db, backup),
 		map[string]any{"method": "normal"}, nil)
@@ -220,7 +210,6 @@ type EnvVar struct {
 	IsSecret bool   `json:"is_secret"`
 }
 
-// Env lists an app's variables.
 func (c *Client) Env(ctx context.Context, appID int64) ([]EnvVar, error) {
 	var vs []EnvVar
 	return vs, c.do(ctx, http.MethodGet, fmt.Sprintf("%s/env", c.app(appID)), nil, &vs)
@@ -235,7 +224,6 @@ func (c *Client) SetEnv(ctx context.Context, appID int64, key, value string) (st
 	return m.Message, err
 }
 
-// Scale sets an app's replicas.
 func (c *Client) Scale(ctx context.Context, appID int64, replicas int) error {
 	return c.do(ctx, http.MethodPost, c.app(appID)+"/scale", map[string]any{"replicas": replicas}, nil)
 }
@@ -250,13 +238,11 @@ type RouteRef struct {
 	} `json:"maintenance"`
 }
 
-// AppRoutes lists an app's routes.
 func (c *Client) AppRoutes(ctx context.Context, appID int64) ([]RouteRef, error) {
 	var rs []RouteRef
 	return rs, c.do(ctx, http.MethodGet, c.ws()+"/routes?application_id="+strconv.FormatInt(appID, 10), nil, &rs)
 }
 
-// SetMaintenance turns maintenance mode on or off for one route.
 func (c *Client) SetMaintenance(ctx context.Context, routeID int64, enabled bool, message string) error {
 	return c.do(ctx, http.MethodPatch, fmt.Sprintf("%s/routes/%d/maintenance", c.ws(), routeID),
 		map[string]any{"enabled": enabled, "message": message}, nil)
@@ -268,7 +254,6 @@ func (c *Client) CanaryPromote(ctx context.Context, appID int64) (*Deployment, e
 	return &d, c.do(ctx, http.MethodPost, c.app(appID)+"/canary/promote", map[string]any{}, &d)
 }
 
-// CanaryAbort drops the canary.
 func (c *Client) CanaryAbort(ctx context.Context, appID int64) error {
 	return c.do(ctx, http.MethodDelete, c.app(appID)+"/canary", nil, nil)
 }
@@ -299,7 +284,6 @@ func (c *Client) StackByName(ctx context.Context, name string) (*Stack, error) {
 	return nil, fmt.Errorf("%w: no Miabi stack named %q in workspace %s", ErrNotFound, name, c.workspace)
 }
 
-// StackRestartResult is one app's outcome.
 type StackRestartResult struct {
 	AppName string `json:"app_name"`
 	Status  string `json:"status"` // ok | skipped | failed
@@ -312,7 +296,6 @@ func (c *Client) RestartStack(ctx context.Context, id int64) ([]StackRestartResu
 	return rs, c.do(ctx, http.MethodPost, fmt.Sprintf("%s/stacks/%d/restart?rolling=true", c.ws(), id), map[string]any{}, &rs)
 }
 
-// CronJob is a scheduled job.
 type CronJob struct {
 	ID        int64      `json:"id"`
 	Name      string     `json:"name"`
@@ -322,7 +305,6 @@ type CronJob struct {
 	LastRunAt *time.Time `json:"last_run_at"`
 }
 
-// Job is one run of a job.
 type Job struct {
 	ID       int64  `json:"id"`
 	Status   string `json:"status"` // pending | running | succeeded | failed | canceled
@@ -330,25 +312,21 @@ type Job struct {
 	Error    string `json:"error"`
 }
 
-// CronJobs lists cron jobs.
 func (c *Client) CronJobs(ctx context.Context) ([]CronJob, error) {
 	var cs []CronJob
 	return cs, c.do(ctx, http.MethodGet, c.ws()+"/cronjobs", nil, &cs)
 }
 
-// RunCronJob starts a cron job now.
 func (c *Client) RunCronJob(ctx context.Context, id int64) (*Job, error) {
 	var j Job
 	return &j, c.do(ctx, http.MethodPost, fmt.Sprintf("%s/cronjobs/%d/run", c.ws(), id), map[string]any{}, &j)
 }
 
-// GetJob reads a job.
 func (c *Client) GetJob(ctx context.Context, id int64) (*Job, error) {
 	var j Job
 	return &j, c.do(ctx, http.MethodGet, fmt.Sprintf("%s/jobs/%d", c.ws(), id), nil, &j)
 }
 
-// PipelineRun is one pipeline run.
 type PipelineRun struct {
 	ID     int64  `json:"id"`
 	Number int    `json:"number"`
@@ -379,7 +357,6 @@ func (c *Client) TriggerPipeline(ctx context.Context, id int64, branch string) (
 	return &r, c.do(ctx, http.MethodPost, fmt.Sprintf("%s/pipelines/%d/trigger", c.ws(), id), map[string]any{"branch": branch}, &r)
 }
 
-// GetPipelineRun reads a run.
 func (c *Client) GetPipelineRun(ctx context.Context, id int64) (*PipelineRun, error) {
 	var r PipelineRun
 	return &r, c.do(ctx, http.MethodGet, fmt.Sprintf("%s/pipeline-runs/%d", c.ws(), id), nil, &r)

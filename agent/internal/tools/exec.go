@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package tools
 
@@ -40,8 +41,7 @@ const (
 	maxShellTimeout     = 600 * time.Second
 )
 
-// shell runs a command with a scrubbed environment in its own process group, so a timeout kills the
-// whole tree, and the agent's own environment (control-plane URL, anything else) never leaks in.
+// shell runs in its own process group so a timeout kills the whole tree, with a scrubbed environment.
 func (e *Executor) shell(ctx context.Context, in proto.ShellInput) (string, error) {
 	cwd := in.Cwd
 	if cwd == "" {
@@ -130,12 +130,9 @@ func (c *capWriter) Write(p []byte) (int, error) {
 	return c.buf.Write(p)
 }
 
-// ---- http_fetch ----------------------------------------------------------------------------------
-
 const maxFetchBody = 512 << 10
 
-// ErrPrivateAddress blocks requests to internal networks (SSRF), including via redirects and DNS
-// answers, because the check runs on the resolved IP at connect time.
+// ErrPrivateAddress is checked on the resolved IP at connect time, so redirects and DNS answers cannot bypass it.
 var ErrPrivateAddress = errors.New("destination is a private, loopback or link-local address")
 
 func safeDialer() *net.Dialer {
@@ -227,7 +224,6 @@ func httpFetch(ctx context.Context, in proto.HTTPFetchInput) (string, error) {
 	return b.String(), nil
 }
 
-// diskUsage reports total and free bytes of the filesystem holding path.
 func diskUsage(path string) (total, free uint64, err error) {
 	var st syscall.Statfs_t
 	if err := syscall.Statfs(path, &st); err != nil {

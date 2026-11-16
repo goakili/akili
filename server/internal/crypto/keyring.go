@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package crypto
 
@@ -37,11 +38,8 @@ import (
 	"time"
 )
 
-// Envelope encryption: each secret is sealed with a data key (DEK); data keys are stored wrapped by a
-// key-encryption key (KEK) that is either derived locally from AKILI_ENCRYPTION_KEY or held in a KMS
-// (Vault Transit), so with a KMS the database alone never yields a secret.
+// Envelope encryption: data keys are wrapped by a local or KMS key, so with a KMS the database alone never yields a secret.
 
-// KEK wraps and unwraps data keys.
 type KEK interface {
 	// Name prefixes wrapped keys so a key can be unwrapped by the provider that wrapped it.
 	Name() string
@@ -91,7 +89,6 @@ func unseal(aead cipher.AEAD, raw, aad []byte) ([]byte, error) {
 // LocalKEK derives the KEK from a passphrase (AKILI_ENCRYPTION_KEY).
 type LocalKEK struct{ aead cipher.AEAD }
 
-// NewLocalKEK returns a KEK derived from passphrase.
 func NewLocalKEK(passphrase string) (*LocalKEK, error) {
 	if passphrase == "" {
 		return nil, errors.New("encryption key is empty")
@@ -104,10 +101,8 @@ func NewLocalKEK(passphrase string) (*LocalKEK, error) {
 	return &LocalKEK{aead: aead}, nil
 }
 
-// Name implements KEK.
 func (k *LocalKEK) Name() string { return "local" }
 
-// Wrap implements KEK.
 func (k *LocalKEK) Wrap(_ context.Context, dek []byte) (string, error) {
 	sealed, err := seal(k.aead, dek, []byte("akili-dek"))
 	if err != nil {
@@ -116,7 +111,6 @@ func (k *LocalKEK) Wrap(_ context.Context, dek []byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(sealed), nil
 }
 
-// Unwrap implements KEK.
 func (k *LocalKEK) Unwrap(_ context.Context, wrapped string) ([]byte, error) {
 	raw, err := base64.StdEncoding.DecodeString(wrapped)
 	if err != nil {
@@ -129,8 +123,7 @@ func (k *LocalKEK) Unwrap(_ context.Context, wrapped string) ([]byte, error) {
 	return dek, nil
 }
 
-// VaultTransitKEK wraps data keys with a HashiCorp Vault (or OpenBao) Transit key. The KEK never
-// leaves Vault; the control plane only holds a token allowed to encrypt and decrypt with that key.
+// VaultTransitKEK wraps data keys with a Vault (or OpenBao) Transit key; the KEK never leaves Vault.
 type VaultTransitKEK struct {
 	Addr      string // e.g. https://vault.example.com:8200
 	Token     string
@@ -140,7 +133,6 @@ type VaultTransitKEK struct {
 	Client    *http.Client
 }
 
-// Name implements KEK.
 func (v *VaultTransitKEK) Name() string { return "vault-transit" }
 
 func (v *VaultTransitKEK) call(ctx context.Context, op string, in map[string]string, out any) error {
@@ -179,7 +171,6 @@ func (v *VaultTransitKEK) call(ctx context.Context, op string, in map[string]str
 	return json.Unmarshal(raw, out)
 }
 
-// Wrap implements KEK.
 func (v *VaultTransitKEK) Wrap(ctx context.Context, dek []byte) (string, error) {
 	var out struct {
 		Data struct {
@@ -195,7 +186,6 @@ func (v *VaultTransitKEK) Wrap(ctx context.Context, dek []byte) (string, error) 
 	return out.Data.Ciphertext, nil
 }
 
-// Unwrap implements KEK.
 func (v *VaultTransitKEK) Unwrap(ctx context.Context, wrapped string) ([]byte, error) {
 	var out struct {
 		Data struct {
@@ -208,7 +198,6 @@ func (v *VaultTransitKEK) Unwrap(ctx context.Context, wrapped string) ([]byte, e
 	return base64.StdEncoding.DecodeString(out.Data.Plaintext)
 }
 
-// Keyring holds the unwrapped data keys.
 type Keyring struct {
 	kek     KEK
 	others  map[string]KEK // other providers that can unwrap older keys (rewrap)
@@ -220,9 +209,7 @@ type Keyring struct {
 	loadCtx func() (context.Context, context.CancelFunc)
 }
 
-// OpenKeyring loads (or, on first start, creates) the active data key. legacyPassphrase decrypts
-// v1 ciphertexts written before envelope encryption; it may be empty when none remain. Extra KEKs
-// let keys wrapped by a previous provider be read (after switching to a KMS).
+// OpenKeyring loads or creates the active data key; legacyPassphrase reads v1 ciphertexts and extra KEKs unwrap older keys.
 func OpenKeyring(ctx context.Context, kek KEK, store KeyStore, legacyPassphrase string, extra ...KEK) (*Keyring, error) {
 	k := &Keyring{kek: kek, store: store, keys: map[string]cipher.AEAD{}, others: map[string]KEK{},
 		loadCtx: func() (context.Context, context.CancelFunc) {
@@ -267,7 +254,6 @@ func OpenKeyring(ctx context.Context, kek KEK, store KeyStore, legacyPassphrase 
 
 func newKID() string { return strings.ToLower(rand.Text()[:12]) }
 
-// newDataKey generates and stores a wrapped data key, returning its id.
 func (k *Keyring) newDataKey(ctx context.Context) (string, error) {
 	dek := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, dek); err != nil {
@@ -337,14 +323,12 @@ func (k *Keyring) load(ctx context.Context, kid string) (cipher.AEAD, error) {
 	return aead, nil
 }
 
-// Active returns the id of the data key new secrets are sealed with.
 func (k *Keyring) Active() string {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
 	return k.active
 }
 
-// Provider names the KEK provider in use.
 func (k *Keyring) Provider() string { return k.kek.Name() }
 
 func (k *Keyring) encrypt(plain string) (string, error) {
@@ -400,8 +384,7 @@ func (k *Keyring) decrypt(enc string) (string, error) {
 	return "", errors.New("unknown ciphertext format")
 }
 
-// Rotate creates a new data key and makes it active. Existing secrets stay readable; re-encrypt
-// them (Box.Reencrypt) to retire the old key.
+// Rotate makes a new data key active; old secrets stay readable until re-encrypted with Box.Reencrypt.
 func (k *Keyring) Rotate(ctx context.Context) (string, error) {
 	kid, err := k.newDataKey(ctx)
 	if err != nil {
@@ -416,8 +399,7 @@ func (k *Keyring) Rotate(ctx context.Context) (string, error) {
 	return kid, nil
 }
 
-// Rewrap re-wraps every stored data key with the current KEK (e.g. after moving to a KMS or after
-// the KMS key was rotated). It returns how many keys were rewrapped.
+// Rewrap re-wraps every stored data key with the current KEK (after moving to a KMS or rotating its key).
 func (k *Keyring) Rewrap(ctx context.Context) (int, error) {
 	ids, err := k.store.Keys(ctx, dekPrefix)
 	if err != nil {
@@ -454,14 +436,12 @@ func (k *Keyring) Rewrap(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-// KeyInfo describes one stored data key.
 type KeyInfo struct {
 	ID       string `json:"id"`
 	Provider string `json:"provider"`
 	Active   bool   `json:"active"`
 }
 
-// Keys lists the stored data keys.
 func (k *Keyring) Keys(ctx context.Context) ([]KeyInfo, error) {
 	ids, err := k.store.Keys(ctx, dekPrefix)
 	if err != nil {

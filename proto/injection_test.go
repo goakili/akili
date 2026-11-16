@@ -1,5 +1,22 @@
-// SPDX-FileCopyrightText: 2026 Jonas Kaninda
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jonas Kaninda.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package proto
 
@@ -35,10 +52,7 @@ func loadCorpus(t *testing.T) []injectionCase {
 	return c.Cases
 }
 
-// TestInjectionCorpus: whatever the model was talked into, the policy engine (which runs outside the
-// model) never lets an injected call through beyond what the operator configured: "deny" cases are
-// refused by every built-in template at every autonomy, and no call ever runs automatically above
-// the autonomy level's risk ceiling, nor a critical one at all.
+// TestInjectionCorpus: deny cases fail under every template, and nothing auto-runs above the autonomy ceiling.
 func TestInjectionCorpus(t *testing.T) {
 	levels := []Autonomy{AutonomyL0, AutonomyL1, AutonomyL2, AutonomyL3}
 	for _, c := range loadCorpus(t) {

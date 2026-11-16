@@ -1,35 +1,10 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-#
-# This file is part of Akili.
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: AGPL-3.0-or-later
-# Load test: real Postgres + Redis (Docker), one control plane in development mode (scripted LLM,
-# no key needed) and AGENTS simulated agents from akili-loadtest, which then run TASKS tasks.
-#
-#   AGENTS=1000 TASKS=200 scripts/loadtest.sh
-#
-# Other knobs: RAMP (connects/s, 100), HOLD (steady window, 60s). The per-IP enroll/connect limits
-# count only failures, so the whole fleet can come from 127.0.0.1 with the limits on, as a fleet
-# behind one NAT would. SERVER_BIN uses a prebuilt server. KEEP=1 keeps logs. Each agent needs ~3 fds
-# here and ~2 in the server.
+# SPDX-License-Identifier: MIT
+# Load test: AGENTS simulated agents run TASKS tasks against one dev-mode control plane (knobs: RAMP, HOLD, SERVER_BIN, KEEP).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# The agent is its own repository, checked out next to this one.
 AGENT_DIR="${AGENT_DIR:-$ROOT/agent}"
 WORK="$(mktemp -d)"
 AGENTS=${AGENTS:-1000}

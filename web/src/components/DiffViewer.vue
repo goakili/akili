@@ -1,28 +1,9 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
-// Renders a unified diff: file list with +/- counts, collapsible files, hunks with line numbers.
-// Every piece of diff text is rendered as a text node (never HTML). Large diffs stay responsive:
-// files over `collapseOver` lines start collapsed, each file renders at most `lineCap` lines until
-// "show more", and only the first FILE_CAP files render until asked.
+// Diff text is only ever rendered as text nodes, never HTML.
 import { computed, ref, watch } from 'vue'
 import { parseDiff, diffTotals, fileLineCount, type DiffFile, type DiffHunk, type DiffLine, type FileStatus } from '../lib/diff'
 import Icon, { type IconName } from './Icon'
@@ -108,11 +89,9 @@ const STATUS: Record<FileStatus, { letter: string; label: string; icon: IconName
   copied: { letter: 'C', label: 'copied', icon: 'copy', tone: 'violet' },
 }
 
-/** Five-block change bar, like forges show. */
 function blocks(f: DiffFile): ('add' | 'del' | 'none')[] {
   const total = f.additions + f.deletions
   if (!total) return ['none', 'none', 'none', 'none', 'none']
-  // Filled blocks grow with the size of the change; the add/delete split follows the ratio.
   const n = Math.min(5, Math.max(1, Math.ceil(Math.log10(total + 1) * 2)))
   const addN = Math.round((f.additions / total) * n)
   const out: ('add' | 'del' | 'none')[] = []
@@ -500,7 +479,6 @@ tr.dv-hunk td.ln {
   width: 14px;
   height: 14px;
 }
-/* compact (tool cards) */
 .compact {
   gap: 8px;
 }

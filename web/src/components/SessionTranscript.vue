@@ -1,25 +1,8 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
-// The session view: persisted history + live timeline for one chat or task session.
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   api,
@@ -76,7 +59,6 @@ const live = useLive()
 const toast = useToast()
 
 const session = ref<ChatSession | null>(null)
-/** The project a coding session works on (repo + branch chip in the header). */
 const project = ref<Project | null>(null)
 const messages = ref<SessionMessage[]>([])
 const events = ref<SessionEvent[]>([])
@@ -95,9 +77,7 @@ const loading = ref(true)
 interface PendingMsg {
   localId: number
   text: string
-  /** Uploaded attachment ids, sent with the text. */
   attachments: string[]
-  /** Local previews of those images. */
   previews: string[]
   sentAt: number
   error?: string
@@ -118,8 +98,6 @@ const draft = ref('')
 const sending = ref(false)
 let localSeq = 0
 let eventSeq = 0
-
-// ---- loading & live ----------------------------------------------------------------------------
 
 async function load() {
   try {
@@ -280,8 +258,7 @@ function onEvent(ev: BusEvent) {
   }
 }
 
-// Live events come from the tab's single shared stream (see stores/live.ts), focused on this session
-// so its token deltas are included.
+// Live events come from the tab's single shared stream (stores/live.ts), focused on this session for its token deltas.
 let offEvents: (() => void) | null = null
 let offReconnect: (() => void) | null = null
 const streamStatus = computed<StreamStatus>(() => live.status)
@@ -302,8 +279,6 @@ onUnmounted(() => {
   images.value.forEach((i) => URL.revokeObjectURL(i.preview))
   pending.value.forEach((p) => p.previews.forEach((u) => URL.revokeObjectURL(u)))
 })
-
-// ---- timeline ------------------------------------------------------------------------------------
 
 type Item =
   | { kind: 'text'; key: string; at: number; role: 'user' | 'assistant'; text: string; time: string; images?: string[] }
@@ -502,8 +477,6 @@ const timeline = computed<Item[]>(() => {
     .map((x) => x.it)
 })
 
-// ---- scrolling ---------------------------------------------------------------------------------
-
 const scroller = ref<HTMLElement | null>(null)
 const stick = ref(true)
 function onScroll() {
@@ -523,8 +496,6 @@ function jumpToLatest() {
 }
 const thinkingOpen = ref(false)
 watch(() => [timeline.value.length, streaming.value.length, pending.value.length], () => scrollToBottom())
-
-// ---- actions -----------------------------------------------------------------------------------
 
 const agent = computed(() => catalog.agents.find((a) => a.id === session.value?.agent_id))
 const isOpen = computed(() => session.value?.status === 'open')

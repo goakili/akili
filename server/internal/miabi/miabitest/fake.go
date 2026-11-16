@@ -1,25 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package miabitest is an in-memory Miabi API for tests: workspaces, apps, releases, deployments
-// that finish after a delay (and emit events, like Miabi), per-tag health, container logs, and the
-// workspace event history and live stream. It implements only what Akili calls.
+// Package miabitest is an in-memory Miabi API for tests that implements only what Akili calls.
 package miabitest
 
 import (
@@ -32,7 +31,6 @@ import (
 	"time"
 )
 
-// Fake is the fake server state.
 type Fake struct {
 	Key         string
 	DeployDelay time.Duration
@@ -95,8 +93,7 @@ type deployment struct {
 	target   *release
 }
 
-// New returns a fake with the workspaces "staging" (id 7) and "prod" (id 8), each with one app
-// ("api", image example/api) whose active release is the last tag.
+// New returns a fake with workspaces "staging" (id 7) and "prod" (id 8), each with an "api" app on the last tag.
 func New(key string, tags ...string) *Fake {
 	f := &Fake{Key: key, DeployDelay: 300 * time.Millisecond, nextID: 100, unhealthy: map[string]bool{}, subs: map[int64][]chan []byte{}}
 	for i, name := range []string{"staging", "prod"} {
@@ -127,7 +124,6 @@ func (f *Fake) SetUnhealthy(tag string, bad bool) {
 // ActiveTag returns the active release tag of an app in the first workspace (staging).
 func (f *Fake) ActiveTag(name string) string { return f.ActiveTagIn("staging", name) }
 
-// ActiveTagIn returns an app's active release tag in a workspace.
 func (f *Fake) ActiveTagIn(ws, name string) string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -593,8 +589,7 @@ func (f *Fake) tick() {
 	}
 }
 
-// database serves /databases/{id}/... for the one instance (pg-main, id 501) with one logical
-// database ("app", id 601).
+// database serves the one instance (pg-main, id 501) with one logical database ("app", id 601).
 func (f *Fake) database(w http.ResponseWriter, r *http.Request, ws *workspace, rest []string) {
 	if rest[0] != "501" {
 		fail(w, 404, "database not found")

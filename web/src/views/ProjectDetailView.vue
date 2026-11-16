@@ -1,22 +1,6 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -73,7 +57,6 @@ const presets = ref<MaintenancePreset[]>([])
 const plans = ref<PlanSummary[] | null>(null)
 const planTitle = (id: string) => plans.value?.find((p) => p.id === id)?.title ?? id
 
-// ---- tabs ----------------------------------------------------------------------------------------
 type TabId = 'overview' | 'plans' | 'tasks' | 'maintenance' | 'chat'
 const TABS = computed(() => {
   const t: { id: TabId; label: string; icon: IconName; count?: number }[] = [
@@ -90,7 +73,6 @@ function setTab(id: TabId) {
   router.replace({ query: { ...route.query, tab: id === 'overview' ? undefined : id } })
 }
 
-// ---- loading -------------------------------------------------------------------------------------
 async function load() {
   try {
     const p = await api.getProject(props.id, { quiet: true })
@@ -155,7 +137,6 @@ const target = computed(() => {
   return 'any agent'
 })
 
-// ---- settings form (admin) -----------------------------------------------------------------------
 const form = ref<ProjectForm>(projectFormFrom())
 const initial = ref('')
 const saving = ref(false)
@@ -205,7 +186,6 @@ async function remove() {
   }
 }
 
-// ---- new coding task -----------------------------------------------------------------------------
 const showTask = ref(false)
 const taskGoal = ref('')
 const taskInitial = computed(() => ({ project_id: props.id, goal: taskGoal.value }))
@@ -231,7 +211,6 @@ function onTaskCreated(t: Task) {
   router.push(`/tasks/${t.id}`)
 }
 
-// ---- maintenance ---------------------------------------------------------------------------------
 const presetFor = ref<MaintenancePreset | null>(null)
 const pCron = ref('')
 const pAutonomy = ref<Autonomy>(2)
@@ -298,7 +277,6 @@ const CRON_HUMAN: Record<string, string> = {
 }
 const PRESET_ICON: Record<string, IconName> = { 'dependency-updates': 'layers', 'security-audit': 'approvals', 'test-health': 'activity', 'docs-drift': 'skills' }
 
-// ---- chat ----------------------------------------------------------------------------------------
 const chatAgent = ref('')
 const chatTitle = ref('')
 const starting = ref(false)
@@ -331,7 +309,6 @@ watch([() => catalog.agents.length, project], () => {
   if (!chatAgent.value) pickDefaultAgent()
 })
 
-// ---- live ----------------------------------------------------------------------------------------
 let off: (() => void) | null = null
 let offRe: (() => void) | null = null
 onMounted(async () => {
@@ -403,10 +380,8 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- plans -->
       <ProjectPlansTab v-if="tab === 'plans'" id="ppanel-plans" role="tabpanel" aria-labelledby="ptab-plans" :project-id="props.id" :plans="plans" @changed="loadPlans" @create-task="newTask" />
 
-      <!-- overview -->
       <div v-else-if="tab === 'overview'" id="ppanel-overview" role="tabpanel" aria-labelledby="ptab-overview" class="detail-grid">
         <form v-if="auth.isAdmin" class="card" novalidate @submit.prevent="save">
           <div class="card-head"><h2><Icon name="settings" />Settings</h2><span v-if="dirty" class="badge warn"><Icon name="edit" />unsaved</span></div>
@@ -456,7 +431,6 @@ onUnmounted(() => {
         </section>
       </div>
 
-      <!-- tasks -->
       <section v-else-if="tab === 'tasks'" id="ppanel-tasks" role="tabpanel" aria-labelledby="ptab-tasks" class="card">
         <div class="card-head">
           <h2><Icon name="tasks" />Coding tasks</h2>
@@ -502,7 +476,6 @@ onUnmounted(() => {
         <InfiniteScroll :has-more="tasksHasMore" :loading="tasksLoadingMore" @more="tasksPaged.more" />
       </section>
 
-      <!-- maintenance -->
       <div v-else-if="tab === 'maintenance'" id="ppanel-maintenance" role="tabpanel" aria-labelledby="ptab-maintenance" class="stack loose">
         <section aria-labelledby="presets-title" class="stack">
           <div>
@@ -555,7 +528,6 @@ onUnmounted(() => {
         </section>
       </div>
 
-      <!-- chat -->
       <div v-else-if="tab === 'chat'" id="ppanel-chat" role="tabpanel" aria-labelledby="ptab-chat" class="stack loose">
         <form v-if="auth.isOperator" class="card" @submit.prevent="startChat">
           <div class="card-head"><h2><Icon name="chat" />Start a coding chat</h2></div>

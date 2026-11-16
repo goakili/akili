@@ -32,8 +32,6 @@ services:
       AKILI_ADMIN_PASSWORD: ${AKILI_ADMIN_PASSWORD:-}
       # Optional: seeds Claude as the model provider. Without it, add one under Settings → Model providers.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      # Optional: an Akili Enterprise license token.
-      AKILI_LICENSE: ${AKILI_LICENSE:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9000/healthz"]
       interval: 30s

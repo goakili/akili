@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package coder
 
@@ -28,7 +29,6 @@ import (
 	"github.com/goakili/akili/server/internal/models"
 )
 
-// GitRemote is a repository named by a git remote URL.
 type GitRemote struct {
 	Host  string // without port: the SSH and HTTPS ports of one forge differ
 	Owner string
@@ -37,8 +37,7 @@ type GitRemote struct {
 	Path string
 }
 
-// ParseGitRemote reads https://, ssh:// and scp-like (git@host:owner/repo) remotes. Owner and repo
-// are the last two path segments, so forges served under a path prefix work too.
+// ParseGitRemote takes owner and repo from the last two path segments, so forges served under a path prefix work.
 func ParseGitRemote(raw string) (GitRemote, error) {
 	raw = strings.TrimSpace(raw)
 	var host, path string
@@ -61,9 +60,7 @@ func ParseGitRemote(raw string) (GitRemote, error) {
 	return GitRemote{Host: strings.ToLower(host), Owner: parts[len(parts)-2], Repo: parts[len(parts)-1], Path: strings.Join(parts[:len(parts)-1], "/")}, nil
 }
 
-// ResolveRemote finds the organization's project for a git remote: the remote path ends with the
-// project's owner (which may be a nested GitLab group) and repository, and, when the project knows
-// its web URL, the host matches.
+// ResolveRemote matches the remote path's suffix against project owner/repo, and the host when the project knows its web URL.
 func (s *Service) ResolveRemote(ctx context.Context, org, remote string) (*models.Project, error) {
 	r, err := ParseGitRemote(remote)
 	if err != nil {

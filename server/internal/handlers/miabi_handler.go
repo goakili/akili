@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -37,7 +38,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// MiabiWatchRequest creates or updates a Miabi watch.
 type MiabiWatchRequest struct {
 	Body struct {
 		IntegrationID  string          `json:"integration_id" required:"true"`
@@ -54,7 +54,6 @@ type MiabiWatchRequest struct {
 	} `json:"body"`
 }
 
-// ListMiabiWatches lists watched Miabi apps.
 func (h *Handlers) ListMiabiWatches(c *okapi.Context) error {
 	var out []models.MiabiWatch
 	h.DB.Where("organization_id = ?", middlewares.OrgID(c)).Order("app").Find(&out)
@@ -114,7 +113,6 @@ func (h *Handlers) saveWatch(c *okapi.Context, w *models.MiabiWatch, req *MiabiW
 	return h.DB.Save(w).Error
 }
 
-// CreateMiabiWatch starts watching a Miabi app.
 func (h *Handlers) CreateMiabiWatch(c *okapi.Context, req *MiabiWatchRequest) error {
 	w := &models.MiabiWatch{Base: models.Base{ID: models.NewID("mbw"), OrganizationID: middlewares.OrgID(c)}, VerifyDeploys: true, TriageFailures: true,
 		Autonomy: proto.AutonomyL2, CreatedBy: middlewares.UserID(c)}
@@ -125,7 +123,6 @@ func (h *Handlers) CreateMiabiWatch(c *okapi.Context, req *MiabiWatchRequest) er
 	return created(c, w)
 }
 
-// UpdateMiabiWatch edits a watch.
 func (h *Handlers) UpdateMiabiWatch(c *okapi.Context, req *MiabiWatchRequest) error {
 	var w models.MiabiWatch
 	if err := h.DB.First(&w, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -138,7 +135,6 @@ func (h *Handlers) UpdateMiabiWatch(c *okapi.Context, req *MiabiWatchRequest) er
 	return ok(c, w)
 }
 
-// DeleteMiabiWatch stops watching an app.
 func (h *Handlers) DeleteMiabiWatch(c *okapi.Context) error {
 	res := h.DB.Where("id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Delete(&models.MiabiWatch{})
 	if res.RowsAffected == 0 {
@@ -179,8 +175,7 @@ func (h *Handlers) MiabiWebhook(c *okapi.Context) error {
 	return created(c, out)
 }
 
-// MiabiTrigger opens the task an event asks for, once: webhooks and the event stream can both
-// deliver the same event, and a failing app keeps reporting until someone looks.
+// MiabiTrigger opens a task once per event: webhooks and the event stream can both deliver it, and failing apps keep reporting.
 func (h *Handlers) MiabiTrigger(ctx context.Context, trig *miabi.Trigger) *models.Task {
 	if !h.Bus.Redis().SetNX(ctx, "akili:miabi-trigger:"+trig.Ref, 1, time.Minute).Val() {
 		return nil
@@ -201,7 +196,6 @@ func (h *Handlers) MiabiTrigger(ctx context.Context, trig *miabi.Trigger) *model
 	return t
 }
 
-// ListMiabiWorkspaces lists the workspaces a Miabi integration's key can reach.
 func (h *Handlers) ListMiabiWorkspaces(c *okapi.Context) error {
 	var it models.Integration
 	if err := h.DB.First(&it, "id = ? AND organization_id = ? AND kind = ?", c.Param("id"), middlewares.OrgID(c), models.KindMiabi).Error; err != nil {
@@ -215,7 +209,6 @@ func (h *Handlers) ListMiabiWorkspaces(c *okapi.Context) error {
 	return ok(c, rows)
 }
 
-// SyncMiabiWorkspaces re-reads the workspaces from Miabi.
 func (h *Handlers) SyncMiabiWorkspaces(c *okapi.Context) error {
 	var it models.Integration
 	if err := h.DB.First(&it, "id = ? AND organization_id = ? AND kind = ?", c.Param("id"), middlewares.OrgID(c), models.KindMiabi).Error; err != nil {
@@ -229,14 +222,12 @@ func (h *Handlers) SyncMiabiWorkspaces(c *okapi.Context) error {
 	return ok(c, rows)
 }
 
-// MiabiWorkspaceRequest enables or disables a workspace for agents and event watching.
 type MiabiWorkspaceRequest struct {
 	Body struct {
 		Enabled bool `json:"enabled"`
 	} `json:"body"`
 }
 
-// UpdateMiabiWorkspace enables or disables a workspace.
 func (h *Handlers) UpdateMiabiWorkspace(c *okapi.Context, req *MiabiWorkspaceRequest) error {
 	var row models.MiabiWorkspace
 	if err := h.DB.First(&row, "id = ? AND integration_id = ? AND organization_id = ?", c.Param("ws"), c.Param("id"), middlewares.OrgID(c)).Error; err != nil {

@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package coder
 
@@ -36,9 +37,7 @@ import (
 	"github.com/goakili/akili/server/internal/gitid"
 )
 
-// Pushed commits must carry the agent's git identity, which the sandbox could otherwise override
-// (git commit --author, git -c user.email). The pack streams to the forge while a copy is parsed;
-// its trailer is held back until every commit passed, and a pack without one is rejected whole.
+// A pack's trailer is held back until every commit passed the identity check; a pack without one is rejected whole.
 
 const (
 	objCommit   = 1
@@ -76,8 +75,7 @@ func (c *countingReader) ReadByte() (byte, error) {
 
 func malformed(format string, a ...any) error { return fmt.Errorf("malformed pack: "+format, a...) }
 
-// inspectPack parses a pack and calls check with the id and body of every commit in it, including
-// commits stored as deltas. An empty body (a push that only moves a ref) has no commits.
+// inspectPack calls check for every commit in a pack, including commits stored as deltas.
 func inspectPack(r io.Reader, check func(id string, commit []byte) error) error {
 	cr := &countingReader{r: bufio.NewReaderSize(r, 64<<10)}
 	var hdr [12]byte
@@ -314,8 +312,7 @@ func objectID(typ string, data []byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// identityCheck refuses commits whose author or committer email is not want's. Exactly one < and >
-// are required so git and the forges cannot read a different address than this check did.
+// identityCheck requires exactly one < and > so git and the forges cannot read a different address than this check did.
 func identityCheck(want gitid.Identity) func(id string, commit []byte) error {
 	return func(id string, commit []byte) error {
 		hdr, _, _ := bytes.Cut(commit, []byte("\n\n"))
@@ -346,8 +343,7 @@ func identityCheck(want gitid.Identity) func(id string, commit []byte) error {
 	}
 }
 
-// verifiedPack passes a pack through while inspectPack reads a copy, holding back the trailer until
-// the inspection succeeded. Read fails with the inspection error otherwise.
+// verifiedPack holds back the pack trailer until inspectPack accepted a copy of the stream.
 type verifiedPack struct {
 	src  io.Reader
 	pw   *io.PipeWriter
@@ -393,8 +389,7 @@ func (v *verifiedPack) result() error {
 	return v.res
 }
 
-// Refused returns the inspection error, if the pack was refused. The transport may still be
-// reading the body when the request returns, hence the lock.
+// Refused is locked because the transport may still be reading the body when the request returns.
 func (v *verifiedPack) Refused() error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -449,8 +444,7 @@ func (v *verifiedPack) Close() error {
 	return nil
 }
 
-// advertiseNoThin copies a receive-pack ref advertisement and adds the no-thin capability, so git
-// sends packs whose deltas resolve inside the pack and every commit can be inspected.
+// advertiseNoThin adds no-thin so deltas resolve inside the pack and every commit can be inspected.
 func advertiseNoThin(w io.Writer, r io.Reader) error {
 	br := bufio.NewReader(r)
 	for {

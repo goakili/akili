@@ -1,23 +1,6 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
-// Shared knowledge about tools: their icons, the one-line summary of a call, and change plans.
 import type { ChangeCall, ChangePlan, ChangePhase, PlanCall, ToolOutcome, ToolRequestPayload } from '../api'
 import type { IconName } from '../components/Icon'
 
@@ -37,7 +20,6 @@ export const TOOL_ICONS: Record<string, IconName> = {
   sandbox_exec: 'box',
   pr_open: 'gitPR',
   pr_status: 'gitPR',
-  // operator (host) tools
   service_status: 'settings',
   service_restart: 'refresh',
   journal_logs: 'scroll',
@@ -111,7 +93,6 @@ const scalar = (v: unknown): string => (typeof v === 'string' ? v : typeof v ===
 // Tools that act on a named workspace resource rather than an app; the prefix matches the policy pattern.
 const MIABI_NAMED: Record<string, string> = { miabi_stack_restart: 'stack', miabi_cron_run: 'cron', miabi_pipeline_run: 'pipeline' }
 
-// Miabi calls name workspace/app (or a database, stack, cron job or pipeline), plus what changes.
 // miabi_env_set never shows its value: it may be a secret.
 function miabiSummary(i: Record<string, unknown>, tool?: string): string {
   const ws = scalar(i.workspace)
@@ -255,10 +236,7 @@ export function phaseLabel(phase: string | undefined): string {
   return phase === 'verify' ? 'check' : phase === 'rollback' ? 'rollback' : 'step'
 }
 
-/**
- * The outcome of a verify call. The agent fails a check whose output misses `expect` or contains
- * `reject`, but the control plane records the call itself as ok; re-derive the check from the output.
- */
+/** The control plane records a failed check as ok, so the outcome is re-derived from the output. */
 export function checkFailed(c: ChangeCall): string {
   if (c.phase !== 'verify' || c.status !== 'ok') return ''
   const out = c.output ?? ''

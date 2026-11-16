@@ -1,21 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import type { BusEvent } from '../api'
 
@@ -33,9 +17,7 @@ export interface LiveStreamOptions {
 const MIN_DELAY = 1000
 const MAX_DELAY = 30000
 
-// Streams must not outlive the page: a document kept in the back/forward cache would otherwise hold
-// its SSE sockets open, and browsers allow only ~6 HTTP/1.1 connections per host, so a few
-// navigations would starve every later request. Suspend on pagehide, resume (and resync) on pageshow.
+// Suspend on pagehide: a back/forward-cached page would hold its SSE sockets and starve the ~6 per-host connections.
 const active = new Set<LiveStream>()
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', () => active.forEach((s) => s.suspend()))
@@ -44,10 +26,7 @@ if (typeof window !== 'undefined') {
   })
 }
 
-/**
- * A reconnecting EventSource. The server sends unnamed `data:` messages, one JSON bus event each,
- * plus "ready" on connect and "ping" keep-alives.
- */
+/** The server sends unnamed `data:` messages, one JSON bus event each, plus "ready" and "ping". */
 export class LiveStream {
   private es: EventSource | null = null
   private timer: ReturnType<typeof setTimeout> | null = null

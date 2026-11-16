@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package sessions
 
@@ -32,11 +33,9 @@ import (
 	"github.com/goakili/akili/server/internal/models"
 )
 
-// Event types for changes.
 const EvChangeUpdated = "change.updated"
 
-// evaluateChange checks a proposed plan: the change_run tool itself must be allowed, and every call
-// in it must pass the policy. A plan always needs a human, whatever the autonomy level.
+// evaluateChange requires a human for every plan, whatever the autonomy level.
 func (h *Hub) evaluateChange(pol proto.Policy, autonomy proto.Autonomy, workdir, base string, req proto.ToolRequest) (proto.Decision, *proto.ChangePlan) {
 	d := proto.EvaluateAt(pol, autonomy, workdir, base, proto.Call{Tool: req.Tool, Input: req.Input})
 	if d.Effect == proto.EffectDeny {
@@ -85,8 +84,7 @@ func (h *Hub) createChange(ctx context.Context, s *models.ChatSession, ap *model
 	return nil
 }
 
-// authorizeChangeCall allows a call only if it matches a pending call of the session's approved
-// change exactly (same phase, tool and input). Each call can be used once.
+// authorizeChangeCall allows a call only if it exactly matches an unused pending call of the approved change.
 func (h *Hub) authorizeChangeCall(ctx context.Context, s *models.ChatSession, req proto.ToolRequest) (bool, string) {
 	var ch models.Change
 	if err := h.db.WithContext(ctx).First(&ch, "id = ? AND session_id = ?", req.ChangeID, s.ID).Error; err != nil {
@@ -100,8 +98,7 @@ func (h *Hub) authorizeChangeCall(ctx context.Context, s *models.ChatSession, re
 		c := &ch.Calls[i]
 		if c.Phase == req.Phase && c.Hash == hash && c.Status == "pending" {
 			c.Status, c.RequestID = "running", req.RequestID
-			// Conditional on the old calls value would be ideal; one agent stream per session makes
-			// concurrent use of the same call impossible, so a plain save is enough.
+			// One agent stream per session makes concurrent use of the same call impossible, so a plain save is enough.
 			if err := h.db.WithContext(ctx).Model(&ch).Select("calls").Updates(&models.Change{Calls: ch.Calls}).Error; err != nil {
 				return false, "could not record the change step"
 			}
@@ -111,7 +108,6 @@ func (h *Hub) authorizeChangeCall(ctx context.Context, s *models.ChatSession, re
 	return false, "this call is not part of the approved change (or already ran)"
 }
 
-// recordChangeResult stores a change call's outcome.
 func (h *Hub) recordChangeResult(ctx context.Context, s *models.ChatSession, r proto.ToolResult) {
 	var ch models.Change
 	if err := h.db.WithContext(ctx).First(&ch, "id = ? AND session_id = ?", r.ChangeID, s.ID).Error; err != nil {

@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 // Package storage connects to Postgres and Redis, runs migrations and seeds first-run data.
 package storage
@@ -67,7 +68,6 @@ func ConnectPostgres(ctx context.Context, dsn string) (*gorm.DB, error) {
 	return nil, fmt.Errorf("connect database: %w", lastErr)
 }
 
-// ConnectRedis opens and verifies a Redis client.
 func ConnectRedis(ctx context.Context, opts *redis.Options) (*redis.Client, error) {
 	client := redis.NewClient(opts)
 	var err error
@@ -85,18 +85,14 @@ func ConnectRedis(ctx context.Context, opts *redis.Options) (*redis.Client, erro
 	return nil, fmt.Errorf("connect redis: %w", err)
 }
 
-// Seeded is what first-run seeding produced.
 type Seeded struct {
 	OrgID      string
 	SigningKey ed25519.PrivateKey
-	InstallID  string
 }
 
-// SigningKeySetting is the settings key of the encrypted policy-signing key.
 const SigningKeySetting = "policy_signing_key"
 
-// Seed ensures the organization, the first owner, built-in policies, a default model provider and the
-// policy-signing key exist. It is idempotent.
+// Seed ensures the organization, first owner, built-in policies, default provider and signing key exist; it is idempotent.
 func Seed(db *gorm.DB, cfg *config.Config, box *crypto.Box) (*Seeded, error) {
 	var org models.Organization
 	if err := db.First(&org).Error; errors.Is(err, gorm.ErrRecordNotFound) {
@@ -183,11 +179,7 @@ func Seed(db *gorm.DB, cfg *config.Config, box *crypto.Box) (*Seeded, error) {
 	if err != nil {
 		return nil, err
 	}
-	installID, err := EnsureInstallID(context.Background(), db)
-	if err != nil {
-		return nil, fmt.Errorf("install id: %w", err)
-	}
-	return &Seeded{OrgID: org.ID, SigningKey: key, InstallID: installID}, nil
+	return &Seeded{OrgID: org.ID, SigningKey: key}, nil
 }
 
 func signingKey(db *gorm.DB, box *crypto.Box) (ed25519.PrivateKey, error) {

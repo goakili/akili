@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package tools
 
@@ -33,8 +34,7 @@ import (
 	"github.com/goakili/akili/proto"
 )
 
-// sessionRemote serves one upstream repository at /<session>/repo.git, like the control plane's
-// git proxy, and records which session each push came in as.
+// sessionRemote mimics the control plane's git proxy and records which session each push came in as.
 func sessionRemote(t *testing.T) (base string, pushes func() []string) {
 	t.Helper()
 	gitBin, err := exec.LookPath("git")
@@ -80,8 +80,7 @@ func spec(branch string) proto.ProjectSpec {
 	return proto.ProjectSpec{Slug: "site", Repo: "o/site", DefaultBranch: "main", Branch: branch, GitName: "Agent", GitEmail: "agent@e2e.local"}
 }
 
-// Two sessions on one project share the mirror. Each must push as itself: the proxy only lets a
-// session push its own branch, so a push sent under the other session's URL would be refused.
+// Each session must push as itself: the proxy refuses a push sent under another session's URL.
 func TestSessionsPushAsThemselves(t *testing.T) {
 	base, pushes := sessionRemote(t)
 	ctx := context.Background()
@@ -156,8 +155,7 @@ func TestOldMirrorIsConverted(t *testing.T) {
 	}
 }
 
-// Sessions of one project open at the same time (a task and a chat); preparing must not race on the
-// mirror's config lock.
+// A task and a chat may prepare the same project at once; they must not race on the mirror's config lock.
 func TestConcurrentPrepare(t *testing.T) {
 	base, _ := sessionRemote(t)
 	ctx := context.Background()

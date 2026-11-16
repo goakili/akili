@@ -1,21 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import * as os from 'node:os'
 import * as vscode from 'vscode'
@@ -106,9 +90,7 @@ export class Auth implements vscode.UriHandler {
     const server = await this.askServer()
     if (!server) return
     const req = newSignInRequest()
-    // VS Code adds windowId to its own callback URI so the answer reaches this window. Akili builds
-    // the callback itself from the scheme and that id: passing a whole URL through the browser got
-    // re-encoded on the way.
+    // Akili rebuilds the callback from the scheme and windowId: a whole URL got re-encoded in the browser.
     const callback = await vscode.env.asExternalUri(vscode.Uri.parse(`${vscode.env.uriScheme}://${EXTENSION_ID}/callback`))
     const window = new URLSearchParams(callback.query).get('windowId') ?? ''
     const client = `${vscode.env.appName} on ${os.hostname()}`.slice(0, 80)
@@ -120,8 +102,7 @@ export class Auth implements vscode.UriHandler {
       setTimeout(() => reject(new Error('the sign-in timed out')), SIGN_IN_TIMEOUT_MS)
     })
     this.changed.fire()
-    // A string, not a Uri: Uri.toString() percent-encodes "=" and "&" in the query, which turns it
-    // into one long parameter name. VS Code opens a string target unchanged.
+    // A string, not a Uri: Uri.toString() percent-encodes "=" and "&", breaking the query.
     await vscode.env.openExternal(url as unknown as vscode.Uri)
     try {
       const got = await code

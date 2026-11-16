@@ -1,10 +1,7 @@
 VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
 
-GO_TAGS            ?= enterprise
-LICENSE_PUBLIC_KEY ?=
-LDFLAGS_SERVER = -s -w -X github.com/goakili/akili/server/internal/config.Version=$(VERSION) \
-	-X github.com/goakili/akili/server/internal/enterprise.embeddedPublicKey=$(LICENSE_PUBLIC_KEY)
-DOCKER_ARGS    = --build-arg VERSION=$(VERSION) --build-arg GO_TAGS=$(GO_TAGS) --build-arg LICENSE_PUBLIC_KEY=$(LICENSE_PUBLIC_KEY)
+LDFLAGS_SERVER = -s -w -X github.com/goakili/akili/server/internal/config.Version=$(VERSION)
+DOCKER_ARGS    = --build-arg VERSION=$(VERSION)
 LDFLAGS_AGENT  = -s -w -X main.Version=$(VERSION)
 
 -include .env
@@ -47,7 +44,7 @@ vscode/node_modules/.package-lock.json: vscode/package-lock.json
 	cd vscode && npm ci
 
 server:
-	cd server && CGO_ENABLED=0 go build -trimpath -tags "$(GO_TAGS)" -ldflags "$(LDFLAGS_SERVER)" -o $(CURDIR)/bin/akili ./cmd/akili
+	cd server && CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS_SERVER)" -o $(CURDIR)/bin/akili ./cmd/akili
 
 agent:
 	cd agent && CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS_AGENT)" -o $(CURDIR)/bin/akili-agent ./cmd/akili-agent
@@ -79,11 +76,11 @@ MODULES = proto agent server
 # Unit tests of every module; the server in both editions.
 test:
 	@for m in $(MODULES); do (cd $$m && go test ./...) || exit 1; done
-	cd server && go test -tags enterprise ./...
+	cd server && go test ./...
 
 vet:
 	@for m in $(MODULES); do (cd $$m && go vet ./...) || exit 1; done
-	cd server && go vet -tags enterprise ./...
+	cd server && go vet ./...
 
 
 run: server

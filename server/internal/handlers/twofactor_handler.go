@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -29,13 +30,11 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// TwoFactorStatus describes the caller's second factor.
 type TwoFactorStatus struct {
 	Enabled           bool `json:"enabled"`
 	RecoveryCodesLeft int  `json:"recovery_codes_left"`
 }
 
-// TwoFactorSetupRequest starts enrolling an authenticator app.
 type TwoFactorSetupRequest struct {
 	Body struct {
 		Password string `json:"password" required:"true"`
@@ -71,7 +70,6 @@ func (h *Handlers) currentUser(c *okapi.Context) (*models.User, error) {
 	return h.Auth.User(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c))
 }
 
-// GetTwoFactor returns whether the caller has two-factor authentication.
 func (h *Handlers) GetTwoFactor(c *okapi.Context) error {
 	u, err := h.currentUser(c)
 	if err != nil {
@@ -104,7 +102,6 @@ func (h *Handlers) SetupTwoFactor(c *okapi.Context, req *TwoFactorSetupRequest) 
 	return ok(c, setup)
 }
 
-// EnableTwoFactor confirms the pending secret with a code and returns the recovery codes once.
 func (h *Handlers) EnableTwoFactor(c *okapi.Context, req *TwoFactorCodeRequest) error {
 	u, err := h.currentUser(c)
 	if err != nil {

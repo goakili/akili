@@ -1,5 +1,22 @@
-// SPDX-FileCopyrightText: 2026 Jonas Kaninda
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jonas Kaninda.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package proto
 
@@ -8,16 +25,13 @@ import (
 	"time"
 )
 
-// Paths on the control plane.
 const (
 	// EnrollPath exchanges a one-time join token for an agent identity (plain HTTPS).
-	EnrollPath = "/api/v1/agent/enroll"
-	// ConnectPath upgrades to the agent tunnel.
+	EnrollPath  = "/api/v1/agent/enroll"
 	ConnectPath = "/api/v1/agent/connect"
 )
 
-// Handshake headers on ConnectPath. The agent signs "<agent-id>\n<timestamp>\n<nonce>" with its
-// Ed25519 key; the control plane checks the signature, a ±60s clock window and nonce reuse.
+// The control plane checks the handshake signature, a ±60s clock window and nonce reuse.
 const (
 	HeaderAgentID   = "X-Akili-Agent-ID"
 	HeaderTimestamp = "X-Akili-Timestamp"
@@ -27,27 +41,23 @@ const (
 	HeaderFeatures  = "X-Akili-Features"
 )
 
-// HandshakeMessage is the byte string an agent signs on connect.
 func HandshakeMessage(agentID, timestamp, nonce string) []byte {
 	return []byte(agentID + "\n" + timestamp + "\n" + nonce)
 }
 
-// Internal API the control plane serves to an agent over its tunnel (agent-opened streams). Identity
-// is the tunnel itself, so these carry no credentials and are unreachable from the public listener.
+// Internal paths carry no credentials: identity is the tunnel, and they are unreachable from the public listener.
 const (
 	InternalLLMPath = "/internal/llm/stream"
 	// GitProxyPath prefixes git smart-HTTP requests: /internal/git/<session-id>/info/refs, ...
 	GitProxyPath = "/internal/git/"
 )
 
-// EnrollRequest is posted by `akili-agent enroll`.
 type EnrollRequest struct {
 	JoinToken string    `json:"join_token"`
 	PublicKey []byte    `json:"public_key"` // Ed25519, 32 bytes
 	Facts     HostFacts `json:"facts"`
 }
 
-// EnrollResponse binds the agent and pins the control plane's policy-signing key.
 type EnrollResponse struct {
 	AgentID       string `json:"agent_id"`
 	Name          string `json:"name"`
@@ -56,7 +66,6 @@ type EnrollResponse struct {
 	EnrolledAtUTC string `json:"enrolled_at"`
 }
 
-// HostFacts describes the machine an agent runs on.
 type HostFacts struct {
 	Hostname     string   `json:"hostname"`
 	OS           string   `json:"os"`
@@ -72,20 +81,13 @@ type HostFacts struct {
 	Workdir      string   `json:"workdir,omitempty"`
 }
 
-// ---- Stream kinds ----------------------------------------------------------------------------
-//
-// The control plane opens every stream; the first envelope names its kind:
-//   control.hello → the control stream (one per tunnel)
-//   session.open  → a chat or task session
-
-// Control stream.
+// The control plane opens every stream; its first envelope names the stream's kind.
 const (
 	TypeHello     = "control.hello"     // CP → agent
 	TypeHeartbeat = "control.heartbeat" // agent → CP
 	TypeDrain     = "control.drain"     // CP → agent
 )
 
-// Hello is the first envelope on the control stream.
 type Hello struct {
 	AgentID     string   `json:"agent_id"`
 	Name        string   `json:"name"`
@@ -94,21 +96,17 @@ type Hello struct {
 	Draining    bool     `json:"draining"`
 }
 
-// Heartbeat reports liveness and load every HeartbeatInterval.
 type Heartbeat struct {
 	Facts          HostFacts `json:"facts"`
 	ActiveSessions []string  `json:"active_sessions"`
 	Draining       bool      `json:"draining"`
 }
 
-// HeartbeatInterval is how often an agent reports.
 const HeartbeatInterval = 15 * time.Second
 
-// ResumeGoal is the user turn an agent adds when it resumes a task (after a reconnect, or when an
-// operator continues a stopped task): the original goal is already in the history.
+// ResumeGoal is added on resume instead of the goal, which is already in the history.
 const ResumeGoal = "Continue the task from where you left off. Your previous run was interrupted before it finished; check the state before repeating any step."
 
-// Session stream.
 const (
 	TypeSessionOpen  = "session.open"  // CP → agent (first envelope)
 	TypeUserMessage  = "user.message"  // CP → agent
@@ -125,13 +123,11 @@ const (
 	TypeError         = "error"           // either way
 )
 
-// Session modes.
 const (
 	ModeChat = "chat" // waits for user messages until closed
 	ModeTask = "task" // runs the goal to completion, then reports done
 )
 
-// SessionOpen starts a session on the agent.
 type SessionOpen struct {
 	SessionID string    `json:"session_id"`
 	TaskID    string    `json:"task_id,omitempty"`
@@ -139,26 +135,20 @@ type SessionOpen struct {
 	Goal      string    `json:"goal,omitempty"` // task mode: the first user message
 	System    string    `json:"system"`         // control-plane assembled system prompt (incl. skills)
 	History   []Message `json:"history,omitempty"`
-	// Policy is the signed bundle the agent enforces locally, in addition to the control plane's
-	// authoritative check of every tool request.
+	// Policy is enforced locally in addition to the control plane's authoritative check.
 	Policy   SignedPolicy `json:"policy"`
 	Autonomy Autonomy     `json:"autonomy"`
 	MaxTurns int          `json:"max_turns"`
-	// ContextTokens is how many tokens of history fit the model's context once the system prompt,
-	// tools and output are reserved; 0 lets the agent use its default.
+	// ContextTokens is the history budget after system prompt, tools and output; 0 means the agent default.
 	ContextTokens int        `json:"context_tokens,omitempty"`
 	Deadline      *time.Time `json:"deadline,omitempty"`
 	ToolNames     []string   `json:"tool_names,omitempty"` // tools to offer the model (subset of the catalog)
-	// MCPTools are the MCP tools among ToolNames, with the risk the control plane assigned, so the
-	// agent can describe them to the model and check them against its signed policy.
+	// MCPTools carry the control-plane-assigned risk so the agent can check them against its signed policy.
 	MCPTools []DynamicTool `json:"mcp_tools,omitempty"`
-	// Project, when set, binds the session to a repository workspace on its own branch.
-	Project *ProjectSpec `json:"project,omitempty"`
+	Project  *ProjectSpec  `json:"project,omitempty"`
 }
 
-// ProjectSpec tells the agent which repository workspace to prepare. The agent reaches the
-// repository only through the control plane's git proxy (GitProxyPath); it never holds forge
-// credentials, and the proxy refuses pushes outside akili/* branches.
+// ProjectSpec repositories are reached only through the control plane's git proxy; the agent never holds forge credentials.
 type ProjectSpec struct {
 	ID            string `json:"id"`
 	Slug          string `json:"slug"`
@@ -168,22 +158,21 @@ type ProjectSpec struct {
 	Branch        string `json:"branch"` // the session's working branch, akili/...
 	// SandboxImage is the container image sandbox_exec runs in ("" = sandbox unavailable).
 	SandboxImage string `json:"sandbox_image,omitempty"`
-	// SandboxRoot runs sandbox_exec as root, an organization setting. Off, it runs unprivileged.
+	// SandboxRoot is an organization setting; off, sandbox_exec runs unprivileged.
 	SandboxRoot bool   `json:"sandbox_root,omitempty"`
 	GitName     string `json:"git_name"`
 	GitEmail    string `json:"git_email"`
-	// Trailers ("Key: value") are appended to every commit, linking it to its task or session.
+	// Trailers ("Key: value") link every commit to its task or session.
 	Trailers []string `json:"trailers,omitempty"`
 }
 
-// UserMessage injects user input into a session.
 type UserMessage struct {
 	Text   string        `json:"text"`
 	UserID string        `json:"user_id,omitempty"`
 	Images []ImageSource `json:"images,omitempty"`
 }
 
-// Message builds the user turn: images first, then the text, as providers recommend.
+// Message puts images before the text, as providers recommend.
 func (u UserMessage) Message() Message {
 	m := Message{Role: RoleUser}
 	for i := range u.Images {
@@ -197,60 +186,49 @@ func (u UserMessage) Message() Message {
 	return m
 }
 
-// Session states reported via TypeStatus.
 const (
 	StateIdle            = "idle"
 	StateThinking        = "thinking"
 	StateRunningTool     = "running_tool"
 	StateWaitingApproval = "waiting_approval"
-	// StateWaitingInput: the agent asked the user a question (ask_user) and waits for the answer.
-	StateWaitingInput = "waiting_input"
+	StateWaitingInput    = "waiting_input"
 )
 
-// Status reports what a session is doing.
 type Status struct {
 	State  string `json:"state"`
 	Detail string `json:"detail,omitempty"`
 }
 
-// Delta kinds.
 const (
 	DeltaText     = "text"
 	DeltaThinking = "thinking" // a summary of the model's reasoning, for display only
 )
 
-// Delta is a streamed piece of assistant output.
 type Delta struct {
 	Text string `json:"text"`
 	Kind string `json:"kind,omitempty"` // DeltaText (default) or DeltaThinking
 }
 
-// MessageAppend adds a message to the persisted conversation.
 type MessageAppend struct {
 	Message Message `json:"message"`
 }
 
-// ToolRequest asks the control plane to authorise a tool call. The agent blocks the call until a
-// ToolDecision with the same RequestID arrives.
+// ToolRequest blocks the call on the agent until a ToolDecision with the same RequestID arrives.
 type ToolRequest struct {
 	RequestID string          `json:"request_id"`
 	ToolUseID string          `json:"tool_use_id"`
 	Tool      string          `json:"tool"`
 	Input     json.RawMessage `json:"input"`
-	// ChangeID and Phase mark a call the agent runs as part of an approved change plan.
-	ChangeID string `json:"change_id,omitempty"`
-	Phase    string `json:"phase,omitempty"`
+	ChangeID  string          `json:"change_id,omitempty"`
+	Phase     string          `json:"phase,omitempty"`
 }
 
-// Decision effects.
 const (
 	EffectAllow   = "allow"
 	EffectDeny    = "deny"
 	EffectApprove = "approve" // needs a human; a final allow/deny follows
 )
 
-// ToolDecision answers a ToolRequest. Effect "approve" is interim: the agent keeps waiting for a
-// final allow or deny.
 type ToolDecision struct {
 	RequestID  string `json:"request_id"`
 	Effect     string `json:"effect"`
@@ -260,18 +238,15 @@ type ToolDecision struct {
 	Result *RemoteResult `json:"result,omitempty"`
 	// ChangeID is set when an approved change_run may start.
 	ChangeID string `json:"change_id,omitempty"`
-	// Deadline is the task's new deadline when this decision ends a wait on a person (approval or
-	// ask_user): time spent waiting does not count toward the task timeout.
+	// Deadline is reset after a wait on a person, which does not count toward the task timeout.
 	Deadline *time.Time `json:"deadline,omitempty"`
 }
 
-// RemoteResult is the outcome of a tool the control plane executed.
 type RemoteResult struct {
 	Output  string `json:"output"`
 	IsError bool   `json:"is_error"`
 }
 
-// ToolResult reports the outcome of an executed tool.
 type ToolResult struct {
 	ChangeID   string `json:"change_id,omitempty"`
 	Phase      string `json:"phase,omitempty"`
@@ -284,14 +259,12 @@ type ToolResult struct {
 	Truncated  bool   `json:"truncated,omitempty"`
 }
 
-// ChangeUpdate reports a change's status as the agent runs it.
 type ChangeUpdate struct {
 	ChangeID string `json:"change_id"`
 	Status   string `json:"status"`
 	Detail   string `json:"detail,omitempty"`
 }
 
-// Terminal stream: CP opens it with pty.open, then both sides exchange data frames.
 const (
 	TypePTYOpen   = "pty.open"   // CP → agent (first envelope)
 	TypePTYInput  = "pty.input"  // CP → agent
@@ -300,7 +273,7 @@ const (
 	TypePTYExit   = "pty.exit"   // agent → CP
 )
 
-// PTYOpen starts a terminal. The agent verifies the signed policy allows terminals.
+// PTYOpen carries the signed policy so the agent can verify it allows terminals.
 type PTYOpen struct {
 	TerminalID string       `json:"terminal_id"`
 	Cols       int          `json:"cols"`
@@ -309,24 +282,20 @@ type PTYOpen struct {
 	UserID     string       `json:"user_id"`
 }
 
-// PTYData carries terminal bytes.
 type PTYData struct {
 	Data []byte `json:"data"`
 }
 
-// PTYResize changes the terminal size.
 type PTYResize struct {
 	Cols int `json:"cols"`
 	Rows int `json:"rows"`
 }
 
-// PTYExit ends a terminal.
 type PTYExit struct {
 	Code  int    `json:"code"`
 	Error string `json:"error,omitempty"`
 }
 
-// Done outcomes.
 const (
 	OutcomeSucceeded = "succeeded"
 	OutcomeFailed    = "failed"
@@ -334,14 +303,12 @@ const (
 	OutcomeTimedOut  = "timed_out"
 )
 
-// Done ends a task session.
 type Done struct {
 	Outcome string `json:"outcome"`
 	Summary string `json:"summary,omitempty"`
 	Error   string `json:"error,omitempty"`
 }
 
-// Error reports a protocol or runtime error.
 type Error struct {
 	Message string `json:"message"`
 }

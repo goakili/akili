@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package tools
 
@@ -39,7 +40,6 @@ import (
 	"github.com/goakili/akili/proto"
 )
 
-// Project is the workspace of a project session.
 type Project struct {
 	Spec   proto.ProjectSpec
 	Dir    string // the worktree, on Spec.Branch
@@ -49,8 +49,7 @@ type Project struct {
 	Remote string
 }
 
-// PrepareProject creates or refreshes the session's worktree. It only ever appends to the mirror
-// (fetches); a worktree left by an earlier attempt of the same task is reused as is.
+// PrepareProject only appends to the mirror; a worktree left by an earlier attempt of the task is reused as is.
 func PrepareProject(ctx context.Context, workdir string, spec proto.ProjectSpec, remote string) (*Project, error) {
 	// Sessions on one project share the mirror; git refuses concurrent writes to its config.
 	unlock := lockMirror(proto.ProjectMirror(workdir, spec.Slug))
@@ -115,10 +114,7 @@ func lockMirror(path string) func() {
 	return mu.Unlock
 }
 
-// perWorktreeConfig lets each worktree carry its own origin URL. The URL names the session the
-// proxy authorizes, and every session on a project shares the mirror: with one URL in the shared
-// config, the last session to open would push for all of them, and the proxy would refuse the
-// others' pushes as another session's. Older mirrors are converted in place.
+// perWorktreeConfig gives each worktree its own origin URL; with a shared one the last session to open pushes for all.
 func (p *Project) perWorktreeConfig(ctx context.Context) error {
 	if out, _ := p.git(ctx, p.Mirror, "config", "--get", "extensions.worktreeConfig"); strings.TrimSpace(out) != "true" {
 		for _, args := range [][]string{
@@ -264,8 +260,7 @@ const (
 	maxSandboxTimeout     = 30 * time.Minute
 )
 
-// sandboxExec runs a command in a disposable container: the worktree is the only host path it sees
-// (plus a per-project build cache), capabilities are dropped and it runs as the agent's user.
+// sandboxExec sees only the worktree and a per-project build cache, with capabilities dropped.
 func (e *Executor) sandboxExec(ctx context.Context, in proto.SandboxExecInput) (string, error) {
 	p := e.Project
 	if p == nil || p.Spec.SandboxImage == "" {
@@ -336,10 +331,7 @@ func (e *Executor) sandboxExec(ctx context.Context, in proto.SandboxExecInput) (
 // sandboxNonRoot is the user sandboxes run as when the agent itself runs as root (the Docker image).
 const sandboxNonRoot = 10001
 
-// sandboxUser returns the --user for a sandbox and a func to call when it exits. Sandboxes run as root
-// only when the organization allows it. Otherwise a root agent lends the workspace and cache to an
-// unprivileged user for the run, then takes them back so its own git commands do not trip git's
-// ownership check.
+// sandboxUser lends the workspace to an unprivileged user for the run, then takes it back for git's ownership check.
 func sandboxUser(p *Project) (string, func()) {
 	if p.Spec.SandboxRoot {
 		return "0:0", func() {}

@@ -1,22 +1,6 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
@@ -155,7 +139,7 @@ function generateSecret() {
   generated.value = true
 }
 
-// ---- validation (mirrors the server so mistakes show before the round trip) ----------------------
+// Mirrors the server's validation so mistakes show before the round trip.
 const hasStored = computed(() => !!editing.value?.has_secret && editing.value.auth_type === form.value.auth_type)
 const errors = computed(() => {
   const f = form.value
@@ -412,7 +396,6 @@ onMounted(load)
     </div>
 
     <Modal :open="show" :title="dialogTitle" wide :dismissable="!saving" @close="show = false">
-      <!-- created: webhook details -->
       <div v-if="saved" class="stack">
         <div class="banner ok"><Icon name="checkCircle" /><div class="banner-body"><strong>{{ saved.name }}</strong> is connected. Test it, then {{ saved.kind === 'miabi' ? 'enable its workspaces and watch apps from the Miabi page' : saved.kind === 'posta' ? 'send yourself a test email from Settings → Account, where each person chooses their email' : 'connect a repository from Projects' }}.</div></div>
         <div class="row">

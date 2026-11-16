@@ -1,25 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package tools executes the catalog tools on the agent's host. Every call has already been allowed
-// by the control plane; this package adds the checks only the host can make — resolving symlinks
-// and re-checking the real path against the policy — plus output and time limits.
+// Package tools executes catalog tools on the host, adding symlink-resolved policy checks and output limits.
 package tools
 
 import (
@@ -38,18 +37,15 @@ import (
 // MaxOutput bounds what one tool call returns to the model.
 const MaxOutput = 64 << 10
 
-// Executor runs tools under one policy.
 type Executor struct {
 	Workdir string
 	Policy  proto.Policy
 	Facts   func() proto.HostFacts
-	// ShellEnv are extra KEY=value pairs added to the scrubbed shell environment. Only variables the
-	// operator named in AKILI_AGENT_SHELL_ENV get here; they override the defaults (PATH, HOME, ...).
+	// ShellEnv holds only variables named in AKILI_AGENT_SHELL_ENV; they override the defaults (PATH, HOME, ...).
 	ShellEnv []string
 	// Project is set in project sessions: relative paths resolve in its worktree.
 	Project *Project
-	// Protected directories are refused whatever the policy says, except inside the workdir or the
-	// project: they hold the agent's private key, which no template may expose.
+	// Protected dirs hold the agent's private key and are refused whatever the policy, unless inside the workdir or project.
 	Protected []string
 }
 
@@ -61,16 +57,13 @@ func (e *Executor) base() string {
 	return e.Workdir
 }
 
-// Result is a tool outcome.
 type Result struct {
 	Output    string
 	IsError   bool
 	Truncated bool
 }
 
-// Run executes a tool. Input has already been validated by proto.Evaluate (strict decode).
-// Output is redacted before it reaches the model: secret values the operator passed through
-// AKILI_AGENT_SHELL_ENV and well-known credential formats.
+// Run expects input already validated by proto.Evaluate; output is redacted before it reaches the model.
 func (e *Executor) Run(ctx context.Context, tool string, input json.RawMessage) Result {
 	out, err := e.run(ctx, tool, input)
 	out = proto.Redact(out, proto.SecretsFromEnv(e.ShellEnv)...)
@@ -148,8 +141,7 @@ func (e *Executor) run(ctx context.Context, tool string, input json.RawMessage) 
 // ErrPathDenied is returned when a path resolves (through symlinks) outside what the policy allows.
 var ErrPathDenied = errors.New("path is not allowed by policy")
 
-// resolve makes p absolute and follows symlinks, then re-checks the policy on the real path. For a
-// path that does not exist yet, the nearest existing parent is resolved instead.
+// resolve re-checks the policy on the symlink-resolved path, or on the nearest existing parent for a new path.
 func (e *Executor) resolve(p string) (string, error) {
 	abs := proto.ResolvePath(e.base(), p)
 	real, err := realPath(abs)

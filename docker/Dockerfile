@@ -16,10 +16,8 @@ COPY server/go.mod server/go.sum server/
 RUN cd server && go mod download
 COPY server/ server/
 COPY --from=web /src/server/internal/web/dist server/internal/web/dist
-ARG GO_TAGS=enterprise
-ARG LICENSE_PUBLIC_KEY=
-RUN cd server && CGO_ENABLED=0 go build -trimpath -tags "${GO_TAGS}" \
-    -ldflags "-s -w -X github.com/goakili/akili/server/internal/config.Version=${VERSION} -X github.com/goakili/akili/server/internal/enterprise.embeddedPublicKey=${LICENSE_PUBLIC_KEY}" \
+RUN cd server && CGO_ENABLED=0 go build -trimpath \
+    -ldflags "-s -w -X github.com/goakili/akili/server/internal/config.Version=${VERSION}" \
     -o /out/akili ./cmd/akili
 
 # The Miabi CLI, for the Miabi MCP preset (`miabi mcp`). Cross-compiled, so arm64 builds natively.

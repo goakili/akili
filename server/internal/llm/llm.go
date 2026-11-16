@@ -1,25 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package llm implements the model providers behind the control plane's LLM gateway. Agents never
-// talk to a provider: they send provider-neutral requests over their tunnel, and the gateway picks
-// the provider, applies budgets and records usage.
+// Package llm implements the model providers behind the control plane's LLM gateway.
 package llm
 
 import (
@@ -47,7 +46,6 @@ type Usage struct {
 	CacheWriteTokens int
 }
 
-// Result is a completed model call.
 type Result struct {
 	Message    proto.Message
 	StopReason string
@@ -68,8 +66,7 @@ const DefaultContextTokens = 200_000
 // minHistoryTokens keeps a usable history even when a provider's settings leave little room.
 const minHistoryTokens = 16_000
 
-// HistoryTokens is the part of a model's context window left for the conversation history after the
-// output and the fixed prefix (system prompt, tool definitions, about 3 characters per token).
+// HistoryTokens is the context left for history after the output and the fixed prefix (about 3 characters per token).
 func HistoryTokens(contextTokens, maxOutput, prefixChars int) int {
 	if contextTokens <= 0 {
 		contextTokens = DefaultContextTokens

@@ -1,25 +1,7 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
-// A small, forgiving parser for unified diffs as `git diff` and forges produce them: `diff --git`
-// headers, rename/copy/mode lines, ---/+++ paths, @@ hunks and binary files. Anything it does not
-// recognise is ignored rather than thrown on, so a truncated or odd diff still renders what it can.
+// Unrecognised lines are ignored rather than thrown on, so a truncated or odd diff still renders what it can.
 
 export type DiffLineKind = 'add' | 'del' | 'ctx' | 'meta'
 

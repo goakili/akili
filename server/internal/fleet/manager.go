@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package fleet
 
@@ -59,7 +60,6 @@ type Manager struct {
 	conns map[string]*agentConn
 }
 
-// NewManager returns a tunnel manager.
 func NewManager(db *gorm.DB, b *bus.Bus, a *audit.Logger, hub *sessions.Hub, api InternalAPI) *Manager {
 	return &Manager{db: db, bus: b, audit: a, hub: hub, api: api, conns: map[string]*agentConn{}}
 }
@@ -109,8 +109,7 @@ func (m *Manager) Handle(agent *models.Agent, ws *websocket.Conn, version, ip st
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Streams the agent opens are HTTP requests to the internal API (the yamux session is a
-	// net.Listener). They never touch the public listener or its auth.
+	// Agent-opened streams are HTTP requests to the internal API; they never touch the public listener or its auth.
 	internal := &http.Server{Handler: m.api.Handler(agent.ID), ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = internal.Serve(sess) }()
 
@@ -165,8 +164,7 @@ func (m *Manager) replace(ac *agentConn) {
 	}
 }
 
-// forget removes ac if it is still current, and reports whether it was. A superseded connection
-// must not mark a freshly reconnected agent offline.
+// forget removes ac only if still current, so a superseded connection cannot mark a reconnected agent offline.
 func (m *Manager) forget(ac *agentConn) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -206,8 +204,7 @@ func (ac *agentConn) readControl(ctx context.Context) {
 			continue
 		}
 		ac.m.bus.MarkPresent(ctx, ac.agentID, len(hb.ActiveSessions))
-		// A task busy in a long tool call sends no session frames; the heartbeat's list of live
-		// sessions is what keeps its lease from expiring.
+		// A task busy in a long tool call sends no frames; the heartbeat's live-session list keeps its lease from expiring.
 		if len(hb.ActiveSessions) > 0 {
 			ac.m.db.Model(&models.Task{}).Where("assigned_agent_id = ? AND session_id IN ? AND status IN ?", ac.agentID, hb.ActiveSessions,
 				[]string{models.TaskAssigned, models.TaskRunning}).Update("lease_until", time.Now().UTC().Add(taskLease))
@@ -351,8 +348,7 @@ func (ac *agentConn) readSession(ls *liveSession) {
 	}
 }
 
-// resumeTasks reopens the sessions of tasks this agent was running when its tunnel dropped, which
-// may have been on another replica. The agent continues from the stored history.
+// resumeTasks reopens the sessions of tasks this agent ran when its tunnel dropped, possibly on another replica.
 func (ac *agentConn) resumeTasks(ctx context.Context) {
 	var ids []string
 	ac.m.db.WithContext(ctx).Model(&models.Task{}).

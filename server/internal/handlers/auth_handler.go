@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -33,7 +34,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// LoginRequest is the login body.
 type LoginRequest struct {
 	Body struct {
 		Email    string `json:"email" required:"true"`
@@ -51,7 +51,6 @@ type LoginResponse struct {
 	MFAToken    string `json:"mfa_token,omitempty"`
 }
 
-// Login authenticates an operator and sets the session cookie, or asks for the second factor.
 func (h *Handlers) Login(c *okapi.Context, req *LoginRequest) error {
 	ctx := c.Request().Context()
 	ip := c.RealIP()
@@ -75,7 +74,6 @@ func (h *Handlers) Login(c *okapi.Context, req *LoginRequest) error {
 	return h.startSession(c, u, "password")
 }
 
-// LoginMFARequest completes a password sign-in with a TOTP or recovery code.
 type LoginMFARequest struct {
 	Body struct {
 		MFAToken string `json:"mfa_token" required:"true"`
@@ -83,7 +81,6 @@ type LoginMFARequest struct {
 	} `json:"body"`
 }
 
-// LoginMFA checks the second factor of a pending sign-in and sets the session cookie.
 func (h *Handlers) LoginMFA(c *okapi.Context, req *LoginMFARequest) error {
 	ctx := c.Request().Context()
 	ip := c.RealIP()
@@ -119,7 +116,6 @@ func (h *Handlers) startSession(c *okapi.Context, u *models.User, method string)
 	return ok(c, LoginResponse{User: u, Token: token, ExpiresAt: exp})
 }
 
-// Logout revokes the current session.
 func (h *Handlers) Logout(c *okapi.Context) error {
 	jti, exp := middlewares.SessionToken(c)
 	h.Auth.Revoke(c.Request().Context(), jti, exp)
@@ -128,14 +124,12 @@ func (h *Handlers) Logout(c *okapi.Context) error {
 	return message(c, "logged out")
 }
 
-// MeResponse describes the current operator.
 type MeResponse struct {
 	User         *models.User         `json:"user"`
 	Organization *models.Organization `json:"organization"`
 	AuthMethod   string               `json:"auth_method"`
 }
 
-// Me returns the current operator.
 func (h *Handlers) Me(c *okapi.Context) error {
 	u, err := h.Auth.User(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c))
 	if err != nil {
@@ -146,7 +140,6 @@ func (h *Handlers) Me(c *okapi.Context) error {
 	return ok(c, MeResponse{User: u, Organization: &org, AuthMethod: c.GetString(middlewares.CtxAuthMethod)})
 }
 
-// ChangePasswordRequest changes the caller's password.
 type ChangePasswordRequest struct {
 	Body struct {
 		Current string `json:"current_password" required:"true"`
@@ -154,7 +147,6 @@ type ChangePasswordRequest struct {
 	} `json:"body"`
 }
 
-// ChangePassword updates the caller's password after checking the current one.
 func (h *Handlers) ChangePassword(c *okapi.Context, req *ChangePasswordRequest) error {
 	ctx := c.Request().Context()
 	u, err := h.Auth.User(ctx, middlewares.OrgID(c), middlewares.UserID(c))
@@ -175,7 +167,6 @@ func (h *Handlers) ChangePassword(c *okapi.Context, req *ChangePasswordRequest) 
 	return message(c, "password changed")
 }
 
-// NotificationSettings are the current user's email preferences.
 type NotificationSettings struct {
 	EmailApprovals bool `json:"email_approvals"`
 	EmailTasks     bool `json:"email_tasks"`
@@ -198,7 +189,6 @@ func (h *Handlers) notificationSettings(c *okapi.Context, u *models.User) Notifi
 		EmailAvailable: h.Mail.Available(c.Request().Context(), middlewares.OrgID(c)), CanApprove: models.RoleRank(u.Role) >= models.RoleRank(models.RoleOperator)}
 }
 
-// GetNotifications returns the current user's email preferences.
 func (h *Handlers) GetNotifications(c *okapi.Context) error {
 	u, err := h.Auth.User(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c))
 	if err != nil {
@@ -207,7 +197,6 @@ func (h *Handlers) GetNotifications(c *okapi.Context) error {
 	return ok(c, h.notificationSettings(c, u))
 }
 
-// UpdateNotifications changes the current user's email preferences.
 func (h *Handlers) UpdateNotifications(c *okapi.Context, req *NotificationsRequest) error {
 	u, err := h.Auth.User(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c))
 	if err != nil {
@@ -245,7 +234,6 @@ type GitIdentityRequest struct {
 	} `json:"body"`
 }
 
-// GetGitIdentity returns how the current user is credited on agent work.
 func (h *Handlers) GetGitIdentity(c *okapi.Context) error {
 	u, err := h.Auth.User(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c))
 	if err != nil {
@@ -254,7 +242,6 @@ func (h *Handlers) GetGitIdentity(c *okapi.Context) error {
 	return ok(c, GitIdentitySettings{ForgeLogin: u.ForgeLogin, CoAuthorEmail: u.CoAuthorEmail})
 }
 
-// UpdateGitIdentity changes how the current user is credited on agent work.
 func (h *Handlers) UpdateGitIdentity(c *okapi.Context, req *GitIdentityRequest) error {
 	ctx := c.Request().Context()
 	u, err := h.Auth.User(ctx, middlewares.OrgID(c), middlewares.UserID(c))
@@ -295,7 +282,6 @@ func (h *Handlers) UpdateGitIdentity(c *okapi.Context, req *GitIdentityRequest) 
 	return ok(c, GitIdentitySettings{ForgeLogin: u.ForgeLogin, CoAuthorEmail: u.CoAuthorEmail})
 }
 
-// TestNotification emails the current user now.
 func (h *Handlers) TestNotification(c *okapi.Context) error {
 	ctx := c.Request().Context()
 	u, err := h.Auth.User(ctx, middlewares.OrgID(c), middlewares.UserID(c))
@@ -312,9 +298,6 @@ func (h *Handlers) TestNotification(c *okapi.Context) error {
 	return message(c, "test email sent to "+u.Email+" (Posta id "+id+")")
 }
 
-// ---- users ---------------------------------------------------------------------------------------
-
-// ListUsers lists the organization's users.
 func (h *Handlers) ListUsers(c *okapi.Context) error {
 	var users []models.User
 	if err := h.DB.Where("organization_id = ?", middlewares.OrgID(c)).Order("email").Find(&users).Error; err != nil {
@@ -323,7 +306,6 @@ func (h *Handlers) ListUsers(c *okapi.Context) error {
 	return ok(c, users)
 }
 
-// UserRequest creates or updates a user.
 type UserRequest struct {
 	Body struct {
 		Email    string `json:"email"`
@@ -336,7 +318,6 @@ type UserRequest struct {
 
 func validRole(r string) bool { return models.RoleRank(r) > 0 }
 
-// CreateUser adds an operator.
 func (h *Handlers) CreateUser(c *okapi.Context, req *UserRequest) error {
 	b := req.Body
 	if !strings.Contains(b.Email, "@") {
@@ -361,7 +342,6 @@ func (h *Handlers) CreateUser(c *okapi.Context, req *UserRequest) error {
 	return created(c, u)
 }
 
-// UpdateUser changes a user's name, role, active flag or password.
 func (h *Handlers) UpdateUser(c *okapi.Context, req *UserRequest) error {
 	u, err := h.Auth.User(c.Request().Context(), middlewares.OrgID(c), c.Param("id"))
 	if err != nil {
@@ -409,16 +389,12 @@ func (h *Handlers) UpdateUser(c *okapi.Context, req *UserRequest) error {
 	return ok(c, u)
 }
 
-// ---- API keys ------------------------------------------------------------------------------------
-
-// ListAPIKeys lists the caller's API keys.
 func (h *Handlers) ListAPIKeys(c *okapi.Context) error {
 	var keys []models.APIKey
 	h.DB.Where("user_id = ?", middlewares.UserID(c)).Order("created_at DESC").Find(&keys)
 	return ok(c, keys)
 }
 
-// APIKeyRequest creates an API key.
 type APIKeyRequest struct {
 	Body struct {
 		Name          string   `json:"name" required:"true"`
@@ -433,7 +409,6 @@ type APIKeyCreated struct {
 	Secret string         `json:"secret"`
 }
 
-// CreateAPIKey issues a key for the caller.
 func (h *Handlers) CreateAPIKey(c *okapi.Context, req *APIKeyRequest) error {
 	u, err := h.Auth.User(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c))
 	if err != nil {
@@ -452,7 +427,6 @@ func (h *Handlers) CreateAPIKey(c *okapi.Context, req *APIKeyRequest) error {
 	return created(c, APIKeyCreated{Key: k, Secret: secret})
 }
 
-// RevokeAPIKey revokes one of the caller's keys.
 func (h *Handlers) RevokeAPIKey(c *okapi.Context) error {
 	res := h.DB.Model(&models.APIKey{}).Where("id = ? AND user_id = ? AND revoked_at IS NULL", c.Param("id"), middlewares.UserID(c)).
 		Update("revoked_at", time.Now().UTC())

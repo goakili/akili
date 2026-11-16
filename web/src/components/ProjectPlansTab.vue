@@ -1,27 +1,9 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
-// The project page's Plans tab: plans (description + phases), their progress, and the tasks that
-// work on them. Agents report progress on phases (plan_phase_update) and propose new plans
-// (plan_propose), which arrive as drafts a person reviews and activates.
+// Agent-proposed plans (plan_propose) arrive as drafts a person reviews and activates.
 import { computed, ref, watch } from 'vue'
 import { api, type PlanDetail, type PlanPhase, type PlanPhaseInput, type PlanSummary, type PhaseStatus, type ProjectPlan } from '../api'
 import { useAuth } from '../stores/auth'
@@ -60,7 +42,6 @@ const FILTERS: { id: Filter; label: string }[] = [
 const shown = computed(() =>
   (props.plans ?? []).filter((p) => (filter.value === 'open' ? p.status !== 'done' && p.status !== 'archived' : p.status === filter.value)),
 )
-// The list shows the description's first line as plain text.
 const excerpt = (md: string) =>
   (md.split('\n').find((l) => l.trim()) ?? '')
     .replace(/[*_`#>]+/g, '')
@@ -69,7 +50,6 @@ const excerpt = (md: string) =>
 const closedOf = (c: PlanSummary['counts']) => (c.done ?? 0) + (c.skipped ?? 0)
 const pct = (done: number, total: number) => (total ? Math.round((done / total) * 100) : 0)
 
-// ---- detail ----------------------------------------------------------------------------------------
 const openId = ref<string | null>(null)
 const detail = ref<PlanDetail | null>(null)
 const detailPhases = computed(() => detail.value?.phases ?? [])
@@ -133,7 +113,6 @@ const PHASE_STATUSES: { value: PhaseStatus; label: string }[] = [
   { value: 'skipped', label: 'Skipped' },
 ]
 
-// Skipping asks for a reason inline, under the phase.
 const skipping = ref<string | null>(null)
 const skipNote = ref('')
 
@@ -159,7 +138,6 @@ const byAgent = (st: PlanPhase) => st.updated_by.startsWith('agent:')
 /** The agent that proposed a plan, or '' for one a person wrote. */
 const proposer = (p: ProjectPlan) => (p.created_by.startsWith('agent:') ? catalog.agentName(p.created_by.slice(6)) : '')
 
-// ---- create / edit ----------------------------------------------------------------------------------
 const formOpen = ref(false)
 const formMode = ref<'create' | 'edit'>('create')
 const fTitle = ref('')
@@ -218,7 +196,6 @@ async function save() {
   }
 }
 
-// ---- phases edited in place ----------------------------------------------------------------------------
 const editingPhases = ref(false)
 const ePhases = ref<PlanPhaseInput[]>([])
 function editPhases() {
@@ -272,7 +249,6 @@ async function remove() {
 </script>
 
 <template>
-  <!-- one plan -->
   <section v-if="openId" class="card plan-detail">
     <div class="card-head">
       <button type="button" class="btn btn-ghost btn-sm" @click="openId = null"><Icon name="chevronLeft" />All plans</button>
@@ -395,7 +371,6 @@ async function remove() {
     </div>
   </section>
 
-  <!-- all plans -->
   <section v-else class="card">
     <div class="card-head">
       <h2><Icon name="list" />Plans</h2>

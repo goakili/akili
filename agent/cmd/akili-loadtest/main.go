@@ -1,30 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Command akili-loadtest simulates a fleet of agents against one control plane. Every simulated
-// agent is a real link.Agent with its own Ed25519 identity, so the control plane sees real signed
-// handshakes, tunnels, heartbeats, presence writes and task sessions.
-//
-// Each agent holds about three file descriptors in this process (tunnel socket, git-proxy
-// listener, plus transient ones) and two in the server (tunnel socket, Redis command
-// subscription). Raise the limit first, e.g. `ulimit -n 8192` for 1000 agents: many shells
-// default to 256 (macOS) or 1024 (Linux).
+// Command akili-loadtest simulates real, signed agents against one control plane; raise `ulimit -n` first (~3 fds per agent).
 package main
 
 import (
@@ -331,7 +325,6 @@ func timeoutNote(ok bool) string {
 	return " (TIMED OUT)"
 }
 
-// waitFor polls cond until it holds or timeout passes, and reports whether it held.
 func waitFor(ctx context.Context, timeout, every time.Duration, cond func() bool) bool {
 	deadline := time.Now().Add(timeout)
 	for {

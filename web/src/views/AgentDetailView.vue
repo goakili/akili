@@ -1,22 +1,6 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -372,7 +356,6 @@ onUnmounted(() => off?.())
       </button>
     </div>
 
-    <!-- overview -->
     <div v-if="tab === 'overview'" id="apanel-overview" role="tabpanel" aria-labelledby="atab-overview" class="detail-grid">
       <section class="card">
         <div class="card-head"><h2><Icon name="server" />Host facts</h2></div>
@@ -422,7 +405,6 @@ onUnmounted(() => off?.())
       </div>
     </div>
 
-    <!-- configuration -->
     <form v-else-if="tab === 'config'" id="apanel-config" role="tabpanel" aria-labelledby="atab-config" class="card" style="max-width: 980px" novalidate @submit.prevent="save">
       <div class="card-head">
         <h2><Icon name="settings" />Configuration</h2>
@@ -446,7 +428,6 @@ onUnmounted(() => off?.())
       </div>
     </form>
 
-    <!-- sessions -->
     <section v-else-if="tab === 'sessions'" id="apanel-sessions" role="tabpanel" aria-labelledby="atab-sessions" class="card">
       <div class="table-wrap">
         <table class="table">
@@ -477,7 +458,6 @@ onUnmounted(() => off?.())
       <InfiniteScroll :has-more="sessionsHasMore" :loading="sessionsLoadingMore" @more="sessionsPaged.more" />
     </section>
 
-    <!-- terminal sessions -->
     <section v-else-if="tab === 'terminals'" id="apanel-terminals" role="tabpanel" aria-labelledby="atab-terminals" class="card">
       <div class="card-head">
         <h2><Icon name="terminal" />Recorded terminal sessions</h2>
@@ -521,7 +501,6 @@ onUnmounted(() => off?.())
       <InfiniteScroll :has-more="terminalsHasMore" :loading="terminalsLoadingMore" @more="terminalsPaged.more" />
     </section>
 
-    <!-- activity -->
     <section v-else-if="tab === 'activity'" id="apanel-activity" role="tabpanel" aria-labelledby="atab-activity" class="card">
       <div class="table-wrap">
         <table class="table">

@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 // Package config loads the control plane's configuration from the environment and configures Okapi.
 package config
@@ -43,12 +44,10 @@ import (
 // Version is set at build time with -ldflags.
 var Version = "dev"
 
-// releaseVersion matches published releases only: not "dev", snapshots ("-dev") or
-// `git describe` builds ("-3-gabc1234"), which have no release to download.
+// releaseVersion matches published releases only, not "dev", "-dev" snapshots or `git describe` builds.
 var releaseVersion = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-(alpha|beta|rc)(\.\d+)?)?$`)
 
-// AgentVersion is the agent release that matches this control plane: its own version without the
-// "v", or "latest" when it is not a release build. Release tags and image tags have no "v".
+// AgentVersion is this version without the "v" (release tags have none), or "latest" for non-release builds.
 func AgentVersion() string {
 	if releaseVersion.MatchString(Version) {
 		return strings.TrimPrefix(Version, "v")
@@ -58,19 +57,15 @@ func AgentVersion() string {
 
 const minSecretLen = 32
 
-// devEncryptionKey is used only in development when AKILI_ENCRYPTION_KEY is unset. validate()
-// refuses it in production.
+// devEncryptionKey is used only in development when AKILI_ENCRYPTION_KEY is unset; validate() refuses it in production.
 const devEncryptionKey = "akili-development-encryption-key-do-not-use"
 
-// Config is the control plane configuration.
 type Config struct {
 	Env         string
 	Port        int
 	PublicURL   string
 	LogLevel    string
 	DatabaseURL string
-	// License is an Akili Enterprise license token, installed on start when none is stored.
-	License string
 
 	// RedisURL (redis:// or rediss:// for TLS) overrides RedisAddr, RedisPassword and RedisDB.
 	RedisURL      string
@@ -94,8 +89,7 @@ type Config struct {
 	NotifyWebhookURL string
 	WebDir           string
 	OpenAPIDocs      bool
-	// TrustedProxies are the CIDRs whose X-Forwarded-For / X-Real-IP headers are believed. Empty
-	// means none: the client IP (rate limits, audit) is always the connection address.
+	// TrustedProxies are the CIDRs whose forwarded headers are believed; empty means the client IP is the connection address.
 	TrustedProxies []string
 	// MCPCommands are the executables an admin may run as stdio MCP servers (by base name).
 	MCPCommands []string
@@ -131,7 +125,6 @@ type SIEMConfig struct {
 	FromStart     bool   // a new sink first receives the whole existing trail
 }
 
-// OIDCConfig enables single sign-on with an OpenID Connect provider.
 type OIDCConfig struct {
 	Issuer          string
 	ClientID        string
@@ -145,7 +138,6 @@ type OIDCConfig struct {
 	DisablePassword bool // password login only for the owner (break-glass)
 }
 
-// Enabled reports whether SSO is configured.
 func (o OIDCConfig) Enabled() bool { return o.Issuer != "" && o.ClientID != "" }
 
 // TLSConfig serves HTTPS directly and, optionally, requires agents to present a client certificate.
@@ -167,7 +159,6 @@ func Load() *Config {
 		Port:             goutils.EnvInt("AKILI_PORT", 9000),
 		PublicURL:        strings.TrimRight(goutils.Env("AKILI_PUBLIC_URL", "http://localhost:9000"), "/"),
 		LogLevel:         goutils.Env("AKILI_LOG_LEVEL", "info"),
-		License:          envOrFile("AKILI_LICENSE"),
 		DatabaseURL:      goutils.Env("AKILI_DATABASE_URL", "postgres://akili:akili@localhost:5432/akili?sslmode=disable"),
 		RedisURL:         envOrFile("AKILI_REDIS_URL"),
 		RedisAddr:        goutils.Env("AKILI_REDIS_ADDR", "localhost:6379"),
@@ -244,10 +235,7 @@ func Load() *Config {
 	return c
 }
 
-// loadEnvFile loads AKILI_ENV_FILE, or ./.env when unset, into the process environment. Variables
-// already set in the real environment win, so a deployment's env always overrides the file. A missing
-// ./.env is normal. A file that exists but cannot be parsed stops the server: silently falling back to
-// defaults would point it at the wrong database.
+// loadEnvFile loads AKILI_ENV_FILE or ./.env; real env vars win, and an unparseable file stops the server.
 func loadEnvFile() {
 	path, explicit := os.Getenv("AKILI_ENV_FILE"), true
 	if path == "" {
@@ -299,8 +287,7 @@ func pairs(s string) map[string]string {
 	return out
 }
 
-// RedisOptions returns the Redis connection settings: AKILI_REDIS_URL when set, otherwise
-// AKILI_REDIS_ADDR, AKILI_REDIS_PASSWORD and AKILI_REDIS_DB.
+// RedisOptions prefers AKILI_REDIS_URL over AKILI_REDIS_ADDR, AKILI_REDIS_PASSWORD and AKILI_REDIS_DB.
 func (c *Config) RedisOptions() (*redis.Options, error) {
 	if c.RedisURL != "" {
 		opts, err := redis.ParseURL(c.RedisURL)
@@ -313,7 +300,6 @@ func (c *Config) RedisOptions() (*redis.Options, error) {
 	return &redis.Options{Addr: c.RedisAddr, Password: c.RedisPassword, DB: c.RedisDB}, nil
 }
 
-// IsDev reports whether the control plane runs in development mode.
 func (c *Config) IsDev() bool { return c.Env == "development" || c.Env == "dev" }
 
 // Validate refuses unsafe production settings.
@@ -361,8 +347,7 @@ func (c *Config) Validate() error {
 	return errors.Join(errs...)
 }
 
-// validateHardening checks the hardening options in every environment: they are all opt-in, so a
-// half-configured option is a mistake, not a default.
+// validateHardening runs in every environment: the options are opt-in, so a half-configured one is a mistake.
 func (c *Config) validateHardening() []error {
 	var errs []error
 	if err := c.Git.Validate(); err != nil {
@@ -416,7 +401,6 @@ func (c *Config) validateHardening() []error {
 	return errs
 }
 
-// Initialize configures the Okapi application.
 func (c *Config) Initialize(app *okapi.Okapi, errorHandler okapi.ErrorHandler) error {
 	if err := c.Validate(); err != nil {
 		return err
@@ -431,8 +415,7 @@ func (c *Config) Initialize(app *okapi.Okapi, errorHandler okapi.ErrorHandler) e
 	if len(c.TrustedProxies) > 0 {
 		app.With(okapi.WithTrustedProxies(c.TrustedProxies...))
 	} else {
-		// With no entries okapi trusts forwarded headers from every peer; 0.0.0.0/32 matches no real
-		// peer, so the headers are ignored and nobody can choose their own IP.
+		// With no entries okapi trusts every peer's forwarded headers; 0.0.0.0/32 matches no real peer.
 		app.With(okapi.WithTrustedProxies("0.0.0.0/32"))
 	}
 	if c.IsDev() {
@@ -452,8 +435,8 @@ func (c *Config) Initialize(app *okapi.Okapi, errorHandler okapi.ErrorHandler) e
 			Version:     Version,
 			Description: "Security-first control plane for autonomous AI operator agents.",
 			License: okapi.License{
-				Name: "AGPL-3.0-or-later",
-				URL:  "https://www.gnu.org/licenses/agpl-3.0.html",
+				Name: "MIT",
+				URL:  "https://github.com/goakili/akili/blob/main/LICENSE",
 			},
 			SecuritySchemes: okapi.SecuritySchemes{
 				{Name: "BearerAuth", Type: "http", Scheme: "bearer", BearerFormat: "JWT or ak_ API key"},

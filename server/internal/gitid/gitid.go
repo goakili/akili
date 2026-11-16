@@ -1,25 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package gitid resolves and validates the git identity an agent commits under. The control plane
-// owns it: it is sent to the agent in the project spec, and the git proxy refuses pushed commits
-// that carry any other author or committer.
+// Package gitid resolves and validates the git identity an agent commits under; the git proxy refuses any other.
 package gitid
 
 import (
@@ -31,14 +30,12 @@ import (
 	"github.com/goakili/akili/server/internal/models"
 )
 
-// Defaults for agents without their own identity. The email is verified on the akili-agent GitHub
-// account, so commits link to it.
+// The default email is verified on the akili-agent GitHub account, so commits link to it.
 const (
 	DefaultNameTemplate  = "Akili Agent"
 	DefaultEmailTemplate = "agent@goakili.dev"
 )
 
-// Config is the server-wide identity setup.
 type Config struct {
 	// NameTemplate is the name of agents without their own; {agent_id} and {agent_name} expand.
 	NameTemplate string
@@ -79,7 +76,6 @@ func (c Config) renderEmail(agentID, agentName string) string {
 	return strings.NewReplacer("{agent_id}", agentID, "{agent_name}", slug(agentName)).Replace(t)
 }
 
-// Validate checks the templates and the domain list.
 func (c Config) Validate() error {
 	if err := ValidateName(c.renderName("ag_example", "example")); err != nil {
 		return fmt.Errorf("AKILI_GIT_NAME_TEMPLATE: %w", err)
@@ -95,8 +91,7 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// ValidateEmail accepts a bare address (no display name, no quoting) whose domain is in allowed, if set.
-// The value ends up in git config and commit headers, so anything git would reinterpret is refused.
+// ValidateEmail refuses anything git would reinterpret, since the value ends up in git config and commit headers.
 func ValidateEmail(email string, allowed []string) error {
 	if email == "" || len(email) > 254 {
 		return errors.New("git email must be 1-254 characters")
@@ -119,8 +114,7 @@ func ValidateEmail(email string, allowed []string) error {
 	return fmt.Errorf("git email domain must be one of: %s", strings.Join(allowed, ", "))
 }
 
-// validLocal allows RFC 5322 atom characters plus [ and ], which GitHub App bot addresses use
-// (123+app[bot]@users.noreply.github.com).
+// validLocal also allows [ and ], which GitHub App bot addresses use (123+app[bot]@users.noreply.github.com).
 func validLocal(s string) bool {
 	if s == "" || len(s) > 64 || s[0] == '.' || s[len(s)-1] == '.' || strings.Contains(s, "..") {
 		return false

@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 // Package handlers holds the thin HTTP handlers: bind, call a service, audit, respond.
 package handlers
@@ -35,7 +36,6 @@ import (
 	"github.com/goakili/akili/server/internal/config"
 	"github.com/goakili/akili/server/internal/crypto"
 	"github.com/goakili/akili/server/internal/dto"
-	"github.com/goakili/akili/server/internal/enterprise"
 	"github.com/goakili/akili/server/internal/fleet"
 	"github.com/goakili/akili/server/internal/lessons"
 	"github.com/goakili/akili/server/internal/mcp"
@@ -51,7 +51,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Handlers bundles every service the HTTP layer uses.
 type Handlers struct {
 	Cfg      *config.Config
 	DB       *gorm.DB
@@ -72,7 +71,6 @@ type Handlers struct {
 	Plans    *plans.Service
 	MCP      *mcp.Service
 	Mail     *notify.Mailer
-	EE       enterprise.EE
 }
 
 func ok[T any](c *okapi.Context, data T) error {
@@ -114,7 +112,6 @@ func (h *Handlers) record(c *okapi.Context, action, targetType, targetID string,
 		ActorID: middlewares.UserID(c), Action: action, TargetType: targetType, TargetID: targetID, IP: c.RealIP(), Metadata: meta})
 }
 
-// mapErr turns service errors into HTTP errors.
 func mapErr(c *okapi.Context, err error) error {
 	switch {
 	case errors.Is(err, fleet.ErrNotFound), errors.Is(err, sessions.ErrNotFound), errors.Is(err, tasks.ErrNotFound), errors.Is(err, coder.ErrNotFound),
@@ -130,12 +127,6 @@ func mapErr(c *okapi.Context, err error) error {
 		return c.AbortConflict(err.Error())
 	case errors.Is(err, context.Canceled):
 		return nil
-	case errors.Is(err, enterprise.ErrLicenseRequired), errors.Is(err, enterprise.ErrEntitlementDenied):
-		return c.AbortPaymentRequired(err.Error())
-	case errors.Is(err, enterprise.ErrLicenseExpired), errors.Is(err, enterprise.ErrBindingMismatch):
-		return c.AbortForbidden(err.Error())
-	case errors.Is(err, enterprise.ErrCommunityEdition), errors.Is(err, enterprise.ErrNoPublicKey):
-		return c.AbortConflict(err.Error())
 	}
 	return c.AbortBadRequest(err.Error())
 }
@@ -150,7 +141,6 @@ func queryInt(c *okapi.Context, key string, def int) int {
 // pingInterval keeps SSE connections alive through proxies.
 const pingInterval = 20 * time.Second
 
-// streamEvents writes bus events to the client as SSE until it disconnects.
 func streamEvents(c *okapi.Context, sub *bus.Subscription, filter func(bus.Event) bool) error {
 	defer sub.Close()
 	ctx := c.Request().Context()

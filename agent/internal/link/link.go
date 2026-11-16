@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package link keeps the agent connected to the control plane and dispatches the streams the
-// control plane opens: one control stream per tunnel, one stream per session.
+// Package link keeps the agent connected to the control plane and dispatches the streams it opens.
 package link
 
 import (
@@ -48,13 +48,11 @@ import (
 	"github.com/jkaninda/wstunnel"
 )
 
-// Agent is the connected agent process.
 type Agent struct {
-	st      *state.State
-	key     ed25519.PrivateKey
-	version string
-	facts   func() proto.HostFacts
-	// ShellEnv is passed to shell tools (see AKILI_AGENT_SHELL_ENV).
+	st       *state.State
+	key      ed25519.PrivateKey
+	version  string
+	facts    func() proto.HostFacts
 	ShellEnv []string
 
 	mu       sync.Mutex
@@ -65,7 +63,6 @@ type Agent struct {
 	wg       sync.WaitGroup
 }
 
-// New returns an agent.
 func New(st *state.State, version string, facts func() proto.HostFacts) (*Agent, error) {
 	key, err := st.Key()
 	if err != nil {
@@ -81,7 +78,6 @@ func New(st *state.State, version string, facts func() proto.HostFacts) (*Agent,
 	return a, nil
 }
 
-// tunnel returns the live tunnel, if connected.
 func (a *Agent) tunnel() *yamux.Session {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -127,8 +123,7 @@ func (a *Agent) Run(ctx context.Context, drainTimeout time.Duration) error {
 // ErrUnauthorized means the control plane rejected the agent's signed handshake.
 var ErrUnauthorized = errors.New("control plane rejected the agent identity (401)")
 
-// dial opens the tunnel. It dials the WebSocket itself (rather than wstunnel.Dial) to see the HTTP
-// status of a refused handshake, and signs a fresh handshake per attempt.
+// dial dials the WebSocket itself, not via wstunnel.Dial, to see the HTTP status of a refused handshake.
 func (a *Agent) dial(ctx context.Context, dialer *websocket.Dialer, url string) (*yamux.Session, error) {
 	ws, resp, err := dialer.DialContext(ctx, url, a.handshake())
 	if err != nil {
@@ -149,7 +144,6 @@ func (a *Agent) dial(ctx context.Context, dialer *websocket.Dialer, url string) 
 	return sess, nil
 }
 
-// handshake signs a fresh timestamp and nonce for each connection attempt.
 func (a *Agent) handshake() http.Header {
 	ts := strconv.FormatInt(time.Now().Unix(), 10)
 	nonce := rand.Text()
@@ -164,7 +158,6 @@ func (a *Agent) handshake() http.Header {
 	return h
 }
 
-// serve accepts the streams the control plane opens on one tunnel.
 func (a *Agent) serve(ctx context.Context, sess *yamux.Session) error {
 	connCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -306,8 +299,7 @@ func (a *Agent) drain(timeout time.Duration) error {
 	}
 }
 
-// TLSHint explains an untrusted control-plane certificate, the usual first error with a self-signed
-// control plane. A wrong hostname or an expired certificate needs another fix, so it gets no hint.
+// TLSHint covers only an untrusted certificate; a wrong hostname or an expired one needs another fix.
 func TLSHint(err error) error {
 	var unknown x509.UnknownAuthorityError
 	var verify *tls.CertificateVerificationError
@@ -316,16 +308,14 @@ func TLSHint(err error) error {
 	if errors.As(err, &host) || errors.As(err, &invalid) {
 		return err
 	}
-	// macOS's verifier reports an unknown CA as "certificate is not trusted" rather than as an
-	// UnknownAuthorityError.
+	// macOS reports an unknown CA as "certificate is not trusted", not as an UnknownAuthorityError.
 	if errors.As(err, &unknown) || errors.As(err, &verify) {
 		return fmt.Errorf("%w (the control plane's certificate is not signed by a trusted CA: set AKILI_CA_CERT to its CA file, or AKILI_CA_CERT_PEM to the PEM)", err)
 	}
 	return err
 }
 
-// Dialer builds the WebSocket dialer. A CA bundle is added to the system pool rather than replacing
-// it; insecure is a loudly-logged development escape hatch.
+// Dialer adds a CA bundle to the system pool rather than replacing it.
 func Dialer(caFile string, insecure bool) (*websocket.Dialer, error) {
 	d := *websocket.DefaultDialer
 	d.HandshakeTimeout = 15 * time.Second
@@ -365,7 +355,6 @@ func Dialer(caFile string, insecure bool) (*websocket.Dialer, error) {
 	return &d, nil
 }
 
-// HTTPClient returns an HTTP client with the same TLS settings, for enrollment.
 func HTTPClient(caFile string, insecure bool) (*http.Client, error) {
 	d, err := Dialer(caFile, insecure)
 	if err != nil {

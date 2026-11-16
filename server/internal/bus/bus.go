@@ -1,28 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package bus carries events and commands between control-plane replicas over Redis.
-//
-// Two kinds of traffic:
-//   - Events fan out to browsers: every replica can serve any SSE stream.
-//   - Agent commands go to whichever replica holds that agent's tunnel. PUBLISH reports how many
-//     subscribers received a command, so zero means the agent is not connected anywhere.
+// Package bus carries events to browsers and commands to the replica holding an agent's tunnel, over Redis pub/sub.
 package bus
 
 import (
@@ -35,7 +31,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Event is pushed to browsers.
 type Event struct {
 	Type      string          `json:"type"`
 	SessionID string          `json:"session_id,omitempty"`
@@ -53,7 +48,6 @@ type Command struct {
 	Data      json.RawMessage `json:"data,omitempty"`
 }
 
-// Command types.
 const (
 	CmdUserMessage  = "session.user_message" // Data: proto.UserMessage
 	CmdInterrupt    = "session.interrupt"
@@ -86,7 +80,6 @@ type TerminalFrame struct {
 
 func terminalChannel(id string) string { return "akili:term:" + id }
 
-// PublishTerminal sends a frame to the browser side of a terminal.
 func (b *Bus) PublishTerminal(ctx context.Context, id string, f TerminalFrame) {
 	payload, _ := json.Marshal(f)
 	b.rdb.Publish(ctx, terminalChannel(id), payload)
@@ -126,12 +119,10 @@ func (b *Bus) SubscribeTerminal(ctx context.Context, id string) (<-chan Terminal
 // ErrAgentOffline means no replica holds the agent's tunnel.
 var ErrAgentOffline = errors.New("agent is not connected")
 
-// Bus wraps Redis pub/sub.
 type Bus struct {
 	rdb *redis.Client
 }
 
-// New returns a bus.
 func New(rdb *redis.Client) *Bus { return &Bus{rdb: rdb} }
 
 func orgChannel(org string) string        { return "akili:events:org:" + org }
@@ -157,7 +148,6 @@ func (b *Bus) Emit(ctx context.Context, org string, ev Event) {
 	}
 }
 
-// EmitData marshals data into an event and emits it.
 func (b *Bus) EmitData(ctx context.Context, org string, ev Event, data any) {
 	if data != nil {
 		ev.Data, _ = json.Marshal(data)
@@ -165,21 +155,17 @@ func (b *Bus) EmitData(ctx context.Context, org string, ev Event, data any) {
 	b.Emit(ctx, org, ev)
 }
 
-// Subscription delivers events until closed.
 type Subscription struct {
 	C     <-chan Event
 	close func()
 }
 
-// Close stops the subscription.
 func (s *Subscription) Close() { s.close() }
 
-// SubscribeOrg streams the organization feed.
 func (b *Bus) SubscribeOrg(ctx context.Context, org string) *Subscription {
 	return b.subscribe(ctx, orgChannel(org))
 }
 
-// SubscribeSession streams one session's feed.
 func (b *Bus) SubscribeSession(ctx context.Context, id string) *Subscription {
 	return b.subscribe(ctx, sessionChannel(id))
 }
@@ -216,7 +202,7 @@ func (b *Bus) subscribe(ctx context.Context, channel string) *Subscription {
 	}}
 }
 
-// SendCommand delivers a command to the replica holding the agent's tunnel.
+// SendCommand returns ErrAgentOffline when PUBLISH reaches no subscriber: no replica holds the tunnel.
 func (b *Bus) SendCommand(ctx context.Context, agentID string, cmd Command) error {
 	payload, err := json.Marshal(cmd)
 	if err != nil {
@@ -232,7 +218,6 @@ func (b *Bus) SendCommand(ctx context.Context, agentID string, cmd Command) erro
 	return nil
 }
 
-// SendCommandData marshals data into a command and sends it.
 func (b *Bus) SendCommandData(ctx context.Context, agentID string, cmd Command, data any) error {
 	if data != nil {
 		var err error
@@ -272,24 +257,19 @@ func (b *Bus) SubscribeCommands(ctx context.Context, agentID string, handle func
 	}
 }
 
-// Presence: a key per connected agent, refreshed by heartbeats. Used for listing and scheduling.
-
 func presenceKey(agentID string) string { return "akili:presence:agent:" + agentID }
 
 // PresenceTTL is how long an agent stays "online" without a heartbeat.
 const PresenceTTL = 45 * time.Second
 
-// MarkPresent refreshes an agent's presence with its active session count.
 func (b *Bus) MarkPresent(ctx context.Context, agentID string, activeSessions int) {
 	b.rdb.Set(ctx, presenceKey(agentID), activeSessions, PresenceTTL)
 }
 
-// ClearPresence removes an agent's presence.
 func (b *Bus) ClearPresence(ctx context.Context, agentID string) {
 	b.rdb.Del(ctx, presenceKey(agentID))
 }
 
-// Present reports whether an agent is connected.
 func (b *Bus) Present(ctx context.Context, agentID string) bool {
 	n, err := b.rdb.Exists(ctx, presenceKey(agentID)).Result()
 	return err == nil && n == 1
@@ -326,10 +306,8 @@ func (b *Bus) Wake(ctx context.Context) {
 	b.rdb.Publish(ctx, "akili:dispatch:wake", "1")
 }
 
-// SubscribeWake delivers dispatcher wake-ups.
 func (b *Bus) SubscribeWake(ctx context.Context) <-chan *redis.Message {
 	return b.rdb.Subscribe(ctx, "akili:dispatch:wake").Channel()
 }
 
-// Redis exposes the client for rate limiting and session revocation.
 func (b *Bus) Redis() *redis.Client { return b.rdb }

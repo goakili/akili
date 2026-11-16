@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package forge
 
@@ -51,8 +52,7 @@ func NewGitHubToken(apiURL, webURL, token string) *GitHub {
 	return newGitHub(apiURL, webURL, staticToken(token))
 }
 
-// NewGitHubApp authenticates as a GitHub App installation. Installation tokens are minted on demand
-// and expire after an hour, so a leaked token is short-lived.
+// NewGitHubApp mints installation tokens on demand; they expire after an hour, so a leaked one is short-lived.
 func NewGitHubApp(apiURL, webURL string, appID, installationID int64, privateKeyPEM []byte) (*GitHub, error) {
 	key, err := parseRSAKey(privateKeyPEM)
 	if err != nil {
@@ -186,7 +186,6 @@ func (p githubPR) pr() *PR {
 	return &PR{Number: p.Number, URL: p.HTMLURL, State: p.State, Merged: p.Merged, Title: p.Title, Head: p.Head.Ref, Base: p.Base.Ref, Draft: p.Draft}
 }
 
-// Verify implements Forge.
 func (g *GitHub) Verify(ctx context.Context) (string, error) {
 	if g.tokens.Kind() == "app" {
 		var out struct {
@@ -206,7 +205,6 @@ func (g *GitHub) Verify(ctx context.Context) (string, error) {
 	return u.Login, nil
 }
 
-// GetRepo implements Forge.
 func (g *GitHub) GetRepo(ctx context.Context, owner, name string) (*Repo, error) {
 	var r githubRepo
 	if err := g.c.do(ctx, http.MethodGet, "/repos/"+esc(owner)+"/"+esc(name), nil, &r); err != nil {
@@ -215,7 +213,6 @@ func (g *GitHub) GetRepo(ctx context.Context, owner, name string) (*Repo, error)
 	return r.repo(), nil
 }
 
-// CreateRepo implements Forge.
 func (g *GitHub) CreateRepo(ctx context.Context, owner, name, description string, private bool) (*Repo, error) {
 	body := map[string]any{"name": name, "description": description, "private": private, "auto_init": true}
 	path := "/user/repos"
@@ -231,7 +228,6 @@ func (g *GitHub) CreateRepo(ctx context.Context, owner, name, description string
 	return r.repo(), nil
 }
 
-// FindOpenPR implements Forge.
 func (g *GitHub) FindOpenPR(ctx context.Context, owner, name, head string) (*PR, error) {
 	var prs []githubPR
 	if err := g.c.do(ctx, http.MethodGet, "/repos/"+esc(owner)+"/"+esc(name)+"/pulls?state=open&head="+esc(owner+":"+head), nil, &prs); err != nil {
@@ -243,7 +239,6 @@ func (g *GitHub) FindOpenPR(ctx context.Context, owner, name, head string) (*PR,
 	return prs[0].pr(), nil
 }
 
-// CreatePR implements Forge.
 func (g *GitHub) CreatePR(ctx context.Context, owner, name, head, base, title, body string, draft bool) (*PR, error) {
 	var p githubPR
 	err := g.c.do(ctx, http.MethodPost, "/repos/"+esc(owner)+"/"+esc(name)+"/pulls",
@@ -254,7 +249,6 @@ func (g *GitHub) CreatePR(ctx context.Context, owner, name, head, base, title, b
 	return p.pr(), nil
 }
 
-// GetPR implements Forge.
 func (g *GitHub) GetPR(ctx context.Context, owner, name string, number int) (*PR, error) {
 	var p githubPR
 	if err := g.c.do(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/%s/pulls/%d", esc(owner), esc(name), number), nil, &p); err != nil {
@@ -263,7 +257,7 @@ func (g *GitHub) GetPR(ctx context.Context, owner, name string, number int) (*PR
 	return p.pr(), nil
 }
 
-// CommitStatus implements Forge, merging commit statuses and check runs (GitHub Actions uses the latter).
+// CommitStatus merges commit statuses and check runs (GitHub Actions uses the latter).
 func (g *GitHub) CommitStatus(ctx context.Context, owner, name, ref string) (*Status, error) {
 	base := "/repos/" + esc(owner) + "/" + esc(name) + "/commits/" + esc(ref)
 	var combined struct {
@@ -308,20 +302,17 @@ func (g *GitHub) CommitStatus(ctx context.Context, owner, name, ref string) (*St
 	return out, nil
 }
 
-// PRDiff implements Forge.
 func (g *GitHub) PRDiff(ctx context.Context, owner, name string, number int) (string, error) {
 	var diff string
 	err := g.c.do(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/%s/pulls/%d", esc(owner), esc(name), number), nil, &diff, "application/vnd.github.diff")
 	return diff, err
 }
 
-// GitAuth implements Forge.
 func (g *GitHub) GitAuth(ctx context.Context) (string, string, error) {
 	t, err := g.tokens.Token(ctx)
 	return "x-access-token", t, err
 }
 
-// GitURL implements Forge.
 func (g *GitHub) GitURL(owner, name string) string {
 	return g.webURL + "/" + owner + "/" + name + ".git"
 }
