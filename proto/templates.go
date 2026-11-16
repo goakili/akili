@@ -1,22 +1,16 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package proto
 
@@ -54,16 +48,16 @@ func PolicyTemplates() []Policy {
 	return []Policy{
 		{
 			Name:    "read-only",
-			Version: 7,
+			Version: 8,
 			// plan_propose only creates a draft a person must activate, so read-only agents can plan work.
-			Tools:   Rule{Allow: []string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolGitStatus, ToolGitDiff, ToolLessonPropose, ToolPlanPropose, ToolAskUser}},
+			Tools:   Rule{Allow: []string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolGitStatus, ToolGitDiff, ToolLessonPropose, ToolPlanPropose, ToolAskUser, ToolReviewSubmit}},
 			Paths:   Rule{Allow: []string{"$WORKDIR/**", "/var/log/**", "/etc/**"}, Deny: commonDenyPaths},
 			MaxRisk: RiskLow,
 		},
 		{
 			Name:       "operator-safe",
-			Version:    8,
-			Tools:      Rule{Allow: append(append([]string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolShell, ToolHTTPFetch, ToolLessonPropose, ToolAskUser}, readHostTools...), miabiReadTools...)},
+			Version:    9,
+			Tools:      Rule{Allow: append(append([]string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolShell, ToolHTTPFetch, ToolLessonPropose, ToolAskUser, ToolReviewSubmit}, readHostTools...), miabiReadTools...)},
 			Apps:       Rule{Allow: []string{"*"}},
 			Services:   Rule{Allow: []string{"*"}},
 			Containers: Rule{Allow: []string{"*"}},
@@ -86,9 +80,9 @@ func PolicyTemplates() []Policy {
 		},
 		{
 			Name:    "operator",
-			Version: 6,
+			Version: 7,
 			Tools: Rule{Allow: append(append(append([]string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolHTTPFetch, ToolShell, ToolFSEdit, ToolFSWrite,
-				ToolServiceRestart, ToolDockerRestart, ToolChangeRun, ToolLessonPropose, ToolAskUser}, readHostTools...), miabiReadTools...), miabiWriteTools...)},
+				ToolServiceRestart, ToolDockerRestart, ToolChangeRun, ToolLessonPropose, ToolAskUser, ToolReviewSubmit}, readHostTools...), miabiReadTools...), miabiWriteTools...)},
 			Apps:       Rule{Allow: []string{"*"}},
 			Paths:      Rule{Allow: []string{"$WORKDIR/**", "/var/log/**", "/etc/**", "/tmp/**", "/var/tmp/**", "/opt/**", "/srv/**"}, Deny: commonDenyPaths},
 			Commands:   Rule{Allow: []string{"*"}, Deny: append([]string{"*sudo su*", "*sudo -i*", "*sudo bash*", "*sudo sh*", "*passwd*", "*visudo*", "*iptables -F*"}, commonDenyCommands...)},

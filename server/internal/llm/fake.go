@@ -1,22 +1,16 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package llm
 
@@ -131,6 +125,13 @@ func (f *Fake) Stream(ctx context.Context, req Request, onDelta DeltaFunc) (Resu
 			script = append(script, d)
 		}
 	}
+	if len(script) == 0 && strings.HasPrefix(text, "CI failed on") {
+		script = onCIFail(req.Messages[:start])
+	}
+	reviewing := len(script) == 0 && (strings.HasPrefix(text, "Review a change plan") || strings.HasPrefix(text, "Review the work"))
+	if reviewing {
+		script = reviewScript
+	}
 	done := 0
 	var lastResult *proto.Block
 	for _, m := range req.Messages[start+1:] {
@@ -143,7 +144,8 @@ func (f *Fake) Stream(ctx context.Context, req Request, onDelta DeltaFunc) (Resu
 	}
 	if done < len(script) {
 		d := script[done]
-		if !hasTool(req.Tools, d.tool) {
+		// A reviewer's write is sent although it is not offered, to prove the control plane refuses it.
+		if !hasTool(req.Tools, d.tool) && !(reviewing && d.tool == proto.ToolFSWrite) {
 			return f.text(ctx, fmt.Sprintf("BLOCKED: I need the %s tool, which is not available in this session.", d.tool), usage, onDelta)
 		}
 		raw, _ := json.Marshal(d.input)
@@ -173,6 +175,31 @@ func (f *Fake) Stream(ctx context.Context, req Request, onDelta DeltaFunc) (Resu
 		return f.text(ctx, fmt.Sprintf("The tool call %s:\n\n```\n%s\n```\n\nDone.", status, strings.TrimSpace(out)), usage, onDelta)
 	}
 	return f.text(ctx, "Echo: "+text, usage, onDelta)
+}
+
+// reviewScript first tries a write a reviewer is never offered, then submits a fixed review.
+var reviewScript = []directive{
+	{tool: proto.ToolFSWrite, input: proto.FSWriteInput{Path: "reviewer-was-here.txt", Content: "x"}},
+	{tool: proto.ToolReviewSubmit, input: proto.ReviewSubmitInput{Verdict: proto.VerdictConcerns, Summary: "Scripted review: the plan has no rollback.",
+		Concerns: []string{"There is no rollback step."}}},
+}
+
+// onCIFail scripts the reply to a CI report from "on-ci-fail: <directive>" lines of the original goal; the report itself is never parsed.
+func onCIFail(earlier []proto.Message) []directive {
+	var script []directive
+	for _, m := range earlier {
+		if m.Role != proto.RoleUser {
+			continue
+		}
+		for _, line := range strings.Split(m.Text(), "\n") {
+			if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "on-ci-fail:"); ok {
+				if d, ok := parseDirective(strings.TrimSpace(rest)); ok {
+					script = append(script, d)
+				}
+			}
+		}
+	}
+	return script
 }
 
 func (f *Fake) text(ctx context.Context, s string, usage Usage, onDelta DeltaFunc) (Result, error) {

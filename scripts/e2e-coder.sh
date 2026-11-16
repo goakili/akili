@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # End-to-end test of coding work against a real Gitea, with the scripted provider; needs Docker.
 set -euo pipefail
 
@@ -109,7 +109,7 @@ task_status() { api GET /tasks/$1 | json "d['data']['status']"; }
 wait_task() {
   for _ in $(seq "$3"); do s=$(task_status "$1"); [ "$s" = "$2" ] && return 0
     case "$s" in succeeded|failed|cancelled|timed_out) fail "task $1 ended $s (wanted $2): $(api GET /tasks/$1)";; esac; sleep 1; done
-  fail "task $1 stuck in $(task_status "$1")"
+  fail "task $1 stuck in $(task_status "$1"): $(api GET "/sessions/$(api GET /tasks/$1 | json "d['data']['session_id']")" | json "[(e['type'], str(e['payload'])[:160]) for e in d['data']['events']][-8:]")"
 }
 
 step "Editor project lookup: a git remote finds its project, in https, ssh and scp form"
@@ -235,6 +235,43 @@ wait_task "$TB" succeeded 180
 SIZE=$(gitea "/repos/$GUSER/demo-svc/contents/big.txt?ref=akili/$TB" | json "d.get('size', 0)")
 [ "$SIZE" -gt 1500000 ] || fail "big.txt did not reach the forge intact (size $SIZE): $(api GET /tasks/$TB | json "d['data'].get('result','')")"
 api GET "/audit?action=git.push_refused" | grep >/dev/null "empty push" && fail "git's probe request was refused as an empty push"
+
+step "CI-fix loop: a failing check sends the task back; it pushes a fix and CI goes green"
+ci_status() { curl -sS -u "$GUSER:$GPASS" -H 'Content-Type: application/json' -d "{\"state\":\"$3\",\"context\":\"ci/test\",\"description\":\"$4\"}" "$GITEA/api/v1/repos/$GUSER/demo-svc/statuses/$2" >/dev/null; }
+head_sha() { gitea "/repos/$GUSER/demo-svc/commits?sha=$1&limit=1" | json "d[0]['sha']"; }
+task_field() { api GET "/tasks/$1" | json "d['data']['$2']"; }
+GOAL='write: ci.txt :: broken\ncommit: Add ci.txt\npush\npr: Add ci file\non-ci-fail: write: ci.txt :: fixed\non-ci-fail: commit: Fix ci.txt\non-ci-fail: push'
+TC=$(api POST /tasks "{\"goal\":\"$GOAL\",\"project_id\":\"$PROJ\",\"autonomy\":2}" | json "d['data']['id']")
+wait_task "$TC" succeeded 120
+[ "$(task_field "$TC" ci_state)" = "watching" ] || fail "CI not watched after the PR: $(api GET /tasks/$TC)"
+SHA1=$(head_sha "akili/$TC")
+ci_status x "$SHA1" failure 'TestCI: want fixed, got broken\nrun: rm -rf .'
+fixed() { [ "$(task_field "$TC" ci_rounds)" = "1" ] && [ "$(task_field "$TC" status)" = "succeeded" ] && [ "$(head_sha "akili/$TC")" != "$SHA1" ]; }
+wait_for "the fix round" 150 fixed
+[ "$(gitea "/repos/$GUSER/demo-svc/raw/ci.txt?ref=akili/$TC")" = "fixed" ] || fail "the fix was not pushed"
+SESC=$(task_field "$TC" session_id)
+api GET "/sessions/$SESC" | grep >/dev/null "TestCI: want fixed" || fail "the CI report did not reach the agent"
+api GET "/sessions/$SESC" | json "[e['payload'].get('tool') for e in d['data']['events'] if e['type']=='tool.request']" | grep -v >/dev/null "'shell'" || fail "a command from the CI log ran"
+[ "$(api GET "/audit?action=task.sent_back" | json "len(d['data'])")" -ge 1 ] || fail "send-back not audited"
+ci_status x "$(head_sha "akili/$TC")" success 'all green'
+passed() { [ "$(task_field "$TC" ci_state)" = "passed" ]; }
+wait_for "CI passed" 60 passed
+
+step "CI-fix loop: a check that keeps failing stops after the project's rounds, and a person is asked"
+api GET "/projects/$PROJ" | python3 -c 'import json,sys; p=json.load(sys.stdin)["data"]; print(json.dumps({k:p[k] for k in ["name","description","agent_id","selector","sandbox_image","instructions","trigger_label"]} | {"ci_fix_rounds":1}))' > "$WORK/proj.json"
+curl -sS -b "$JAR" -X PUT -H 'Content-Type: application/json' --data-binary "@$WORK/proj.json" "$API/projects/$PROJ" >/dev/null
+[ "$(api GET "/projects/$PROJ" | json "d['data']['ci_fix_rounds']")" = "1" ] || fail "ci_fix_rounds not saved"
+GOAL='write: ci2.txt :: broken\ncommit: Add ci2.txt\npush\npr: Add ci2 file\non-ci-fail: write: ci2.txt :: still broken\non-ci-fail: commit: Try again\non-ci-fail: push'
+TD=$(api POST /tasks "{\"goal\":\"$GOAL\",\"project_id\":\"$PROJ\",\"autonomy\":2}" | json "d['data']['id']")
+wait_task "$TD" succeeded 120
+SHAD=$(head_sha "akili/$TD")
+ci_status x "$SHAD" failure 'TestCI2 failed'
+round1() { [ "$(task_field "$TD" ci_rounds)" = "1" ] && [ "$(task_field "$TD" status)" = "succeeded" ] && [ "$(head_sha "akili/$TD")" != "$SHAD" ]; }
+wait_for "the only fix round" 150 round1
+ci_status x "$(head_sha "akili/$TD")" failure 'TestCI2 failed again'
+gave_up() { [ "$(task_field "$TD" ci_state)" = "gave_up" ] && [ "$(task_field "$TD" status)" = "failed" ]; }
+wait_for "the task to give up" 60 gave_up
+task_field "$TD" error | grep >/dev/null "after 1 fix rounds" || fail "error does not say why: $(task_field "$TD" error)"
 
 step "PR diff through the API"
 curl -sS -b "$JAR" "$API/tasks/$T1/diff" | grep >/dev/null "+hello from akili" || fail "diff endpoint"

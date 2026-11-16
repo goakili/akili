@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // The bridge must load before anything calls fetch.
 import { vscode } from './bridge'

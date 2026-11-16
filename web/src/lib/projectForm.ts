@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 import type { Project, ProjectInput } from '../api'
 import { splitList } from './format'
@@ -16,6 +16,7 @@ export interface ProjectForm {
   sandbox_image: string
   instructions: string
   trigger_label: string
+  ci_fix_rounds: number
 }
 
 export function projectFormFrom(p?: Project | null): ProjectForm {
@@ -29,6 +30,7 @@ export function projectFormFrom(p?: Project | null): ProjectForm {
     sandbox_image: p?.sandbox_image ?? '',
     instructions: p?.instructions ?? '',
     trigger_label: p?.trigger_label ?? '',
+    ci_fix_rounds: p?.ci_fix_rounds ?? 0,
   }
 }
 
@@ -41,6 +43,7 @@ export function projectInput(f: ProjectForm): ProjectInput {
     sandbox_image: f.sandbox_image.trim(),
     instructions: f.instructions,
     trigger_label: f.trigger_label.trim(),
+    ci_fix_rounds: f.ci_fix_rounds,
   }
 }
 

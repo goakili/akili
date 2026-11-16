@@ -1,22 +1,16 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // Package plans holds project plans; agents report phase progress and propose drafts but cannot edit, activate or delete plans.
 package plans
@@ -74,6 +68,9 @@ type PhaseInput struct {
 	Title    string `json:"title"`
 	Detail   string `json:"detail,omitempty"`
 	DoneWhen string `json:"done_when,omitempty" description:"what finished means for this phase"`
+	// AgentID and Selector target the phase's tasks when they name no agent of their own.
+	AgentID  *string  `json:"agent_id,omitempty"`
+	Selector []string `json:"selector,omitempty"`
 }
 
 type CreateInput struct {
@@ -178,10 +175,11 @@ func MergePhases(existing []models.PlanPhase, in []PhaseInput) (keep []models.Pl
 		if st, ok := byID[s.ID]; ok && !used[s.ID] {
 			used[s.ID] = true
 			st.Title, st.Detail, st.DoneWhen, st.Position = s.Title, s.Detail, s.DoneWhen, i
+			st.AgentID, st.Selector = emptyNil(s.AgentID), nonNil(s.Selector)
 			keep = append(keep, st)
 			continue
 		}
-		create = append(create, PhaseInput{Title: s.Title, Detail: s.Detail, DoneWhen: s.DoneWhen})
+		create = append(create, PhaseInput{Title: s.Title, Detail: s.Detail, DoneWhen: s.DoneWhen, AgentID: s.AgentID, Selector: s.Selector})
 		positions = append(positions, i)
 	}
 	for _, st := range existing {
@@ -323,7 +321,8 @@ func (s *Service) create(ctx context.Context, org, projectID string, in CreateIn
 		}
 		for i, st := range in.Phases {
 			if err := tx.Create(&models.PlanPhase{Base: models.Base{ID: models.NewID("phs"), OrganizationID: org}, PlanID: p.ID, Position: i,
-				Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Status: models.PhaseTodo, UpdatedBy: phaseBy}).Error; err != nil {
+				Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Status: models.PhaseTodo, UpdatedBy: phaseBy,
+				AgentID: emptyNil(st.AgentID), Selector: nonNil(st.Selector)}).Error; err != nil {
 				return err
 			}
 		}
@@ -428,14 +427,16 @@ func (s *Service) ReplacePhases(ctx context.Context, org, userID, id string, in 
 			}
 		}
 		for _, st := range keep {
-			if err := tx.Model(&models.PlanPhase{}).Where("id = ?", st.ID).
-				Updates(map[string]any{"title": st.Title, "detail": st.Detail, "done_when": st.DoneWhen, "position": st.Position}).Error; err != nil {
+			// Struct update with Select: a map update would bypass the JSON serializer on selector.
+			if err := tx.Model(&models.PlanPhase{}).Where("id = ?", st.ID).Select("title", "detail", "done_when", "position", "agent_id", "selector").
+				Updates(&models.PlanPhase{Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Position: st.Position, AgentID: st.AgentID, Selector: st.Selector}).Error; err != nil {
 				return err
 			}
 		}
 		for i, st := range create {
 			if err := tx.Create(&models.PlanPhase{Base: models.Base{ID: models.NewID("phs"), OrganizationID: org}, PlanID: p.ID,
-				Position: positions[i], Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Status: models.PhaseTodo, UpdatedBy: userID}).Error; err != nil {
+				Position: positions[i], Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Status: models.PhaseTodo, UpdatedBy: userID,
+				AgentID: emptyNil(st.AgentID), Selector: nonNil(st.Selector)}).Error; err != nil {
 				return err
 			}
 		}
@@ -705,3 +706,17 @@ func (s *Service) phaseUpdate(ctx context.Context, sess *models.ChatSession, inp
 
 // IsAgentUpdate reports whether a phase's last change came from an agent.
 func IsAgentUpdate(st models.PlanPhase) bool { return strings.HasPrefix(st.UpdatedBy, agentUpdaterPfx) }
+
+func emptyNil(s *string) *string {
+	if s == nil || *s == "" {
+		return nil
+	}
+	return s
+}
+
+func nonNil(l []string) []string {
+	if l == nil {
+		return []string{}
+	}
+	return l
+}

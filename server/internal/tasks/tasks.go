@@ -1,22 +1,16 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // Package tasks queues, dispatches and retries agent work; the tasks table is the source of truth, Redis only wakes the dispatcher.
 package tasks
@@ -25,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"time"
@@ -52,13 +47,17 @@ const (
 )
 
 type Service struct {
-	db     *gorm.DB
-	bus    *bus.Bus
-	audit  *audit.Logger
-	hub    *sessions.Hub
-	notify *notify.Notifier
-	elect  *leader.Elector
+	db       *gorm.DB
+	bus      *bus.Bus
+	audit    *audit.Logger
+	hub      *sessions.Hub
+	notify   *notify.Notifier
+	elect    *leader.Elector
+	onFinish []func(context.Context, *models.Task)
 }
+
+// OnFinish registers a callback run after a task reaches a final status.
+func (s *Service) OnFinish(f func(context.Context, *models.Task)) { s.onFinish = append(s.onFinish, f) }
 
 // New returns the task service and registers it with the session hub.
 func New(db *gorm.DB, b *bus.Bus, a *audit.Logger, hub *sessions.Hub, n *notify.Notifier, e *leader.Elector) *Service {
@@ -88,6 +87,9 @@ type Input struct {
 	PlanPhaseID string
 	// Draft saves the task without queueing it; Start queues it later.
 	Draft bool
+	// Kind and ReviewID mark a reviewer's task (models.TaskKindReview).
+	Kind     string
+	ReviewID *string
 }
 
 // DefaultAutonomy (L2) lets edits, commits, pushes and PRs run unattended, while host shell commands still need approval.
@@ -115,6 +117,12 @@ func (s *Service) Create(ctx context.Context, org, userID string, in Input) (*mo
 	}
 	if in.ProjectID != nil && *in.ProjectID == "" {
 		in.ProjectID = nil
+	}
+	if in.PlanPhaseID != "" && in.AgentID == nil && len(in.Selector) == 0 {
+		var ph models.PlanPhase
+		if s.db.WithContext(ctx).Select("agent_id", "selector").First(&ph, "id = ? AND organization_id = ?", in.PlanPhaseID, org).Error == nil {
+			in.AgentID, in.Selector = ph.AgentID, ph.Selector
+		}
 	}
 	if in.ProjectID != nil {
 		var p models.Project
@@ -154,7 +162,8 @@ func (s *Service) Create(ctx context.Context, org, userID string, in Input) (*mo
 	t := &models.Task{Base: models.Base{ID: models.NewID("tsk"), OrganizationID: org}, Title: in.Title, Goal: in.Goal,
 		AgentID: in.AgentID, Selector: in.Selector, Status: status, Priority: in.Priority, Autonomy: in.Autonomy,
 		BudgetUSD: in.BudgetUSD, MaxTurns: in.MaxTurns, TimeoutSec: in.TimeoutSec, MaxAttempts: in.MaxAttempts,
-		ScheduleID: in.ScheduleID, CreatedBy: userID, ProjectID: in.ProjectID, Trigger: in.Trigger, TriggerRef: in.TriggerRef}
+		ScheduleID: in.ScheduleID, CreatedBy: userID, ProjectID: in.ProjectID, Trigger: in.Trigger, TriggerRef: in.TriggerRef,
+		Kind: in.Kind, ReviewID: in.ReviewID}
 	if t.ProjectID != nil {
 		t.Branch = "akili/" + t.ID
 	}
@@ -349,7 +358,60 @@ func (s *Service) TaskDone(ctx context.Context, taskID string, d proto.Done) {
 	case proto.OutcomeTimedOut:
 		status = models.TaskTimedOut
 	}
-	s.finish(ctx, t, status, d.Summary, d.Error)
+	var extra map[string]any
+	if status == models.TaskSucceeded && t.ProjectID != nil && t.PRNumber > 0 {
+		// Set with the status, so a finished PR task is never seen without its CI watch.
+		extra = map[string]any{"ci_state": models.CIWatching, "ci_since": time.Now().UTC(), "ci_detail": ""}
+	}
+	s.finish(ctx, t, status, d.Summary, d.Error, extra)
+}
+
+// SendBack requeues a succeeded task on the agent that ran it, continuing its conversation with goal.
+func (s *Service) SendBack(ctx context.Context, taskID, goal, reason string) error {
+	t, err := s.byID(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	if t.Status != models.TaskSucceeded || t.SessionID == nil {
+		return ErrNotContinuable
+	}
+	updates := map[string]any{"status": models.TaskQueued, "status_reason": reason, "attempts": 0, "lease_until": nil,
+		"finished_at": nil, "error": "", "paused_at": nil, "resume_goal": goal, "ci_state": models.CIFixing}
+	if t.AgentID == nil && t.AssignedAgentID != nil {
+		updates["agent_id"] = *t.AssignedAgentID
+	}
+	res := s.db.WithContext(ctx).Model(&models.Task{}).Where("id = ? AND status = ?", t.ID, models.TaskSucceeded).Updates(updates)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrNotContinuable
+	}
+	s.audit.Best(ctx, audit.Entry{OrganizationID: t.OrganizationID, ActorType: audit.ActorSystem, Action: "task.sent_back", TargetType: "task", TargetID: t.ID,
+		Metadata: map[string]any{"reason": reason, "previous_session_id": *t.SessionID}})
+	if nt, err := s.byID(ctx, t.ID); err == nil {
+		s.emit(ctx, nt)
+	}
+	s.bus.Wake(ctx)
+	return nil
+}
+
+// FailAfterCI marks a succeeded task failed because its pull request's CI kept failing: a person has to look.
+func (s *Service) FailAfterCI(ctx context.Context, taskID, msg string) {
+	res := s.db.WithContext(ctx).Model(&models.Task{}).Where("id = ? AND status = ?", taskID, models.TaskSucceeded).
+		Updates(map[string]any{"status": models.TaskFailed, "error": msg, "ci_state": models.CIGaveUp})
+	if res.RowsAffected == 0 {
+		return
+	}
+	nt, err := s.byID(ctx, taskID)
+	if err != nil {
+		return
+	}
+	s.audit.Best(ctx, audit.Entry{OrganizationID: nt.OrganizationID, ActorType: audit.ActorSystem, Action: "task.failed", TargetType: "task", TargetID: nt.ID,
+		Metadata: map[string]any{"error": msg}})
+	s.emit(ctx, nt)
+	s.notify.Send(fmt.Sprintf("Akili task %q needs a person: %s\n%s", nt.Title, msg, s.notify.Link("/tasks/"+nt.ID)))
+	s.notify.Mail().TaskFinished(nt.OrganizationID, nt)
 }
 
 // TaskLost handles a session that ended without an outcome: retry if attempts remain.
@@ -384,11 +446,14 @@ func (s *Service) requeueOrFail(ctx context.Context, t *models.Task, reason stri
 	s.finish(ctx, t, models.TaskFailed, "", reason)
 }
 
-func (s *Service) finish(ctx context.Context, t *models.Task, status, result, errMsg string) {
+func (s *Service) finish(ctx context.Context, t *models.Task, status, result, errMsg string, extra ...map[string]any) {
 	now := time.Now().UTC()
+	updates := map[string]any{"status": status, "result": result, "error": errMsg, "finished_at": now, "lease_until": nil}
+	for _, e := range extra {
+		maps.Copy(updates, e)
+	}
 	res := s.db.WithContext(ctx).Model(&models.Task{}).Where("id = ? AND status NOT IN ?", t.ID,
-		[]string{models.TaskSucceeded, models.TaskFailed, models.TaskCancelled, models.TaskTimedOut}).
-		Updates(map[string]any{"status": status, "result": result, "error": errMsg, "finished_at": now, "lease_until": nil})
+		[]string{models.TaskSucceeded, models.TaskFailed, models.TaskCancelled, models.TaskTimedOut}).Updates(updates)
 	if res.RowsAffected == 0 {
 		return
 	}
@@ -402,6 +467,9 @@ func (s *Service) finish(ctx context.Context, t *models.Task, status, result, er
 	if status != models.TaskCancelled {
 		s.notify.Send(fmt.Sprintf("Akili task %q %s (cost $%.4f)\n%s", nt.Title, status, nt.CostUSD, s.notify.Link("/tasks/"+nt.ID)))
 		s.notify.Mail().TaskFinished(nt.OrganizationID, nt)
+	}
+	for _, f := range s.onFinish {
+		f(ctx, nt)
 	}
 	s.bus.Wake(ctx) // capacity freed
 }
@@ -532,18 +600,18 @@ func (s *Service) assign(ctx context.Context, t *models.Task, agent *models.Agen
 		}
 		sess = &models.ChatSession{Base: models.Base{ID: models.NewID("ses"), OrganizationID: t.OrganizationID}, AgentID: agent.ID, TaskID: &t.ID,
 			Title: t.Title, Mode: proto.ModeTask, Status: models.SessionOpen, State: proto.StateIdle, CreatedBy: t.CreatedBy, LastActivityAt: &now,
-			ProjectID: locked.ProjectID, Branch: locked.Branch}
+			ProjectID: locked.ProjectID, Branch: locked.Branch, ResumeGoal: locked.ResumeGoal}
 		if err := tx.Create(sess).Error; err != nil {
 			return err
 		}
-		// Only Continue leaves a session on a queued task (requeues clear it): carry its history over.
+		// Only Continue and SendBack leave a session on a queued task (requeues clear it): carry its history over.
 		if locked.SessionID != nil {
 			if err := copyHistory(tx, *locked.SessionID, sess.ID); err != nil {
 				return err
 			}
 		}
 		updates := map[string]any{"status": models.TaskAssigned, "assigned_agent_id": agent.ID, "session_id": sess.ID,
-			"attempts": gorm.Expr("attempts + 1"), "lease_until": lease, "status_reason": ""}
+			"attempts": gorm.Expr("attempts + 1"), "lease_until": lease, "status_reason": "", "resume_goal": ""}
 		if locked.StartedAt == nil {
 			updates["started_at"] = now
 		}

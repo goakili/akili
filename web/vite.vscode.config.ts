@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // Fixed file names: the extension loads them into its webview under a strict CSP.
 import { defineConfig } from 'vite'

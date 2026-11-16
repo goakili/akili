@@ -1,6 +1,6 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-  SPDX-License-Identifier: MIT
+  SPDX-License-Identifier: Apache-2.0
 -->
 <script setup lang="ts">
 // A chat task's trigger_ref is a conversation id, so it has nothing to link to.

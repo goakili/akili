@@ -26,7 +26,7 @@ The security-first platform for orchestrating, governing, and safely automating 
 [![Go](https://img.shields.io/github/go-mod/go-version/goakili/akili?filename=server%2Fgo.mod)](https://go.dev/)
 [![Go Reference](https://pkg.go.dev/badge/github.com/goakili/akili/proto.svg)](https://pkg.go.dev/github.com/goakili/akili/proto)
 [![GitHub Release](https://img.shields.io/github/v/release/goakili/akili)](https://github.com/goakili/akili/releases)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 ![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/jkaninda/akili?style=flat-square)
 ![Docker Pulls](https://img.shields.io/docker/pulls/jkaninda/akili?style=flat-square)
 [![Deploy on Miabi](https://miabi.io/badge.svg?style=flat-square&label=deploy)](https://marketplace.miabi.io/templates/akili)
@@ -58,13 +58,14 @@ The platform ships as three parts:
 
 - **Policy before every action**: allow, deny or approve, decided by the agent and the control plane independently, with risk from a shared catalog. Autonomy levels L0 to L3; critical actions always need a human. [How a tool call is decided](#how-a-tool-call-is-decided)
 - **Earned autonomy**: approve once and allow similar calls for a few hours, open change windows or declare freezes, grant runbooks with bounded parameters, and see suggestions drawn from what people kept approving. Grants never cover a policy denial or a critical call, and a stuck task pauses to ask instead of looping.
-- **Coding agents**: projects on GitHub, GitLab or Gitea, a branch per task, pull requests, sandboxed tests, and a git proxy that keeps forge credentials off the agent. [Coding](#coding-projects-branches-and-pull-requests)
+- **Coding agents**: projects on GitHub, GitLab or Gitea, a branch per task, pull requests, sandboxed tests, and a git proxy that keeps forge credentials off the agent. When CI fails on the PR, the task goes back to the agent with the failing logs, a bounded number of times. [Coding](#coding-projects-branches-and-pull-requests)
 - **Operations**: alerts become triage tasks; fixes are change plans approved once, run step by step and rolled back automatically if a check fails. A recorded browser terminal. [Operations](#operations-alerts-change-plans-and-a-recorded-terminal)
 - **Miabi**: deploys, rollbacks, databases and workspaces, scoped by policy, with every deploy verified on real traffic. [Miabi](#miabi-workspaces-deploys-databases-and-more)
 - **Chat anywhere**: in the web UI (with images), or from Slack, Telegram and Signal with approval buttons. [Images in chat](#images-in-chat) · [Chat gateways](#chat-slack-telegram-and-signal)
 - **MCP servers**: tools from MCP servers, run on the control plane so agents never hold their credentials. [MCP](#mcp-servers)
 - **Hardened by default**: multiple replicas, encryption at rest with Vault Transit, OIDC SSO, SIEM streaming, agent mTLS and an organization-wide kill switch. [High availability and hardening](#high-availability-and-security-hardening)
-- **Lessons and notifications**: agents propose what they learned and an admin approves it; approvals and results reach you by sound and email. [Lessons](#lessons-what-agents-remember) · [Notifications](#notifications-dashboard-sounds-and-email)
+- **Reviewer agents**: ask a second agent to review a change plan or a pull request. It works read-only and its verdict is advice next to the approval, never a decision.
+- **Lessons and notifications**: agents propose what they learned and an admin approves it, including postmortems recalled when the same app or alert comes up again; approvals and results reach you by sound and email. [Lessons](#lessons-what-agents-remember) · [Notifications](#notifications-dashboard-sounds-and-email)
 
 ## Architecture
 
@@ -467,6 +468,8 @@ Settings come from environment variables. On start the server also loads `./.env
 
 ## License
 
-Akili is free software, published under the [MIT License](LICENSE).
+Akili is free software, published under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
+
+"Akili" and the Akili logo are not licensed under Apache-2.0; forks must use a different name.
 
 Copyright © 2026 [Jonas Kaninda](https://jkaninda.dev/)

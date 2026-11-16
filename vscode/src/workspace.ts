@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 /** Task branches the extension will fetch and check out; anything else is refused. */
 export function validTaskBranch(branch: string): boolean {

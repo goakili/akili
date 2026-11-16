@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 export async function copyText(text: string): Promise<boolean> {
   try {

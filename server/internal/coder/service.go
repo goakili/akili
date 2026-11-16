@@ -1,22 +1,16 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // Package coder is the control-plane side of coding work; forge credentials never leave it.
 package coder
@@ -392,6 +386,7 @@ type ProjectInput struct {
 	SandboxImage  string
 	Instructions  string
 	TriggerLabel  string
+	CIFixRounds   int
 	// CreateRepo creates the repository on the forge instead of connecting an existing one.
 	CreateRepo bool
 	Private    bool
@@ -434,6 +429,9 @@ func validOwner(kind, owner string) bool {
 
 // CreateProject connects (or creates) a repository and registers it as a project.
 func (s *Service) CreateProject(ctx context.Context, org, userID string, in ProjectInput) (*models.Project, error) {
+	if in.CIFixRounds < -1 || in.CIFixRounds > 10 {
+		return nil, errors.New("ci_fix_rounds must be between -1 (off) and 10")
+	}
 	in.Owner = strings.Trim(strings.TrimSpace(in.Owner), "/")
 	if !repoNameRE.MatchString(in.Repo) {
 		return nil, errors.New("repo must be a plain name (letters, digits, . _ -)")
@@ -485,7 +483,7 @@ func (s *Service) CreateProject(ctx context.Context, org, userID string, in Proj
 	p := &models.Project{Base: models.Base{ID: models.NewID("prj"), OrganizationID: org}, Name: name, Slug: s.uniqueSlug(ctx, org, slugify(name)),
 		Description: in.Description, IntegrationID: it.ID, Forge: it.Kind, Owner: repo.Owner, Repo: repo.Name, DefaultBranch: repo.DefaultBranch,
 		WebURL: repo.WebURL, AgentID: emptyToNil(in.AgentID), Selector: nonNil(in.Selector), SandboxImage: strings.TrimSpace(in.SandboxImage),
-		Instructions: in.Instructions, TriggerLabel: strings.TrimSpace(in.TriggerLabel), CreatedBy: userID}
+		Instructions: in.Instructions, TriggerLabel: strings.TrimSpace(in.TriggerLabel), CIFixRounds: in.CIFixRounds, CreatedBy: userID}
 	if p.DefaultBranch == "" {
 		p.DefaultBranch = "main"
 	}
@@ -521,6 +519,9 @@ func (s *Service) checkGitLabAccess(ctx context.Context, it *models.Integration,
 
 // UpdateProject edits a project's settings (the repository itself is fixed).
 func (s *Service) UpdateProject(ctx context.Context, org, userID, id string, in ProjectInput) (*models.Project, error) {
+	if in.CIFixRounds < -1 || in.CIFixRounds > 10 {
+		return nil, errors.New("ci_fix_rounds must be between -1 (off) and 10")
+	}
 	p, err := s.Project(ctx, org, id)
 	if err != nil {
 		return nil, err
@@ -530,6 +531,7 @@ func (s *Service) UpdateProject(ctx context.Context, org, userID, id string, in 
 	}
 	p.Description, p.AgentID, p.Selector = in.Description, emptyToNil(in.AgentID), nonNil(in.Selector)
 	p.SandboxImage, p.Instructions, p.TriggerLabel = strings.TrimSpace(in.SandboxImage), in.Instructions, strings.TrimSpace(in.TriggerLabel)
+	p.CIFixRounds = in.CIFixRounds
 	if err := s.db.WithContext(ctx).Save(p).Error; err != nil {
 		return nil, err
 	}

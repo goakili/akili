@@ -1,22 +1,16 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package proto
 
@@ -80,6 +74,8 @@ func TestEveryToolHasADenyCase(t *testing.T) {
 		ToolSandboxExec:       {"developer", SandboxExecInput{Command: "sudo rm -rf /"}},
 		ToolPROpen:            {"read-only", PROpenInput{Title: "x"}},
 		ToolPRStatus:          {"operator-safe", EmptyInput{}},
+		ToolCILogs:            {"read-only", EmptyInput{}},
+		ToolReviewSubmit:      {"developer", ReviewSubmitInput{Verdict: "approve", Summary: "ship it"}},
 		ToolServiceStatus:     {"developer", ServiceInput{Unit: "nginx"}},
 		ToolServiceRestart:    {"operator", ServiceInput{Unit: "sshd"}},
 		ToolJournalLogs:       {"read-only", JournalInput{}},
@@ -473,6 +469,20 @@ func TestAskUserInputIsBounded(t *testing.T) {
 		d := Evaluate(template(t, "read-only"), AutonomyL1, wd, Call{Tool: ToolAskUser, Input: input(t, c.in)})
 		if d.Effect != c.want {
 			t.Errorf("%s: got %s (%s), want %s", c.name, d.Effect, d.Reason, c.want)
+		}
+	}
+}
+
+func TestReviewToolsAreReadOnly(t *testing.T) {
+	for _, name := range reviewTools {
+		spec, ok := LookupTool(name)
+		if !ok || spec.Risk != RiskLow {
+			t.Errorf("review tool %s is not a known low-risk tool", name)
+		}
+	}
+	for _, name := range []string{ToolShell, ToolFSWrite, ToolFSEdit, ToolGitCommit, ToolGitPush, ToolPROpen, ToolChangeRun, ToolHTTPFetch, ToolLessonPropose, ToolAskUser, ToolMiabiRestart} {
+		if IsReviewTool(name) {
+			t.Errorf("reviewers may call %s", name)
 		}
 	}
 }

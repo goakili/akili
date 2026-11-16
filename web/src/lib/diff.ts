@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // Unrecognised lines are ignored rather than thrown on, so a truncated or odd diff still renders what it can.
 

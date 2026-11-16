@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # End-to-end test of the Miabi integration against a fake Miabi API with two workspaces (staging, prod).
 set -euo pipefail
 

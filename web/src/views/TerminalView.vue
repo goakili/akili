@@ -1,6 +1,6 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-  SPDX-License-Identifier: MIT
+  SPDX-License-Identifier: Apache-2.0
 -->
 <script setup lang="ts">
 // One WebSocket per session: text frames carry input, resize and the exit notice; binary frames are output.

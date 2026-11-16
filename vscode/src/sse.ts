@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 /** Splits an SSE byte stream into event data; Akili sends unnamed events, so only `data:` lines matter. */
 export class SSEParser {

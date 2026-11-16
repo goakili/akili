@@ -1,6 +1,6 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-  SPDX-License-Identifier: MIT
+  SPDX-License-Identifier: Apache-2.0
 -->
 <script setup lang="ts">
 defineProps<{ title: string; subtitle?: string; back?: { to: string; label: string } }>()

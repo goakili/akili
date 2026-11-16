@@ -1,6 +1,6 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-  SPDX-License-Identifier: MIT
+  SPDX-License-Identifier: Apache-2.0
 -->
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
@@ -28,6 +28,12 @@ const now = useNow()
 
 const MIN_LEN = 10
 const MAX_LEN = 400
+const MAX_POSTMORTEM = 2000
+const maxFor = (kind?: string) => (kind === 'postmortem' ? MAX_POSTMORTEM : MAX_LEN)
+
+function scopeChips(l: Lesson): string[] {
+  return [l.app && `app ${l.app}`, l.alert && `alert ${l.alert}`, l.host && `label ${l.host}`, l.project_id && 'one project'].filter(Boolean) as string[]
+}
 
 const status = ref<LessonStatus>('proposed')
 const agentFilter = ref('')
@@ -86,7 +92,8 @@ const decideText = ref('')
 const decideNote = ref('')
 const saving = ref(false)
 const decideLen = computed(() => lessonLen(decideText.value))
-const decideValid = computed(() => deciding.value?.action === 'reject' || (decideLen.value >= MIN_LEN && decideLen.value <= MAX_LEN))
+const decideMax = computed(() => maxFor(deciding.value?.lesson.kind))
+const decideValid = computed(() => deciding.value?.action === 'reject' || (decideLen.value >= MIN_LEN && decideLen.value <= decideMax.value))
 
 function openDecide(l: Lesson, action: 'approve' | 'reject') {
   deciding.value = { lesson: l, action }
@@ -142,10 +149,19 @@ const addText = ref('')
 const addAgent = ref('')
 const addTried = ref(false)
 const addLen = computed(() => lessonLen(addText.value))
-const addValid = computed(() => addLen.value >= MIN_LEN && addLen.value <= MAX_LEN)
+const addKind = ref<'' | 'postmortem'>('')
+const addApp = ref('')
+const addAlert = ref('')
+const addHost = ref('')
+const addMax = computed(() => maxFor(addKind.value))
+const addValid = computed(() => addLen.value >= MIN_LEN && addLen.value <= addMax.value)
 
 function openAdd() {
   addText.value = ''
+  addKind.value = ''
+  addApp.value = ''
+  addAlert.value = ''
+  addHost.value = ''
   addAgent.value = agentFilter.value
   addTried.value = false
   adding.value = true
@@ -156,7 +172,10 @@ async function add() {
   if (!addValid.value) return
   saving.value = true
   try {
-    await api.createLesson(addAgent.value ? { text: addText.value.trim(), agent_id: addAgent.value } : { text: addText.value.trim() })
+    await api.createLesson({
+      text: addText.value.trim(), agent_id: addAgent.value || undefined, kind: addKind.value,
+      app: addApp.value.trim(), alert: addAlert.value.trim(), host: addHost.value.trim(),
+    })
     adding.value = false
     toast.success('Lesson added')
     if (status.value === 'approved') load()
@@ -227,7 +246,10 @@ onMounted(() => {
             </tr>
             <tr v-for="l in items" :key="l.id">
               <td style="min-width: 260px">
-                <div class="lesson-text">{{ l.text }}</div>
+                <div class="lesson-text"><span v-if="l.kind === 'postmortem'" class="badge info" style="margin-right: 6px">postmortem</span>{{ l.text }}</div>
+                <div v-if="scopeChips(l).length" class="chips" style="margin-top: 4px">
+                  <span v-for="c in scopeChips(l)" :key="c" class="label-chip">{{ c }}</span>
+                </div>
                 <div v-if="l.note" class="cell-sub" style="white-space: normal"><Icon name="info" :size="12" style="vertical-align: -1px" /> {{ l.note }}</div>
               </td>
               <td class="nowrap">
@@ -280,12 +302,12 @@ onMounted(() => {
         <template v-if="deciding.action === 'approve'">
           <div class="field">
             <label for="ld-text">Lesson</label>
-            <textarea id="ld-text" v-model="decideText" class="textarea" :class="{ invalid: !decideValid }" rows="4" :maxlength="MAX_LEN + 50" />
+            <textarea id="ld-text" v-model="decideText" class="textarea" :class="{ invalid: !decideValid }" rows="4" :maxlength="decideMax + 50" />
             <div class="row between">
               <span v-if="decideLen < MIN_LEN" class="error-msg"><Icon name="alert" />At least {{ MIN_LEN }} characters.</span>
-              <span v-else-if="decideLen > MAX_LEN" class="error-msg"><Icon name="alert" />At most {{ MAX_LEN }} characters.</span>
+              <span v-else-if="decideLen > decideMax" class="error-msg"><Icon name="alert" />At most {{ decideMax }} characters.</span>
               <span v-else class="hint">Edit it into a clear, general fact. It is added word for word to the system prompt.</span>
-              <span class="xs num" :class="decideLen > MAX_LEN ? 'danger-text' : 'muted'">{{ decideLen }}/{{ MAX_LEN }}</span>
+              <span class="xs num" :class="decideLen > decideMax ? 'danger-text' : 'muted'">{{ decideLen }}/{{ decideMax }}</span>
             </div>
           </div>
         </template>
@@ -314,14 +336,14 @@ onMounted(() => {
             class="textarea"
             :class="{ invalid: addTried && !addValid }"
             rows="4"
-            :maxlength="MAX_LEN + 50"
+            :maxlength="addMax + 50"
             placeholder="e.g. The staging database is on db-2; never run migrations against db-1."
           />
           <div class="row between">
             <span v-if="addTried && addLen < MIN_LEN" class="error-msg"><Icon name="alert" />At least {{ MIN_LEN }} characters.</span>
-            <span v-else-if="addLen > MAX_LEN" class="error-msg"><Icon name="alert" />At most {{ MAX_LEN }} characters.</span>
+            <span v-else-if="addLen > addMax" class="error-msg"><Icon name="alert" />At most {{ addMax }} characters.</span>
             <span v-else class="hint">One fact, added word for word to the system prompt. No secrets.</span>
-            <span class="xs num" :class="addLen > MAX_LEN ? 'danger-text' : 'muted'">{{ addLen }}/{{ MAX_LEN }}</span>
+            <span class="xs num" :class="addLen > addMax ? 'danger-text' : 'muted'">{{ addLen }}/{{ addMax }}</span>
           </div>
         </div>
         <div class="field">
@@ -332,6 +354,28 @@ onMounted(() => {
           </select>
           <span class="hint">The lesson is approved right away and used by new sessions.</span>
         </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="la-kind">Kind</label>
+            <select id="la-kind" v-model="addKind" class="select">
+              <option value="">Lesson (one fact, every session)</option>
+              <option value="postmortem">Postmortem (an incident, recalled for its app or alert)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="la-host">Agent label <span class="opt">(optional)</span></label>
+            <input id="la-host" v-model="addHost" class="input" maxlength="120" placeholder="db" />
+          </div>
+          <div class="field">
+            <label for="la-app">App <span class="opt">(optional)</span></label>
+            <input id="la-app" v-model="addApp" class="input mono" maxlength="200" placeholder="prod/api" />
+          </div>
+          <div class="field">
+            <label for="la-alert">Alert <span class="opt">(optional)</span></label>
+            <input id="la-alert" v-model="addAlert" class="input" maxlength="200" placeholder="HighErrorRate" />
+          </div>
+        </div>
+        <span class="hint">With an app, alert or label, the lesson is recalled only for tasks that mention that app or alert, or agents with that label.</span>
       </form>
       <template #footer>
         <button type="button" class="btn" @click="adding = false">Cancel</button>

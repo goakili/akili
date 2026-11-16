@@ -1,22 +1,16 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // Command akili is the Akili control plane.
 package main
@@ -48,6 +42,7 @@ import (
 	"github.com/goakili/akili/server/internal/notify"
 	"github.com/goakili/akili/server/internal/plans"
 	"github.com/goakili/akili/server/internal/procsec"
+	"github.com/goakili/akili/server/internal/reviews"
 	"github.com/goakili/akili/server/internal/routes"
 	"github.com/goakili/akili/server/internal/sessions"
 	"github.com/goakili/akili/server/internal/siem"
@@ -170,10 +165,12 @@ func runServer(cli *okapicli.CLI) error {
 		return err
 	}
 	forwarder := siem.New(db, elector, cfg.SIEM.FromStart, sinks...)
+	reviewSvc := reviews.New(db, auditLog, taskSvc, coderSvc)
+	hub.AddRemoteRunner([]string{proto.ToolReviewSubmit}, reviewSvc.RunRemote)
 	chatSvc := chat.New(db, box, b, auditLog, hub, taskSvc, elector)
 
 	h := &handlers.Handlers{Cfg: cfg, DB: db, Bus: b, Audit: auditLog, Auth: authSvc, Fleet: fleetSvc, Tunnels: tunnels,
-		Sessions: hub, Tasks: taskSvc, Box: box, Coder: coderSvc, Miabi: miabiSvc, OIDC: sso, SIEM: forwarder, Chat: chatSvc, Lessons: lessonSvc, Plans: planSvc, MCP: mcpSvc, Mail: mailer, Autonomy: autonomySvc}
+		Sessions: hub, Tasks: taskSvc, Box: box, Coder: coderSvc, Miabi: miabiSvc, OIDC: sso, SIEM: forwarder, Chat: chatSvc, Lessons: lessonSvc, Plans: planSvc, MCP: mcpSvc, Mail: mailer, Autonomy: autonomySvc, Reviews: reviewSvc}
 	routes.Register(app, h, middlewares.NewAuthenticator(db, authSvc))
 
 	return cli.RunServer(&okapicli.RunOptions{
@@ -189,6 +186,7 @@ func runServer(cli *okapicli.CLI) error {
 					it.TokenExpiresAt.Format("2006-01-02"), notifier.Link("/integrations")))
 				mailer.TokenExpiring(it.OrganizationID, it)
 			})
+			go coderSvc.RunCI(ctx, elector.Leading, taskSvc)
 			go miabiSvc.RunEvents(ctx, elector, func(ctx context.Context, t *miabi.Trigger) { h.MiabiTrigger(ctx, t) })
 			logger.Info("akili control plane starting", "version", config.Version, "port", cfg.Port, "public_url", cfg.PublicURL,
 				"kms", box.Keyring().Provider(), "tls", cfg.TLS.Enabled(), "agent_mtls", cfg.TLS.AgentMTLS, "sso", sso != nil, "siem_sinks", len(sinks))

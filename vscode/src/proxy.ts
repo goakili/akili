@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // Only the calls the sidebar needs are forwarded, so script injected into the webview can't use the user's key for anything else.
 

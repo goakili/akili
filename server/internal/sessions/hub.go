@@ -1,22 +1,16 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 // Package sessions owns chat and task sessions and the authoritative policy check on every tool request.
 package sessions
@@ -55,6 +49,7 @@ const (
 	EvApprovalResolved = "approval.resolved"
 	EvError            = "session.error"
 	EvUsage            = "usage"
+	EvLessonsRecalled  = "lessons.recalled"
 )
 
 // ApprovalTTL is how long a pending approval stays valid.
@@ -85,7 +80,7 @@ type Hub struct {
 	tasks      TaskHooks
 	remote     RemoteTools
 	runners    map[string]RemoteRunner
-	lessons    func(ctx context.Context, org, agentID string) []string
+	lessons    func(ctx context.Context, org string, q models.LessonQuery) []models.PromptLesson
 	mcpTools   func(ctx context.Context, org string) []proto.DynamicTool
 	mcpRun     RemoteRunner
 	autonomy   *autonomy.Service
@@ -101,8 +96,10 @@ func (h *Hub) SetMCP(tools func(ctx context.Context, org string) []proto.Dynamic
 	h.mcpTools, h.mcpRun = tools, run
 }
 
-// SetLessons supplies the approved lessons added to new sessions' system prompts.
-func (h *Hub) SetLessons(f func(ctx context.Context, org, agentID string) []string) { h.lessons = f }
+// SetLessons supplies the approved lessons that fit a new session's system prompt.
+func (h *Hub) SetLessons(f func(ctx context.Context, org string, q models.LessonQuery) []models.PromptLesson) {
+	h.lessons = f
+}
 
 func New(db *gorm.DB, b *bus.Bus, a *audit.Logger, n *notify.Notifier, key ed25519.PrivateKey) *Hub {
 	return &Hub{db: db, bus: b, audit: a, notify: n, signingKey: key}
@@ -176,6 +173,9 @@ func (h *Hub) BuildOpen(ctx context.Context, sessionID, agentID string) (proto.S
 	}
 	if s.System == "" {
 		s.ToolNames = offeredTools(pol, spec)
+		if h.isReview(ctx, &s) {
+			s.ToolNames = slices.DeleteFunc(s.ToolNames, func(t string) bool { return !proto.IsReviewTool(t) })
+		}
 		if s.Mode != proto.ModeTask {
 			// In a chat the agent asks in its reply.
 			s.ToolNames = slices.DeleteFunc(s.ToolNames, func(t string) bool { return t == proto.ToolAskUser })
@@ -187,10 +187,7 @@ func (h *Hub) BuildOpen(ctx context.Context, sessionID, agentID string) (proto.S
 				}
 			}
 		}
-		var lessons []string
-		if h.lessons != nil {
-			lessons = h.lessons(ctx, s.OrganizationID, agent.ID)
-		}
+		lessons := h.recallLessons(ctx, &s, &agent)
 		s.System = buildSystemPrompt(&agent, agent.Skills, s.Mode, s.ToolNames, project, spec, lessons)
 		// Struct update with Select: map updates bypass the JSON serializer on tool_names.
 		if err := h.db.WithContext(ctx).Model(&s).Select("system", "tool_names").Updates(&models.ChatSession{System: s.System, ToolNames: s.ToolNames}).Error; err != nil {
@@ -226,6 +223,9 @@ func (h *Hub) BuildOpen(ctx context.Context, sessionID, agentID string) (proto.S
 		open.Autonomy = minAutonomy(t.Autonomy, agent.Autonomy)
 		if t.MaxTurns > 0 {
 			open.MaxTurns = t.MaxTurns
+		}
+		if len(history) > 0 && s.ResumeGoal != "" {
+			open.Goal = s.ResumeGoal
 		}
 		if len(history) == 0 {
 			open.Goal = t.Goal
@@ -331,6 +331,10 @@ func (h *Hub) HandleFrame(ctx context.Context, agentID, sessionID string, env pr
 		if err := h.db.WithContext(ctx).Create(&row).Error; err != nil {
 			return nil, err
 		}
+		if m.Message.Role == proto.RoleUser && s.ResumeGoal != "" {
+			// The agent has the resume goal in its history now; a reconnect must not add it twice.
+			h.db.WithContext(ctx).Model(&models.ChatSession{}).Where("id = ?", s.ID).Update("resume_goal", "")
+		}
 		h.bus.EmitData(ctx, s.OrganizationID, bus.Event{Type: EvMessage, SessionID: s.ID, AgentID: agentID}, row)
 	case proto.TypeToolRequest:
 		var req proto.ToolRequest
@@ -411,6 +415,8 @@ func (h *Hub) authorize(ctx context.Context, s *models.ChatSession, req proto.To
 		d = proto.Decision{Effect: proto.EffectDeny, Reason: "in a chat, ask in your reply instead"}
 	case isProjectTool(req.Tool) && s.ProjectID == nil:
 		d = proto.Decision{Effect: proto.EffectDeny, Reason: req.Tool + " needs a session bound to a project"}
+	case h.isReview(ctx, s) && !proto.IsReviewTool(req.Tool), req.Tool == proto.ToolReviewSubmit && !h.isReview(ctx, s):
+		d = proto.Decision{Effect: proto.EffectDeny, Reason: reviewDenial(req.Tool)}
 	default:
 		pol, err := h.agentPolicy(ctx, &agent)
 		if err != nil {

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // The key lives in the extension and the control plane refuses the webview's origin, so fetch and EventSource go through the extension.
 

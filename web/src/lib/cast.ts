@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // asciinema v2 casts: a JSON header line, then one [time, "o"|"i", data] event per line.
 

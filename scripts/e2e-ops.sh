@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # End-to-end test of operations: alert, triage, approved change plan, verify or rollback, and a recorded terminal.
 set -euo pipefail
 
@@ -14,10 +14,11 @@ BASE="http://127.0.0.1:$PORT"
 API="$BASE/api/v1"
 JAR="$WORK/cookies"
 PASS="e2e-password-123456"
-SERVER_PID=""; AGENT_PID=""
+SERVER_PID=""; AGENT_PID=""; REVIEWER_PID=""
 
 cleanup() {
   [ -n "$AGENT_PID" ] && kill "$AGENT_PID" 2>/dev/null || true
+  [ -n "$REVIEWER_PID" ] && kill "$REVIEWER_PID" 2>/dev/null || true
   [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true
   docker rm -f akili-o-pg akili-o-redis >/dev/null 2>&1 || true
   if [ "${KEEP:-}" = "1" ]; then echo "logs kept in $WORK"; else rm -rf "$WORK"; fi
@@ -147,6 +148,49 @@ code() {
   if [ $# -ge 3 ]; then curl -s -o "$WORK/code.out" -w '%{http_code}' -b "$JAR" -X "$1" -H 'Content-Type: application/json' -d "$3" "$API$2"
   else curl -s -o "$WORK/code.out" -w '%{http_code}' -b "$JAR" -X "$1" "$API$2"; fi
 }
+
+step "Reviewer agents: a second agent reviews a change plan read-only; its review is advice, not a decision"
+created=$(api POST /agents "{\"name\":\"reviewer-1\",\"policy_id\":\"$POLICY\",\"autonomy\":2}")
+REVIEWER=$(echo "$created" | json "d['data']['agent']['id']")
+mkdir -p "$WORK/st2" "$WORK/wk2"
+AKILI_JOIN_TOKEN=$(echo "$created" | json "d['data']['join_token']") AKILI_LOG_FORMAT=text "$WORK/akili-agent" enroll --url "$BASE" --state-dir "$WORK/st2" --workdir "$WORK/wk2" >>"$WORK/reviewer.log" 2>&1
+AKILI_LOG_FORMAT=text "$WORK/akili-agent" start --state-dir "$WORK/st2" >>"$WORK/reviewer.log" 2>&1 &
+REVIEWER_PID=$!
+rv_online() { [ "$(api GET /agents/$REVIEWER | json "d['data']['status']")" = "online" ]; }
+wait_for "reviewer online" 30 rv_online
+RPLAN=$(python3 -c 'import json; print("change: "+json.dumps({"title":"Write rev","reason":"review test","steps":[{"tool":"fs_write","input":{"path":"cache/rev.txt","content":"x"}}],"verify":[{"tool":"fs_list","input":{"path":"cache"},"expect":"rev.txt"}]}))')
+TR=$(task "$RPLAN")
+rv_change() { api GET '/changes?status=pending' | json "[c['id'] for c in d['data'] if c['task_id']=='$TR'][0]"; }
+wait_for "change plan to review" 30 rv_change
+CHR=$(rv_change)
+[ "$(code POST "/changes/$CHR/review" "{\"agent_id\":\"$AGENT\"}")" = "400" ] || fail "an agent was allowed to review its own plan"
+RV=$(api POST "/changes/$CHR/review" "{\"agent_id\":\"$REVIEWER\"}" | json "d['data']['id']")
+rv_done() { [ "$(api GET "/reviews?target_type=change&target_id=$CHR" | json "[r['status'] for r in d['data'] if r['id']=='$RV'][0]")" = "done" ]; }
+wait_for "review" 60 rv_done
+[ "$(api GET "/reviews?target_id=$CHR" | json "d['data'][0]['verdict']")" = "concerns" ] || fail "review verdict: $(api GET "/reviews?target_id=$CHR")"
+RVT=$(api GET "/reviews?target_id=$CHR" | json "d['data'][0]['reviewer_task_id']")
+RVS=$(api GET "/tasks/$RVT" | json "d['data']['session_id']")
+api GET "/sessions/$RVS" | json "[e['payload'].get('reason','') for e in d['data']['events'] if e['type']=='tool.request' and e['payload'].get('tool')=='fs_write'][0]" | grep >/dev/null "reviewers are read-only" || fail "the reviewer's write was not refused as read-only"
+[ ! -f "$WORK/wk2/reviewer-was-here.txt" ] || fail "the reviewer wrote a file"
+[ "$(api GET "/changes/$CHR" | json "d['data']['status']")" = "pending" ] || fail "a review decided the change"
+api POST "/approvals/$(api GET "/changes/$CHR" | json "d['data']['approval_id']")/deny" '{}' >/dev/null
+
+step "Incident memory: an approved postmortem is recalled when the same alert fires again"
+python3 - "$WORK/route-mem.json" <<'PY'
+import json, sys
+pm = {"lesson": "CacheFull came from stale build files in cache/; deleting cache/*.bin fixed it and fs_list confirmed the space.", "kind": "postmortem", "alert": "CacheFull"}
+json.dump({"name": "memory", "match": {"team": "mem"}, "instructions": "tool: lesson_propose " + json.dumps(pm)}, open(sys.argv[1], "w"))
+PY
+HOOKM=$(api_file POST /alert-routes "$WORK/route-mem.json" | json "d['data']['webhook_url']")
+TM1=$(curl -sS -H 'Content-Type: application/json' -d '{"title":"CacheFull","host":"ops-1","labels":{"team":"mem"}}' "$HOOKM" | json "d['data']['created'][0]")
+wait_for "first CacheFull triage" 60 finished "$TM1"
+pm_id() { api GET '/lessons?status=proposed' | json "[l['id'] for l in d['data'] if l.get('kind')=='postmortem' and l.get('alert')=='CacheFull'][0]"; }
+wait_for "proposed postmortem" 30 pm_id
+PM=$(pm_id)
+api POST "/lessons/$PM/approve" '{}' >/dev/null
+TM2=$(curl -sS -H 'Content-Type: application/json' -d '{"title":"CacheFull","host":"ops-1","labels":{"team":"mem","seen":"again"}}' "$HOOKM" | json "d['data']['created'][0]")
+recalled() { api GET "/sessions/$(api GET "/tasks/$TM2" | json "d['data']['session_id']")" | json "[e['payload'] for e in d['data']['events'] if e['type']=='lessons.recalled'][0]['lesson_ids']" | grep -q "$PM"; }
+wait_for "the postmortem in the next triage" 60 recalled
 
 step "Grants: approve once and allow similar calls; denials and API keys never grant"
 TG1=$(task 'tool: fs_write {"path":"cache/granted.txt","content":"one"}')

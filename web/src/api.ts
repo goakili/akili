@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // Models mirror the Go JSON tags in server/internal/models, server/internal/handlers and proto/.
 
@@ -352,11 +352,37 @@ export interface Task extends Base {
   branch: string
   pr_number: number
   pr_url: string
+  /** The PR's checks after the agent finished: Akili sends the task back while they fail, up to the project's rounds. */
+  ci_state?: CIState
+  ci_rounds?: number
+  ci_detail?: string
+  /** "review" for a read-only review of another agent's work. */
+  kind?: '' | 'review'
+  review_id?: string | null
   /** What created the task: manual, schedule, issue, template, alert, miabi, chat. */
   trigger: string
   trigger_ref: string
   /** Project plans linked to the task. */
   plan_ids?: string[] | null
+}
+
+export type CIState = '' | 'watching' | 'fixing' | 'passed' | 'failed' | 'gave_up' | 'none'
+
+export type ReviewVerdict = '' | 'looks_good' | 'concerns' | 'block'
+
+/** A second agent's advice on a change plan or a task's work; it never approves or blocks anything. */
+export interface Review extends Base {
+  target_type: 'change' | 'task'
+  target_id: string
+  author_agent_id: string
+  reviewer_task_id: string | null
+  reviewer_agent_id: string | null
+  status: 'pending' | 'done' | 'failed'
+  verdict: ReviewVerdict
+  summary: string
+  risks: string[] | null
+  concerns: string[] | null
+  requested_by: string
 }
 
 export interface TaskTemplate {
@@ -450,6 +476,8 @@ export interface Project extends Base {
   sandbox_image: string
   instructions: string
   trigger_label: string
+  /** Fix rounds after failing CI: 0 default (3), -1 off. */
+  ci_fix_rounds: number
   created_by: string
 }
 
@@ -1059,6 +1087,22 @@ export interface Lesson {
   decided_at: ISODate | null
   note: string
   created_at: ISODate
+  /** "postmortem" for an incident write-up; app, alert, host (agent label) and project limit where it is recalled. */
+  kind?: '' | 'postmortem'
+  app?: string
+  alert?: string
+  host?: string
+  project_id?: string | null
+}
+
+export interface LessonInput {
+  text: string
+  agent_id?: string
+  kind?: '' | 'postmortem'
+  app?: string
+  alert?: string
+  host?: string
+  project_id?: string | null
 }
 
 export interface AgentInput {
@@ -1125,6 +1169,9 @@ export interface PlanPhase extends Base {
   done_by_task: string | null
   /** A user id, or "agent:<id>". */
   updated_by: string
+  /** Who works on the phase when its task names no agent. */
+  agent_id?: string | null
+  selector?: string[] | null
 }
 
 export interface PlanSummary extends ProjectPlan {
@@ -1146,6 +1193,8 @@ export interface PlanPhaseInput {
   title: string
   detail?: string
   done_when?: string
+  agent_id?: string | null
+  selector?: string[]
 }
 
 /** A plan as a task's agent received it. */
@@ -1247,6 +1296,7 @@ export interface ProjectInput {
   sandbox_image: string
   instructions: string
   trigger_label: string
+  ci_fix_rounds?: number
   autonomy?: Autonomy
 }
 
@@ -1617,7 +1667,10 @@ export const api = {
   deleteChatIdentity: (id: string) => del<MessageResponse>(`/chat/identities/${enc(id)}`),
 
   pageLessons: (p: { status?: LessonStatus; agent_id?: string } & PageQuery = {}, o?: RequestOptions) => getPage<Lesson>('/lessons' + qs(p), o),
-  createLesson: (b: { text: string; agent_id?: string }) => post<Lesson>('/lessons', b),
+  createLesson: (b: LessonInput) => post<Lesson>('/lessons', b),
+  listReviews: (p: { target_type?: 'change' | 'task'; target_id?: string } = {}, o?: RequestOptions) => get<Review[] | null>('/reviews' + qs(p), o),
+  requestReview: (targetType: 'change' | 'task', id: string, b: { agent_id?: string | null; selector?: string[] }) =>
+    post<Review>(`/${targetType === 'change' ? 'changes' : 'tasks'}/${enc(id)}/review`, b),
   approveLesson: (id: string, b: { text: string; note: string }) => post<Lesson>(`/lessons/${enc(id)}/approve`, b),
   rejectLesson: (id: string, note = '') => post<Lesson>(`/lessons/${enc(id)}/reject`, { note }),
   deleteLesson: (id: string) => del<MessageResponse>(`/lessons/${enc(id)}`),
