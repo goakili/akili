@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package forge
 
@@ -35,7 +36,6 @@ type Gitea struct {
 	token    string
 }
 
-// NewGitea returns a Gitea client. base is the instance URL (https://gitea.example.com).
 func NewGitea(base, username, token string) *Gitea {
 	base = strings.TrimRight(base, "/")
 	return &Gitea{
@@ -83,7 +83,6 @@ func (p giteaPR) pr() *PR {
 
 func esc(s string) string { return url.PathEscape(s) }
 
-// Verify implements Forge.
 func (g *Gitea) Verify(ctx context.Context) (string, error) {
 	var u struct {
 		Login string `json:"login"`
@@ -94,7 +93,6 @@ func (g *Gitea) Verify(ctx context.Context) (string, error) {
 	return u.Login, nil
 }
 
-// GetRepo implements Forge.
 func (g *Gitea) GetRepo(ctx context.Context, owner, name string) (*Repo, error) {
 	var r giteaRepo
 	if err := g.c.do(ctx, http.MethodGet, "/repos/"+esc(owner)+"/"+esc(name), nil, &r); err != nil {
@@ -103,7 +101,6 @@ func (g *Gitea) GetRepo(ctx context.Context, owner, name string) (*Repo, error) 
 	return r.repo(), nil
 }
 
-// CreateRepo implements Forge.
 func (g *Gitea) CreateRepo(ctx context.Context, owner, name, description string, private bool) (*Repo, error) {
 	body := map[string]any{"name": name, "description": description, "private": private, "auto_init": true, "default_branch": "main", "readme": "Default"}
 	path := "/user/repos"
@@ -117,7 +114,6 @@ func (g *Gitea) CreateRepo(ctx context.Context, owner, name, description string,
 	return r.repo(), nil
 }
 
-// FindOpenPR implements Forge.
 func (g *Gitea) FindOpenPR(ctx context.Context, owner, name, head string) (*PR, error) {
 	var prs []giteaPR
 	if err := g.c.do(ctx, http.MethodGet, "/repos/"+esc(owner)+"/"+esc(name)+"/pulls?state=open&limit=50", nil, &prs); err != nil {
@@ -131,7 +127,7 @@ func (g *Gitea) FindOpenPR(ctx context.Context, owner, name, head string) (*PR, 
 	return nil, ErrNotFound
 }
 
-// CreatePR implements Forge. Gitea marks drafts with a "WIP:" title prefix.
+// CreatePR marks drafts with Gitea's "WIP:" title prefix.
 func (g *Gitea) CreatePR(ctx context.Context, owner, name, head, base, title, body string, draft bool) (*PR, error) {
 	if draft && !strings.HasPrefix(title, "WIP:") {
 		title = "WIP: " + title
@@ -145,7 +141,6 @@ func (g *Gitea) CreatePR(ctx context.Context, owner, name, head, base, title, bo
 	return p.pr(), nil
 }
 
-// GetPR implements Forge.
 func (g *Gitea) GetPR(ctx context.Context, owner, name string, number int) (*PR, error) {
 	var p giteaPR
 	if err := g.c.do(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/%s/pulls/%d", esc(owner), esc(name), number), nil, &p); err != nil {
@@ -154,7 +149,7 @@ func (g *Gitea) GetPR(ctx context.Context, owner, name string, number int) (*PR,
 	return p.pr(), nil
 }
 
-// CommitStatus implements Forge (Gitea Actions and external CI both report commit statuses).
+// CommitStatus reads commit statuses, which Gitea Actions and external CI both report.
 func (g *Gitea) CommitStatus(ctx context.Context, owner, name, ref string) (*Status, error) {
 	var st struct {
 		SHA      string `json:"sha"`
@@ -180,14 +175,12 @@ func (g *Gitea) CommitStatus(ctx context.Context, owner, name, ref string) (*Sta
 	return out, nil
 }
 
-// PRDiff implements Forge.
 func (g *Gitea) PRDiff(ctx context.Context, owner, name string, number int) (string, error) {
 	var diff string
 	err := g.c.do(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/%s/pulls/%d.diff", esc(owner), esc(name), number), nil, &diff, "text/plain")
 	return diff, err
 }
 
-// GitAuth implements Forge.
 func (g *Gitea) GitAuth(context.Context) (string, string, error) {
 	user := g.username
 	if user == "" {
@@ -196,5 +189,4 @@ func (g *Gitea) GitAuth(context.Context) (string, string, error) {
 	return user, g.token, nil
 }
 
-// GitURL implements Forge.
 func (g *Gitea) GitURL(owner, name string) string { return g.base + "/" + owner + "/" + name + ".git" }

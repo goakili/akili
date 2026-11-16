@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package auth
 
@@ -37,19 +38,15 @@ import (
 	"github.com/goakili/akili/server/internal/models"
 )
 
-// Editor sign-in: a browser already signed in to Akili approves the editor's request, and the code
-// travels to the editor through its URI handler. The editor redeems it with the PKCE verifier for an
-// API key, so the code alone is useless to anyone who sees the redirect.
+// Editor sign-in: the code alone is useless; the editor redeems it with its PKCE verifier for an API key.
 
 // VSCodeExtensionID is the extension whose URI handler receives the code.
 const VSCodeExtensionID = "goakili.akili"
 
-// VSCodeKeyDays is the lifetime of an API key issued to an editor.
 const VSCodeKeyDays = 90
 
 const vscodeCodeTTL = 2 * time.Minute
 
-// Editors built on VS Code, by the URI scheme of their handler.
 var vscodeSchemes = map[string]bool{"vscode": true, "vscode-insiders": true, "vscodium": true, "cursor": true, "windsurf": true}
 
 var (
@@ -59,7 +56,6 @@ var (
 	windowID      = regexp.MustCompile(`^[0-9]{1,10}$`)
 )
 
-// ErrVSCodeCode is returned for an unknown, expired, used or mismatched code.
 var ErrVSCodeCode = errors.New("the sign-in code is invalid or expired; sign in again from the editor")
 
 type vscodeGrant struct {
@@ -68,10 +64,7 @@ type vscodeGrant struct {
 	Client    string `json:"client"`
 }
 
-// VSCodeRedirect builds the URI the browser sends the code to, from the editor's URI scheme and,
-// optionally, its window id (VS Code routes the callback to the window that asked). The editor never
-// sends a URL: the shape is fixed here, so an approval can only ever reach an editor's URI handler
-// for the extension, never a website.
+// VSCodeRedirect fixes the URI shape here, so an approval can only reach the extension's URI handler, never a website.
 func VSCodeRedirect(editor, window, code, state string) (string, error) {
 	if !vscodeSchemes[editor] {
 		return "", fmt.Errorf("unknown editor %q", editor)
@@ -89,8 +82,7 @@ func VSCodeRedirect(editor, window, code, state string) (string, error) {
 	return (&url.URL{Scheme: editor, Host: VSCodeExtensionID, Path: "/callback", RawQuery: q.Encode()}).String(), nil
 }
 
-// ValidateClientName accepts the editor's description of itself ("VS Code on laptop"), shown to the
-// user and used in the API key's name.
+// ValidateClientName checks the editor's self-description, shown to the user and used in the API key's name.
 func ValidateClientName(s string) error {
 	if s == "" || len(s) > 80 || strings.TrimSpace(s) != s || strings.IndexFunc(s, unicode.IsControl) >= 0 {
 		return errors.New("client must be 1-80 characters without control characters")
@@ -98,7 +90,6 @@ func ValidateClientName(s string) error {
 	return nil
 }
 
-// IssueVSCodeCode records an approved sign-in and returns its one-time code.
 func (s *Service) IssueVSCodeCode(ctx context.Context, u *models.User, challenge, client string) (string, error) {
 	if !pkceChallenge.MatchString(challenge) {
 		return "", errors.New("challenge must be an S256 PKCE challenge")

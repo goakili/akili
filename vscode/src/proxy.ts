@@ -1,25 +1,7 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
-// The sidebar webview asks the extension to make API calls for it (web/src/vscode/bridge.ts). Only
-// the calls the sidebar needs are forwarded, so script injected into the webview can't use the
-// user's key for anything else (users, policies, agents' terminals, API keys, integrations).
+// Only the calls the sidebar needs are forwarded, so script injected into the webview can't use the user's key for anything else.
 
 const ID = '[A-Za-z0-9_-]{1,64}'
 const QUERY = '(\\?[^#\\s]*)?'

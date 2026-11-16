@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package runtime
 
@@ -29,14 +30,11 @@ import (
 	"github.com/goakili/akili/proto"
 )
 
-// llmRetryDelays are the waits before each retry of a model call that failed transiently (overload,
-// rate limit, a dropped stream). Each wait is shorter than the task lease, and the status frame sent
-// before it renews the lease.
+// llmRetryDelays are each shorter than the task lease, and the status frame sent before each wait renews it.
 var llmRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second, 15 * time.Second, 30 * time.Second,
 	60 * time.Second, 60 * time.Second, 60 * time.Second, 60 * time.Second}
 
-// complete makes one model call over the current history, retrying transient failures so a long run
-// does not die on a single provider hiccup.
+// complete retries transient failures so a long run does not die on a single provider hiccup.
 func (s *Session) complete(ctx context.Context) (*proto.LLMEvent, error) {
 	onDelta := func(kind, d string) { _ = s.conn.Send(proto.TypeDelta, proto.Delta{Text: d, Kind: kind}) }
 	retries := 0
@@ -69,20 +67,17 @@ func (s *Session) complete(ctx context.Context) (*proto.LLMEvent, error) {
 	}
 }
 
-// The history sent to the model is bounded so a run with no turn limit stays inside the context
-// window; the control plane sizes the bound from the provider's window and still records everything.
+// The control plane sizes the history bound from the provider's window and still records everything.
 const (
 	// defaultContextChars applies when the control plane sends no bound.
 	defaultContextChars = 450_000
 	// charsPerToken is conservative: code and JSON tokenize denser than prose.
-	charsPerToken = 3
-	minContextChars     = 60_000
-	// keepRecent messages always go unchanged: the model needs its latest work verbatim, and the
-	// provider needs the last assistant turn's thinking blocks.
+	charsPerToken   = 3
+	minContextChars = 60_000
+	// keepRecent: the provider needs the last assistant turn's thinking blocks verbatim.
 	keepRecent = 8
 	// Blocks smaller than elideOver are kept even in trimmed messages.
-	elideOver = 512
-	// imageChars approximates an image's context cost.
+	elideOver  = 512
 	imageChars = 6_000
 )
 
@@ -90,10 +85,7 @@ const elidedResult = "[output removed to save context; run the tool again if you
 
 var elidedInput = json.RawMessage(`{"_omitted":"input removed to save context"}`)
 
-// view returns the history to send. When it outgrows the context bound, the oldest messages lose
-// their tool output, large tool inputs, images and thinking until it is back to 60% of the bound. The
-// trimmed prefix only moves when the bound is crossed again, so the provider's prompt cache stays
-// valid between moves.
+// view only moves the trimmed prefix when the bound is crossed again, so the provider's prompt cache stays valid.
 func (s *Session) view() []proto.Message {
 	limit := s.contextLimit()
 	s.trimmed = min(s.trimmed, len(s.history))

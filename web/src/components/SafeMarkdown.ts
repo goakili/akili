@@ -1,27 +1,7 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
-// A deliberately tiny Markdown renderer that builds VNodes, never HTML strings. Agent and tool output
-// is untrusted: every piece of text ends up as a text node, so nothing it contains can execute.
-//
-// Supported: fenced code blocks, headings, bullet/numbered lists, blockquotes, paragraphs, and inline
-// `code`, **bold**, *italic* and http(s) links.
+// Builds VNodes, never HTML strings: untrusted agent and tool output only ever becomes text nodes.
 
 import { defineComponent, h, type VNode, type VNodeArrayChildren } from 'vue'
 
@@ -46,8 +26,7 @@ function link(text: string, url: string): Inline {
 }
 
 export function renderInline(text: string): Inline[] {
-  // A fresh regex per call: renderInline recurses for **bold** and *italic*, and a shared global
-  // regex would have its lastIndex reset by the inner call, re-matching the same span forever.
+  // A fresh regex per call: renderInline recurses, and a shared global regex's lastIndex would loop forever.
   const re = new RegExp(INLINE_RE.source, 'g')
   const out: Inline[] = []
   let last = 0
@@ -125,7 +104,6 @@ export function renderMarkdown(src: string): VNode[] {
           items.push(h('li', renderInline(ordered ? m[2] : m[1])))
           i++
         } else if (lines[i].trim() && /^\s{2,}/.test(lines[i]) && items.length) {
-          // continuation line of the previous item
           const prev = items[items.length - 1]
           items[items.length - 1] = h('li', [...((prev.children as VNodeArrayChildren) ?? []), ' ', ...renderInline(lines[i].trim())])
           i++

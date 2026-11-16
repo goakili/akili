@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package fleet manages agents: creation, enrollment, connection authentication and the live
-// tunnels to connected agents.
+// Package fleet manages agents: creation, enrollment, connect authentication and live tunnels.
 package fleet
 
 import (
@@ -51,7 +51,6 @@ const JoinTokenTTL = time.Hour
 // Clock skew tolerated on the signed connect handshake.
 const handshakeWindow = 60 * time.Second
 
-// Service is the agent registry.
 type Service struct {
 	db        *gorm.DB
 	bus       *bus.Bus
@@ -61,19 +60,16 @@ type Service struct {
 	git       gitid.Config
 }
 
-// NewService returns the registry.
 func NewService(db *gorm.DB, b *bus.Bus, a *audit.Logger, cpKey ed25519.PublicKey, publicURL string, git gitid.Config) *Service {
 	return &Service{db: db, bus: b, audit: a, cpKey: cpKey, publicURL: publicURL, git: git}
 }
 
-// Errors.
 var (
 	ErrNotFound     = errors.New("agent not found")
 	ErrBadToken     = errors.New("join token is invalid, already used or expired (tokens are single-use and valid for 1 hour); an enrolled agent reconnects with its key and needs no token — to enroll again, use Re-enroll on the agent page")
 	ErrUnauthorized = errors.New("agent authentication failed")
 )
 
-// Input holds editable agent fields.
 type Input struct {
 	Name          *string
 	Description   *string
@@ -90,8 +86,7 @@ type Input struct {
 	SetSkills     bool
 }
 
-// Enrollment is returned when an agent is created or given a new join token. The token is shown
-// once.
+// Enrollment is returned when an agent gets a join token; the token is shown once.
 type Enrollment struct {
 	Agent          *models.Agent `json:"agent"`
 	JoinToken      string        `json:"join_token"`
@@ -139,7 +134,6 @@ func (s *Service) Create(ctx context.Context, org, userID string, in Input) (*En
 	return enr, nil
 }
 
-// Update edits an agent.
 func (s *Service) Update(ctx context.Context, org, userID, id string, in Input) (*models.Agent, error) {
 	a, err := s.Get(ctx, org, id)
 	if err != nil {
@@ -251,8 +245,7 @@ func (s *Service) apply(ctx context.Context, org string, a *models.Agent, in Inp
 	return nil
 }
 
-// checkGitEmail refuses a member's address: forges credit commits to whoever owns the author
-// email, so the agent's commits would show up as that person's.
+// checkGitEmail refuses a member's address: forges credit commits to the email's owner, so they would show as that person's.
 func (s *Service) checkGitEmail(ctx context.Context, org, email string) error {
 	if email == "" {
 		return nil
@@ -296,8 +289,7 @@ func (s *Service) issueToken(tx *gorm.DB, a *models.Agent, userID string) (*Enro
 	}, nil
 }
 
-// Reenroll issues a new join token. The current key is revoked immediately, so a stolen agent key
-// stops working the moment an operator starts re-enrollment.
+// Reenroll issues a new join token and revokes the current key at once, so a stolen agent key stops working immediately.
 func (s *Service) Reenroll(ctx context.Context, org, userID, id string) (*Enrollment, error) {
 	a, err := s.Get(ctx, org, id)
 	if err != nil {
@@ -375,8 +367,7 @@ func (s *Service) Get(ctx context.Context, org, id string) (*models.Agent, error
 	return &a, nil
 }
 
-// List returns every agent in the organization. Presence and active sessions are fetched in one
-// round trip each, not per agent: fleets run to thousands of agents.
+// List returns every agent in the organization, fetching presence and sessions in one round trip each: fleets run to thousands.
 func (s *Service) List(ctx context.Context, org string) ([]models.Agent, error) {
 	var out []models.Agent
 	if err := s.db.WithContext(ctx).Preload("Skills").Where("organization_id = ?", org).Order("name").Find(&out).Error; err != nil {
@@ -459,9 +450,7 @@ func (s *Service) Enroll(ctx context.Context, req proto.EnrollRequest, ip string
 	return resp, nil
 }
 
-// AuthenticateConnect verifies the signed handshake on the connect request. Refusals carry a reason,
-// logged and audited so an operator can see why an agent cannot connect; the agent itself only gets
-// a bare 401.
+// AuthenticateConnect verifies the signed connect handshake; refusal reasons are logged and audited, the agent only gets a bare 401.
 func (s *Service) AuthenticateConnect(ctx context.Context, h http.Header, ip string) (*models.Agent, error) {
 	a, err := s.authenticateConnect(ctx, h)
 	if err != nil {

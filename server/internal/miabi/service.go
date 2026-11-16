@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package miabi
 
@@ -63,12 +64,10 @@ type cachedClient struct {
 	c       *Client
 }
 
-// NewService returns the Miabi service.
 func NewService(db *gorm.DB, box *crypto.Box, a *audit.Logger) *Service {
 	return &Service{db: db, box: box, audit: a, clients: map[string]cachedClient{}}
 }
 
-// ClientFor builds the client for a Miabi integration.
 func (s *Service) ClientFor(it *models.Integration) (*Client, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -119,9 +118,7 @@ func (s *Service) Test(ctx context.Context, it *models.Integration) (string, err
 	return fmt.Sprintf("%s · %s · %d workspaces reachable, %d enabled", b.User, scope, reachable, enabled), nil
 }
 
-// SyncWorkspaces records the workspaces the key can reach. New workspaces start disabled, except
-// the integration's own workspace and the only reachable one, which are enabled so existing setups
-// keep working. Watches that name a workspace by id or uid are rewritten to its handle.
+// SyncWorkspaces starts new workspaces disabled, except the integration's own and the only reachable one, so existing setups keep working.
 func (s *Service) SyncWorkspaces(ctx context.Context, it *models.Integration) ([]models.MiabiWorkspace, error) {
 	c, err := s.ClientFor(it)
 	if err != nil {
@@ -198,8 +195,7 @@ func (s *Service) SyncWorkspaces(ctx context.Context, it *models.Integration) ([
 	return out, nil
 }
 
-// workspace returns an enabled, reachable workspace of the integration by its handle, syncing once
-// if none is known yet.
+// workspace returns an enabled, reachable workspace by handle, syncing once if none is known yet.
 func (s *Service) workspace(ctx context.Context, it *models.Integration, name string) (*models.MiabiWorkspace, error) {
 	var row models.MiabiWorkspace
 	err := s.db.WithContext(ctx).First(&row, "integration_id = ? AND name = ?", it.ID, name).Error
@@ -222,8 +218,7 @@ func (s *Service) workspace(ctx context.Context, it *models.Integration, name st
 	return &row, nil
 }
 
-// integration picks the Miabi integration for a call: the named one, else the only one, else the
-// default. "default" names the default, since that is what a model passes when it knows of no name.
+// integration picks the named Miabi integration, else the only one, else the default (which a model may also name "default").
 func (s *Service) integration(ctx context.Context, org, name string) (*models.Integration, error) {
 	var list []models.Integration
 	if err := s.db.WithContext(ctx).Where("organization_id = ? AND kind = ?", org, models.KindMiabi).
@@ -549,8 +544,7 @@ func sortReleases(rs []Release) {
 	sort.Slice(rs, func(i, j int) bool { return rs[i].CreatedAt.After(rs[j].CreatedAt) })
 }
 
-// keptRelease reports a rollback with nothing to undo: the newest deployment failed, so Miabi never
-// replaced the release that was running before it.
+// keptRelease means the newest deployment failed, so Miabi never replaced the release running before it.
 type keptRelease struct {
 	deployment int
 	image      string
@@ -560,10 +554,7 @@ func (k *keptRelease) Error() string {
 	return fmt.Sprintf("nothing to roll back: deployment #%d failed and never replaced %s, which is still the active release (pass release_id to go further back)", k.deployment, k.image)
 }
 
-// previousRelease picks the rollback target: the release of the last successful deployment before
-// the current one (the version that was running before), else the newest release older than the
-// active one. After a failed deployment it returns a *keptRelease instead: rolling back then would
-// go past the version that was running before the change.
+// previousRelease returns a *keptRelease after a failed deployment: rolling back then would go past the version running before.
 func previousRelease(ctx context.Context, c *Client, appID int64) (int64, error) {
 	rs, err := c.Releases(ctx, appID)
 	if err != nil {

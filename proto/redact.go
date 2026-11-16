@@ -1,5 +1,22 @@
-// SPDX-FileCopyrightText: 2026 Jonas Kaninda
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jonas Kaninda.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package proto
 
@@ -9,11 +26,9 @@ import (
 	"strings"
 )
 
-// Redacted replaces secrets in tool output.
 const Redacted = "[REDACTED]"
 
-// secretPatterns match credential formats that are unambiguous enough to redact wherever they
-// appear. Tool output enters the model's context, so a leaked token would reach the LLM provider.
+// secretPatterns are unambiguous enough to redact anywhere; tool output would otherwise reach the LLM provider.
 var secretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----`),
 	regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`),                                                    // AWS access key id
@@ -29,7 +44,6 @@ var secretPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)(://[^/\s:@]+:)[^@\s/]+(@)`), // credentials in URLs
 }
 
-// secretEnvName reports whether an environment variable name suggests a secret value.
 func secretEnvName(name string) bool {
 	n := strings.ToUpper(name)
 	for _, s := range []string{"TOKEN", "SECRET", "PASSWORD", "PASSWD", "PASS", "KEY", "CREDENTIAL", "AUTH", "COOKIE", "SESSION", "DSN"} {
@@ -40,7 +54,6 @@ func secretEnvName(name string) bool {
 	return false
 }
 
-// SecretsFromEnv returns the values of KEY=value pairs whose names look secret, for Redact.
 func SecretsFromEnv(env []string) []string {
 	var out []string
 	for _, kv := range env {
@@ -51,8 +64,6 @@ func SecretsFromEnv(env []string) []string {
 	return out
 }
 
-// Redact removes known secret values (exact matches, 6+ characters) and well-known credential
-// formats from s.
 func Redact(s string, secrets ...string) string {
 	if s == "" {
 		return s

@@ -1,5 +1,22 @@
-// SPDX-FileCopyrightText: 2026 Jonas Kaninda
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jonas Kaninda.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package proto
 
@@ -32,8 +49,7 @@ func template(t *testing.T, name string) Policy {
 
 const wd = "/srv/akili"
 
-// TestEveryToolDeniedByEmptyPolicy is the default-deny guarantee: a new tool added to the catalog is
-// refused until a policy explicitly allows it.
+// TestEveryToolDeniedByEmptyPolicy: a new catalog tool is refused until a policy explicitly allows it.
 func TestEveryToolDeniedByEmptyPolicy(t *testing.T) {
 	for _, spec := range Catalog() {
 		d := Evaluate(Policy{Name: "empty"}, AutonomyL3, wd, Call{Tool: spec.Name, Input: json.RawMessage(`{}`)})
@@ -331,8 +347,7 @@ func TestTemplatesProtectTheAgent(t *testing.T) {
 	}
 }
 
-// Workspace-qualified app rules: an agent may work freely in staging, never touch production apps,
-// and cannot reach production by leaving the workspace out.
+// Leaving the workspace out must never reach production apps.
 func TestMiabiWorkspaceRules(t *testing.T) {
 	p := template(t, "operator")
 	p.Apps = Rule{Allow: []string{"staging/*", "prod/status-page"}, Deny: []string{"prod/*"}}

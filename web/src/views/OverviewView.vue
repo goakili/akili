@@ -1,22 +1,6 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
@@ -85,7 +69,6 @@ async function load() {
   }
 }
 
-// ---- coding: pull requests opened by tasks in the last 7 days --------------------------------------
 const prTasks = ref<Task[]>([])
 async function loadCoding() {
   await coder.loadProjects()
@@ -126,7 +109,6 @@ onUnmounted(() => {
   if (timer) clearTimeout(timer)
 })
 
-// ---- greeting & quick actions ---------------------------------------------------------------------
 
 const greeting = computed(() => {
   const h = new Date(now.value).getHours()
@@ -145,7 +127,6 @@ const quick = computed(() => {
   return out
 })
 
-// ---- setup checklist ---------------------------------------------------------------------------
 
 const steps = computed(() => {
   const agents = ov.value?.agents.total ?? catalog.agents.length
@@ -159,7 +140,6 @@ const steps = computed(() => {
 })
 const setupDone = computed(() => steps.value.every((s) => s.done))
 
-// ---- fleet ---------------------------------------------------------------------------------------
 
 const RANK: Record<string, number> = { online: 0, pending: 1, offline: 2, revoked: 3 }
 const fleet = computed(() =>
@@ -178,7 +158,6 @@ async function openChat(agentId: string) {
   }
 }
 
-// ---- approvals -----------------------------------------------------------------------------------
 
 async function decide(a: Approval, allow: boolean) {
   deciding.value = a.id
@@ -228,7 +207,6 @@ function taskDuration(t: Task): string {
       </RouterLink>
     </nav>
 
-    <!-- stat cards -->
     <div v-if="loading && !ov" class="stats" aria-busy="true">
       <div v-for="i in 5" :key="i" class="skel skel-card" />
     </div>
@@ -275,7 +253,6 @@ function taskDuration(t: Task): string {
       </RouterLink>
     </div>
 
-    <!-- first-time setup -->
     <section v-if="ov && !setupDone" class="card" aria-labelledby="setup-title">
       <div class="card-head">
         <h2 id="setup-title"><Icon name="sparkles" />Get started</h2>
@@ -300,7 +277,6 @@ function taskDuration(t: Task): string {
 
     <div class="dash-grid">
       <div class="stack loose">
-        <!-- fleet -->
         <section class="card" aria-labelledby="fleet-title">
           <div class="card-head">
             <h2 id="fleet-title"><Icon name="server" />Fleet</h2>
@@ -338,7 +314,6 @@ function taskDuration(t: Task): string {
           </div>
         </section>
 
-        <!-- recent tasks -->
         <section class="card" aria-labelledby="recent-tasks">
           <div class="card-head">
             <h2 id="recent-tasks"><Icon name="tasks" />Recent tasks</h2>
@@ -373,7 +348,6 @@ function taskDuration(t: Task): string {
       </div>
 
       <div class="stack loose">
-      <!-- attention -->
       <section class="card" aria-labelledby="attention-title">
         <div class="card-head">
           <h2 id="attention-title"><Icon name="bell" />Needs your attention</h2>
@@ -412,7 +386,6 @@ function taskDuration(t: Task): string {
         </div>
       </section>
 
-      <!-- coding -->
       <section v-if="coder.projects.length" class="card" aria-labelledby="coding-title">
         <div class="card-head">
           <h2 id="coding-title"><Icon name="gitPR" />Pull requests · 7 days</h2>

@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -46,7 +47,6 @@ type MCPServerRequest struct {
 	} `json:"body"`
 }
 
-// MCPToolRequest enables a tool for agents and sets its risk.
 type MCPToolRequest struct {
 	Body struct {
 		Enabled bool   `json:"enabled"`
@@ -54,7 +54,6 @@ type MCPToolRequest struct {
 	} `json:"body"`
 }
 
-// ListMCPServers lists MCP servers.
 func (h *Handlers) ListMCPServers(c *okapi.Context) error {
 	var out []models.MCPServer
 	h.DB.Where("organization_id = ?", middlewares.OrgID(c)).Order("name").Find(&out)
@@ -126,14 +125,12 @@ func (h *Handlers) syncMCP(ctx context.Context, srv *models.MCPServer) ([]models
 	return h.MCP.Sync(sctx, srv)
 }
 
-// MCPServerView is a server with its tools.
 type MCPServerView struct {
 	Server models.MCPServer `json:"server"`
 	Tools  []models.MCPTool `json:"tools"`
 	Error  string           `json:"error,omitempty"`
 }
 
-// CreateMCPServer adds an MCP server and lists its tools.
 func (h *Handlers) CreateMCPServer(c *okapi.Context, req *MCPServerRequest) error {
 	srv := &models.MCPServer{Base: models.Base{ID: models.NewID("mcs"), OrganizationID: middlewares.OrgID(c)}, Enabled: true, CreatedBy: middlewares.UserID(c)}
 	if err := h.saveMCPServer(c, srv, req, true); err != nil {
@@ -149,7 +146,6 @@ func (h *Handlers) CreateMCPServer(c *okapi.Context, req *MCPServerRequest) erro
 	return created(c, out)
 }
 
-// UpdateMCPServer edits an MCP server.
 func (h *Handlers) UpdateMCPServer(c *okapi.Context, req *MCPServerRequest) error {
 	var srv models.MCPServer
 	if err := h.DB.First(&srv, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -167,7 +163,6 @@ func (h *Handlers) UpdateMCPServer(c *okapi.Context, req *MCPServerRequest) erro
 	return ok(c, srv)
 }
 
-// DeleteMCPServer removes a server and its tools.
 func (h *Handlers) DeleteMCPServer(c *okapi.Context) error {
 	var srv models.MCPServer
 	if err := h.DB.First(&srv, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -180,7 +175,6 @@ func (h *Handlers) DeleteMCPServer(c *okapi.Context) error {
 	return message(c, "deleted")
 }
 
-// SyncMCPServer re-reads a server's tools.
 func (h *Handlers) SyncMCPServer(c *okapi.Context) error {
 	var srv models.MCPServer
 	if err := h.DB.First(&srv, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -194,14 +188,12 @@ func (h *Handlers) SyncMCPServer(c *okapi.Context) error {
 	return ok(c, tools)
 }
 
-// ListMCPTools lists a server's tools.
 func (h *Handlers) ListMCPTools(c *okapi.Context) error {
 	var out []models.MCPTool
 	h.DB.Where("server_id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Order("name").Find(&out)
 	return ok(c, out)
 }
 
-// UpdateMCPTool enables or disables a tool and sets its risk.
 func (h *Handlers) UpdateMCPTool(c *okapi.Context, req *MCPToolRequest) error {
 	var t models.MCPTool
 	if err := h.DB.First(&t, "id = ? AND server_id = ? AND organization_id = ?", c.Param("tool"), c.Param("id"), middlewares.OrgID(c)).Error; err != nil {

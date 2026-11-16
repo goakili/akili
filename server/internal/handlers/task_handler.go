@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -33,7 +34,6 @@ import (
 
 type busEvent = bus.Event
 
-// TaskRequest creates a task.
 type TaskRequest struct {
 	Body struct {
 		Title       string          `json:"title" maxLength:"200"`
@@ -53,7 +53,6 @@ type TaskRequest struct {
 	} `json:"body"`
 }
 
-// ListTasks lists tasks.
 func (h *Handlers) ListTasks(c *okapi.Context) error {
 	ctx := c.Request().Context()
 	p := pageParams(c)
@@ -72,7 +71,6 @@ func (h *Handlers) ListTasks(c *okapi.Context) error {
 	return paged(c, out, total, p)
 }
 
-// CreateTask queues a task.
 func (h *Handlers) CreateTask(c *okapi.Context, req *TaskRequest) error {
 	b := req.Body
 	autonomy := tasks.DefaultAutonomy(b.ProjectID)
@@ -89,7 +87,6 @@ func (h *Handlers) CreateTask(c *okapi.Context, req *TaskRequest) error {
 	return created(c, t)
 }
 
-// GetTask returns a task.
 func (h *Handlers) GetTask(c *okapi.Context) error {
 	t, err := h.Tasks.Get(c.Request().Context(), middlewares.OrgID(c), c.Param("id"))
 	if err != nil {
@@ -117,7 +114,6 @@ func (h *Handlers) TaskPlans(c *okapi.Context) error {
 	return ok(c, h.Plans.ForTask(c.Request().Context(), t.OrganizationID, t.ID))
 }
 
-// CancelTask stops a task.
 func (h *Handlers) CancelTask(c *okapi.Context) error {
 	t, err := h.Tasks.Cancel(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), c.Param("id"))
 	if err != nil {
@@ -126,7 +122,6 @@ func (h *Handlers) CancelTask(c *okapi.Context) error {
 	return ok(c, t)
 }
 
-// RetryTask queues a finished task again.
 func (h *Handlers) RetryTask(c *okapi.Context) error {
 	t, err := h.Tasks.Retry(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), c.Param("id"))
 	if err != nil {
@@ -135,7 +130,6 @@ func (h *Handlers) RetryTask(c *okapi.Context) error {
 	return created(c, t)
 }
 
-// ContinueTaskRequest continues a stopped task.
 type ContinueTaskRequest struct {
 	Body struct {
 		MaxTurns int `json:"max_turns" minimum:"0" maximum:"1000" description:"turn limit for the continued run; 0 = no limit"`
@@ -151,9 +145,6 @@ func (h *Handlers) ContinueTask(c *okapi.Context, req *ContinueTaskRequest) erro
 	return ok(c, t)
 }
 
-// ---- schedules -----------------------------------------------------------------------------------
-
-// ScheduleRequest creates or updates a schedule.
 type ScheduleRequest struct {
 	Body struct {
 		Name     string              `json:"name" required:"true"`
@@ -163,7 +154,6 @@ type ScheduleRequest struct {
 	} `json:"body"`
 }
 
-// ListSchedules lists schedules.
 func (h *Handlers) ListSchedules(c *okapi.Context) error {
 	var out []models.Schedule
 	h.DB.Where("organization_id = ?", middlewares.OrgID(c)).Order("name").Find(&out)
@@ -184,7 +174,6 @@ func (h *Handlers) validateSchedule(c *okapi.Context, req *ScheduleRequest) (*ti
 	return &next, nil
 }
 
-// CreateSchedule adds a schedule.
 func (h *Handlers) CreateSchedule(c *okapi.Context, req *ScheduleRequest) error {
 	next, err := h.validateSchedule(c, req)
 	if err != nil {
@@ -199,7 +188,6 @@ func (h *Handlers) CreateSchedule(c *okapi.Context, req *ScheduleRequest) error 
 	return created(c, s)
 }
 
-// UpdateSchedule edits a schedule.
 func (h *Handlers) UpdateSchedule(c *okapi.Context, req *ScheduleRequest) error {
 	var s models.Schedule
 	if err := h.DB.First(&s, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -217,7 +205,6 @@ func (h *Handlers) UpdateSchedule(c *okapi.Context, req *ScheduleRequest) error 
 	return ok(c, s)
 }
 
-// DeleteSchedule removes a schedule.
 func (h *Handlers) DeleteSchedule(c *okapi.Context) error {
 	res := h.DB.Where("id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Delete(&models.Schedule{})
 	if res.RowsAffected == 0 {
@@ -227,7 +214,6 @@ func (h *Handlers) DeleteSchedule(c *okapi.Context) error {
 	return message(c, "deleted")
 }
 
-// RunSchedule creates a task from a schedule now.
 func (h *Handlers) RunSchedule(c *okapi.Context) error {
 	var s models.Schedule
 	if err := h.DB.First(&s, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {

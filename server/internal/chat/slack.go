@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package chat
 
@@ -35,8 +36,7 @@ import (
 	"time"
 )
 
-// Slack is a Slack app: events arrive on the Events API and interactivity webhooks (signed with the
-// app's signing secret); replies go through chat.postMessage with the bot token.
+// Slack is a Slack app: events and interactivity arrive on signed webhooks, replies go through chat.postMessage.
 type Slack struct {
 	base   string // https://slack.com/api
 	token  string
@@ -69,7 +69,6 @@ func (s *Slack) call(ctx context.Context, method string, in any) (*slackResp, er
 	return &r, nil
 }
 
-// Test implements Platform.
 func (s *Slack) Test(ctx context.Context) (string, error) {
 	r, err := s.call(ctx, "auth.test", map[string]any{})
 	if err != nil {
@@ -78,7 +77,6 @@ func (s *Slack) Test(ctx context.Context) (string, error) {
 	return r.User + " in " + r.Team, nil
 }
 
-// Send implements Platform.
 func (s *Slack) Send(ctx context.Context, chatID string, msg Outgoing) error {
 	parts := chunks(msg.Text)
 	for i, p := range parts {
@@ -123,7 +121,6 @@ func (s *Slack) Verify(h http.Header, body []byte, now time.Time) error {
 
 var slackMention = regexp.MustCompile(`<@[A-Z0-9]+>\s*`)
 
-// SlackEvent is the result of parsing an Events API request.
 type SlackEvent struct {
 	Challenge string // url_verification: echo it back
 	EventID   string // for de-duplicating Slack's retries

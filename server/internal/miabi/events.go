@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package miabi
 
@@ -47,7 +48,6 @@ type Trigger struct {
 	Ref   string // de-duplication key: one open task per ref
 }
 
-// Webhook errors.
 var (
 	ErrBadSignature = errors.New("webhook signature does not match")
 	ErrIgnored      = errors.New("event ignored")
@@ -89,8 +89,7 @@ func (p webhookPayload) event() Event {
 	return ev
 }
 
-// ParseWebhook verifies a Miabi webhook (X-Miabi-Signature: sha256=<hmac>) and returns the tasks it
-// asks for.
+// ParseWebhook verifies X-Miabi-Signature (sha256=<hmac>) and returns the tasks the event asks for.
 func (s *Service) ParseWebhook(ctx context.Context, integrationID string, h http.Header, body []byte) ([]Trigger, error) {
 	var it models.Integration
 	if err := s.db.WithContext(ctx).First(&it, "id = ? AND kind = ?", integrationID, models.KindMiabi).Error; err != nil {
@@ -250,8 +249,7 @@ type Leader interface{ Leading() bool }
 // OnTrigger receives the tasks events ask for (de-duplication and task creation live with the caller).
 type OnTrigger func(ctx context.Context, t *Trigger)
 
-// RunEvents follows the event stream of every enabled workspace that has a watch, on the leader. A
-// stream that drops is resumed from the stored cursor, so events in between are not lost.
+// RunEvents resumes a dropped stream from the stored cursor, so events in between are not lost.
 func (s *Service) RunEvents(ctx context.Context, leader Leader, on OnTrigger) {
 	tick := time.NewTicker(10 * time.Second)
 	defer tick.Stop()

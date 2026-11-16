@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package miabi is a client for the Miabi PaaS REST API (github.com/miabi-io/miabi), used only on the
-// control plane: the API key never reaches an agent.
+// Package miabi is a Miabi PaaS API client used only on the control plane: the API key never reaches an agent.
 package miabi
 
 import (
@@ -49,14 +49,13 @@ type Client struct {
 	Poll time.Duration
 }
 
-// New returns a client. workspace is a Miabi workspace id, uid or handle.
+// New takes workspace as a Miabi workspace id, uid or handle.
 func New(baseURL, workspace, apiKey string) *Client {
 	return &Client{base: strings.TrimRight(baseURL, "/"), workspace: workspace, key: apiKey,
 		http: &http.Client{Timeout: 60 * time.Second}, Poll: 3 * time.Second}
 }
 
-// TrustCA makes the client trust an extra CA (PEM), for a Miabi with a self-signed or private-CA
-// certificate. The system roots stay trusted.
+// TrustCA adds an extra CA (PEM) for a Miabi on a private-CA certificate; the system roots stay trusted.
 func (c *Client) TrustCA(caPEM string) error {
 	cfg, err := crypto.TLSConfigWithCA(caPEM)
 	if err != nil {
@@ -84,8 +83,7 @@ type Workspace struct {
 	Role        string `json:"role"`
 }
 
-// Workspaces lists the workspaces of the key's user. Miabi refuses this to a key bound to one
-// workspace (every service-account key); use Workspace for that one.
+// Workspaces is refused by Miabi to a workspace-bound key (every service-account key); use Workspace for that one.
 func (c *Client) Workspaces(ctx context.Context) ([]Workspace, error) {
 	var ws []Workspace
 	return ws, c.do(ctx, http.MethodGet, "/api/v1/workspaces", nil, &ws)
@@ -176,7 +174,6 @@ type Deployment struct {
 	Current         bool       `json:"current"`
 }
 
-// Terminal reports whether a deployment has finished.
 func (d Deployment) Terminal() bool { return d.Status == "succeeded" || d.Status == "failed" }
 
 // Release is a deployable version (a rollback target).
@@ -198,7 +195,6 @@ type Route struct {
 	TLSMode string   `json:"tls_mode"`
 }
 
-// Error is a Miabi API error.
 type Error struct {
 	Status  int
 	Code    string
@@ -207,7 +203,6 @@ type Error struct {
 
 func (e *Error) Error() string { return fmt.Sprintf("miabi: %d %s: %s", e.Status, e.Code, e.Message) }
 
-// ErrNotFound is returned for unknown apps or releases.
 var ErrNotFound = errors.New("not found")
 
 func (c *Client) ws() string { return "/api/v1/workspaces/" + url.PathEscape(c.workspace) }
@@ -286,14 +281,12 @@ func (c *Client) Me(ctx context.Context) (string, error) {
 	return me.Name, nil
 }
 
-// Apps lists the workspace's applications.
 func (c *Client) Apps(ctx context.Context) ([]App, error) {
 	var apps []App
 	return apps, c.do(ctx, http.MethodGet, c.ws()+"/apps", nil, &apps)
 }
 
-// ResolveName finds an app by its name (slug) only. Agent tool calls use this: policies match app
-// names, so an id or uid must not reach an app the name rules would refuse.
+// ResolveName matches by name only: policies match app names, so an id or uid must not reach an app the rules would refuse.
 func (c *Client) ResolveName(ctx context.Context, name string) (*App, error) {
 	apps, err := c.Apps(ctx)
 	if err != nil {
@@ -324,7 +317,6 @@ func (c *Client) Resolve(ctx context.Context, ref string) (*App, error) {
 
 func (c *Client) app(id int64) string { return c.ws() + "/apps/" + strconv.FormatInt(id, 10) }
 
-// Status returns an app's live status.
 func (c *Client) Status(ctx context.Context, appID int64) (*LiveStatus, error) {
 	var st LiveStatus
 	return &st, c.do(ctx, http.MethodGet, c.app(appID)+"/status", nil, &st)
@@ -336,20 +328,17 @@ func (c *Client) Deployments(ctx context.Context, appID int64) ([]Deployment, er
 	return ds, c.do(ctx, http.MethodGet, c.app(appID)+"/deployments", nil, &ds)
 }
 
-// Releases lists an app's releases.
 func (c *Client) Releases(ctx context.Context, appID int64) ([]Release, error) {
 	var rs []Release
 	return rs, c.do(ctx, http.MethodGet, c.app(appID)+"/releases", nil, &rs)
 }
 
-// Routes lists the ingress routes to an app.
 func (c *Client) Routes(ctx context.Context, appID int64) ([]Route, error) {
 	var rs []Route
 	return rs, c.do(ctx, http.MethodGet, c.ws()+"/routes?application_id="+strconv.FormatInt(appID, 10), nil, &rs)
 }
 
-// Deploy starts a deployment (optionally of a tag). Apps whose repository owns a pipeline start a
-// pipeline run instead; that is reported as an error because its outcome is not a deployment.
+// Deploy reports a pipeline run as an error, because its outcome is not a deployment.
 func (c *Client) Deploy(ctx context.Context, appID int64, tag string) (*Deployment, error) {
 	body := map[string]any{}
 	if tag != "" {
@@ -375,7 +364,6 @@ func (c *Client) Rollback(ctx context.Context, appID, releaseID int64) (*Deploym
 	return &d, c.do(ctx, http.MethodPost, c.app(appID)+"/rollback", map[string]any{"release_id": releaseID}, &d)
 }
 
-// Restart restarts an app's containers.
 func (c *Client) Restart(ctx context.Context, appID int64) error {
 	return c.do(ctx, http.MethodPost, c.app(appID)+"/restart", map[string]any{}, nil)
 }
@@ -430,7 +418,6 @@ func (c *Client) Logs(ctx context.Context, appID int64, lines int) (string, erro
 	return b.String(), nil
 }
 
-// Wait polls until a deployment finishes or the timeout passes.
 func (c *Client) Wait(ctx context.Context, appID, deploymentID int64, timeout time.Duration) (*Deployment, error) {
 	deadline := time.Now().Add(timeout)
 	for {

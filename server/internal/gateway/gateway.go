@@ -1,25 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package gateway is the LLM gateway agents call over their tunnel. It owns provider keys, picks
-// the model, enforces budgets and the kill switch, and records usage. Agents never see a key and
-// cannot choose a model or rewrite tool definitions.
+// Package gateway is the LLM gateway agents call over their tunnel; agents never see a key or choose a model.
 package gateway
 
 import (
@@ -41,7 +40,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Gateway serves model calls.
 type Gateway struct {
 	db    *gorm.DB
 	box   *crypto.Box
@@ -61,13 +59,11 @@ type cachedProvider struct {
 	p       llm.Provider
 }
 
-// New returns a gateway.
 func New(db *gorm.DB, box *crypto.Box, a *audit.Logger, hub *sessions.Hub) *Gateway {
 	return &Gateway{db: db, box: box, audit: a, hub: hub, providers: map[string]cachedProvider{}}
 }
 
-// Handler serves the internal API for one connected agent. Identity is the tunnel: the handler is
-// bound to agentID, and every request is checked against sessions that agent owns.
+// Handler serves one agent's internal API; identity is the tunnel, so every request is checked against that agent's sessions.
 func (g *Gateway) Handler(agentID string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST "+proto.InternalLLMPath, func(w http.ResponseWriter, r *http.Request) {
@@ -125,8 +121,7 @@ func (g *Gateway) serveLLM(w http.ResponseWriter, r *http.Request, agentID strin
 		return
 	}
 
-	// The system prompt and tool definitions come from the control plane, not the agent: the tool list
-	// is the session's frozen set, described from the shared catalog.
+	// The system prompt and tools come from the control plane, not the agent: the tool list is the session's frozen set.
 	lreq := llm.Request{Model: row.Model, System: s.System, Messages: g.hub.ResolveImages(ctx, &s, req.Messages), MaxTokens: row.MaxTokens, Effort: row.Effort}
 	if lreq.System == "" {
 		lreq.System = req.System
@@ -167,7 +162,6 @@ func (g *Gateway) serveLLM(w http.ResponseWriter, r *http.Request, agentID strin
 		Usage: &proto.Usage{InputTokens: in, OutputTokens: res.Usage.OutputTokens}})
 }
 
-// ErrBudget is returned when a budget is exhausted.
 var ErrBudget = errors.New("budget exhausted")
 
 func (g *Gateway) checkBudget(ctx context.Context, agent *models.Agent, s *models.ChatSession) error {
@@ -228,7 +222,6 @@ func (g *Gateway) provider(ctx context.Context, agent *models.Agent) (*models.Mo
 	return &row, p, nil
 }
 
-// Build constructs a provider client from its row.
 func Build(row *models.ModelProvider, box *crypto.Box) (llm.Provider, error) {
 	key, err := box.Decrypt(row.APIKeyEnc)
 	if err != nil {

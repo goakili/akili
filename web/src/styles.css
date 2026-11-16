@@ -31,7 +31,6 @@
   --violet-600: #7c3aed;
   --violet-700: #6d28d9;
 
-  /* readable text colour for each state on its -50 tint */
   --primary-text: var(--primary-600);
   --success-text: var(--success-700);
   --warning-text: var(--warning-700);
@@ -281,8 +280,6 @@ kbd {
   color: var(--warning-text);
 }
 
-/* ---- layout primitives ------------------------------------------------------------------------ */
-
 .row {
   display: flex;
   align-items: center;
@@ -336,8 +333,6 @@ kbd {
     grid-column: auto;
   }
 }
-
-/* ---- shell ------------------------------------------------------------------------------------ */
 
 .shell {
   display: grid;
@@ -518,7 +513,6 @@ kbd {
   height: 16px;
 }
 
-/* collapsed rail */
 .shell.collapsed .sb-brand {
   padding: 0;
   justify-content: center;
@@ -723,7 +717,6 @@ kbd {
   .sidebar.open {
     transform: none;
   }
-  /* the drawer is always full width; collapse only applies to the desktop rail */
   .shell.collapsed .sb-brand {
     padding: 0 16px;
     justify-content: flex-start;
@@ -784,8 +777,6 @@ kbd {
     display: none !important;
   }
 }
-
-/* ---- menus / popovers ------------------------------------------------------------------------- */
 
 .popover-anchor {
   position: relative;
@@ -952,8 +943,6 @@ kbd {
   color: var(--text-tertiary);
 }
 
-/* ---- page header -------------------------------------------------------------------------------- */
-
 .page-head {
   display: flex;
   align-items: flex-end;
@@ -994,8 +983,6 @@ kbd {
 .crumbs a {
   color: var(--text-tertiary);
 }
-
-/* ---- cards ------------------------------------------------------------------------------------ */
 
 .card {
   background: var(--bg-primary);
@@ -1049,8 +1036,6 @@ kbd {
   letter-spacing: 0.06em;
   color: var(--text-tertiary);
 }
-
-/* ---- stat cards ------------------------------------------------------------------------------- */
 
 .stats {
   display: grid;
@@ -1138,8 +1123,6 @@ a.stat:hover {
   color: var(--text-tertiary);
   margin-top: 2px;
 }
-
-/* ---- buttons ---------------------------------------------------------------------------------- */
 
 .btn {
   display: inline-flex;
@@ -1286,8 +1269,6 @@ a.stat:hover {
   height: 19px;
 }
 
-/* ---- quick actions ----------------------------------------------------------------------------- */
-
 .qa-row {
   display: flex;
   flex-wrap: wrap;
@@ -1330,8 +1311,6 @@ a.stat:hover {
   width: 14px;
   height: 14px;
 }
-
-/* ---- forms ------------------------------------------------------------------------------------ */
 
 .field {
   display: flex;
@@ -1563,7 +1542,6 @@ a.stat:hover {
   box-shadow: var(--shadow-focus);
 }
 
-/* choice cards (radio-like) */
 .choices {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -1683,8 +1661,6 @@ a.stat:hover {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- toolbar ---------------------------------------------------------------------------------- */
-
 .toolbar {
   display: flex;
   align-items: center;
@@ -1729,8 +1705,6 @@ a.stat:hover {
     font-size: 20px;
   }
 }
-
-/* ---- tables ----------------------------------------------------------------------------------- */
 
 .table-wrap {
   overflow-x: clip;
@@ -1808,7 +1782,6 @@ a.cell-title:hover {
   background: var(--bg-secondary);
 }
 
-/* skeletons */
 .skel {
   display: block;
   height: 12px;
@@ -1880,8 +1853,6 @@ a.cell-title:hover {
 .empty.compact {
   padding: 24px 16px;
 }
-
-/* ---- badges ----------------------------------------------------------------------------------- */
 
 .badge {
   display: inline-flex;
@@ -1990,8 +1961,6 @@ a.cell-title:hover {
   }
 }
 
-/* ---- banners ---------------------------------------------------------------------------------- */
-
 .banner {
   display: flex;
   align-items: flex-start;
@@ -2038,8 +2007,6 @@ a.cell-title:hover {
   margin: 2px 0 0;
   color: var(--text-secondary);
 }
-
-/* ---- dialogs ---------------------------------------------------------------------------------- */
 
 dialog.modal {
   padding: 0;
@@ -2095,8 +2062,6 @@ dialog.modal::backdrop {
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
 }
 
-/* ---- toasts ----------------------------------------------------------------------------------- */
-
 .toasts {
   position: fixed;
   right: 20px;
@@ -2151,8 +2116,6 @@ dialog.modal::backdrop {
     opacity: 0;
   }
 }
-
-/* ---- tabs / sub-nav --------------------------------------------------------------------------- */
 
 .tabs {
   display: flex;
@@ -2282,8 +2245,6 @@ dialog.modal::backdrop {
   }
 }
 
-/* ---- code / json ------------------------------------------------------------------------------ */
-
 .code {
   margin: 0;
   padding: 12px 14px;
@@ -2354,8 +2315,6 @@ dialog.modal::backdrop {
   word-break: break-all;
 }
 
-/* ---- key/value -------------------------------------------------------------------------------- */
-
 .kv {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -2402,8 +2361,6 @@ dialog.modal::backdrop {
   font-weight: 550;
   overflow-wrap: anywhere;
 }
-
-/* ---- markdown --------------------------------------------------------------------------------- */
 
 .md {
   overflow-wrap: anywhere;
@@ -2457,8 +2414,6 @@ dialog.modal::backdrop {
 .md strong {
   font-weight: 650;
 }
-
-/* ---- chat ------------------------------------------------------------------------------------- */
 
 .chat {
   display: flex;
@@ -3033,8 +2988,6 @@ dialog.modal::backdrop {
   border-color: color-mix(in srgb, var(--danger-500) 35%, transparent);
 }
 
-/* ---- board ------------------------------------------------------------------------------------ */
-
 .board {
   display: grid;
   grid-template-columns: repeat(5, minmax(200px, 1fr));
@@ -3141,8 +3094,6 @@ dialog.modal::backdrop {
   border-radius: var(--radius);
 }
 
-/* ---- timeline --------------------------------------------------------------------------------- */
-
 .steps {
   display: flex;
   align-items: flex-start;
@@ -3219,8 +3170,6 @@ dialog.modal::backdrop {
   color: var(--text-tertiary);
 }
 
-/* ---- setup checklist -------------------------------------------------------------------------- */
-
 .setup {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3269,8 +3218,6 @@ dialog.modal::backdrop {
   font-size: 12.5px;
   color: var(--text-tertiary);
 }
-
-/* ---- list rows -------------------------------------------------------------------------------- */
 
 .list {
   display: flex;
@@ -3450,8 +3397,6 @@ a.list-row:hover {
   }
 }
 
-/* ---- login ------------------------------------------------------------------------------------ */
-
 .login-wrap {
   min-height: 100vh;
   display: grid;
@@ -3524,8 +3469,6 @@ a.list-row:hover {
   }
 }
 
-/* ---- cards with one stretched link (the whole card opens it; inner links stay clickable) ------- */
-
 .stretch-card {
   position: relative;
 }
@@ -3555,8 +3498,6 @@ a.list-row:hover {
 .task-card .code-row {
   margin-top: 8px;
 }
-
-/* ---- operations ------------------------------------------------------------------------------- */
 
 .tip-wrap {
   display: inline-flex;

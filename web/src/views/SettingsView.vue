@@ -1,22 +1,6 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
@@ -32,7 +16,6 @@ import UsageTab from './settings/UsageTab.vue'
 import KillSwitchTab from './settings/KillSwitchTab.vue'
 import AccountTab from './settings/AccountTab.vue'
 import SecurityTab from './settings/SecurityTab.vue'
-import LicenseTab from './settings/LicenseTab.vue'
 
 const auth = useAuth()
 const route = useRoute()
@@ -58,7 +41,6 @@ const SECTIONS: Section[] = [
   { id: 'sandbox', label: 'Sandbox', icon: 'box', admin: true, group: 'Organization', title: 'Sandbox', desc: 'How project sandboxes run the commands agents give them (builds, tests, installs).', comp: SandboxTab },
   { id: 'kill', label: 'Kill switch', icon: 'power', admin: true, group: 'Organization', title: 'Kill switch', desc: 'An emergency stop for the whole fleet.', comp: KillSwitchTab },
   { id: 'security', label: 'Security', icon: 'lock', admin: true, group: 'Organization', title: 'Security', desc: 'Encryption at rest, audit export to your SIEM, and how people and agents authenticate. Read-only: these are set in the control-plane environment and CLI.', comp: SecurityTab },
-  { id: 'license', label: 'License', icon: 'award', admin: true, group: 'Organization', title: 'License', desc: 'The edition and the Akili Enterprise license. Only the owner can install or remove it.', comp: LicenseTab },
   { id: 'audit', label: 'Audit log', icon: 'scroll', admin: true, group: 'Organization', title: 'Audit log', desc: '', href: '/audit' },
 ]
 

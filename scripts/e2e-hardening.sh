@@ -1,33 +1,10 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-#
-# This file is part of Akili.
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: AGPL-3.0-or-later
-# Hardening end-to-end test:
-#  - TLS with agent mTLS required: an agent without a client certificate is refused; with one it enrolls.
-#  - SSO against a fake OIDC provider: sign-in, group → role mapping, unverified email and forged
-#    state refused, password sign-in limited to the owner.
-#  - SIEM: the audit trail reaches a JSON-lines file and a signed webhook, hash chain intact.
-#  - KMS: secrets move from the local key to a real Vault Transit key; after rotation the control
-#    plane runs with Vault alone (no AKILI_ENCRYPTION_KEY) and still decrypts every secret.
+# SPDX-License-Identifier: MIT
+# Hardening end-to-end test: TLS with agent mTLS, SSO against a fake OIDC provider, SIEM sinks and a KMS move to Vault Transit.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# The agent is its own repository, checked out next to this one.
 AGENT_DIR="${AGENT_DIR:-$ROOT/agent}"
 WORK="$(mktemp -d)"
 PG_PORT=${PG_PORT:-55542}

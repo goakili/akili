@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 // Command akili is the Akili control plane.
 package main
@@ -34,7 +35,6 @@ import (
 	"github.com/goakili/akili/server/internal/coder"
 	"github.com/goakili/akili/server/internal/config"
 	"github.com/goakili/akili/server/internal/dto"
-	"github.com/goakili/akili/server/internal/enterprise"
 	"github.com/goakili/akili/server/internal/fleet"
 	"github.com/goakili/akili/server/internal/gateway"
 	"github.com/goakili/akili/server/internal/handlers"
@@ -130,7 +130,6 @@ func runServer(cli *okapicli.CLI) error {
 		return fmt.Errorf("seed: %w", err)
 	}
 
-	ee := enterprise.New(db, cfg.License, cfg.PublicURL, seeded.InstallID)
 	b := bus.New(rdb)
 	auditLog := audit.New(db)
 	notifier := notify.New(cfg.NotifyWebhookURL, cfg.PublicURL)
@@ -171,7 +170,7 @@ func runServer(cli *okapicli.CLI) error {
 	chatSvc := chat.New(db, box, b, auditLog, hub, taskSvc, elector)
 
 	h := &handlers.Handlers{Cfg: cfg, DB: db, Bus: b, Audit: auditLog, Auth: authSvc, Fleet: fleetSvc, Tunnels: tunnels,
-		Sessions: hub, Tasks: taskSvc, Box: box, Coder: coderSvc, Miabi: miabiSvc, OIDC: sso, SIEM: forwarder, Chat: chatSvc, Lessons: lessonSvc, Plans: planSvc, MCP: mcpSvc, Mail: mailer, EE: ee}
+		Sessions: hub, Tasks: taskSvc, Box: box, Coder: coderSvc, Miabi: miabiSvc, OIDC: sso, SIEM: forwarder, Chat: chatSvc, Lessons: lessonSvc, Plans: planSvc, MCP: mcpSvc, Mail: mailer}
 	routes.Register(app, h, middlewares.NewAuthenticator(db, authSvc))
 
 	return cli.RunServer(&okapicli.RunOptions{

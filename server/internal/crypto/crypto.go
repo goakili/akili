@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 // Package crypto holds at-rest encryption, token hashing and the policy-signing key.
 package crypto
@@ -42,10 +43,8 @@ type Box struct {
 	ring *Keyring
 }
 
-// NewBox returns a box over a keyring.
 func NewBox(ring *Keyring) *Box { return &Box{ring: ring} }
 
-// Keyring exposes the key management behind the box.
 func (b *Box) Keyring() *Keyring { return b.ring }
 
 // boxPrefix marks ciphertexts written before envelope encryption.
@@ -86,10 +85,8 @@ type MemoryStore struct {
 	m  map[string]string
 }
 
-// NewMemoryStore returns an empty store.
 func NewMemoryStore() *MemoryStore { return &MemoryStore{m: map[string]string{}} }
 
-// Get implements KeyStore.
 func (s *MemoryStore) Get(_ context.Context, key string) (string, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -97,7 +94,6 @@ func (s *MemoryStore) Get(_ context.Context, key string) (string, bool, error) {
 	return v, ok, nil
 }
 
-// Create implements KeyStore.
 func (s *MemoryStore) Create(_ context.Context, key, value string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -108,7 +104,6 @@ func (s *MemoryStore) Create(_ context.Context, key, value string) (bool, error)
 	return true, nil
 }
 
-// Put implements KeyStore.
 func (s *MemoryStore) Put(_ context.Context, key, value string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -116,7 +111,6 @@ func (s *MemoryStore) Put(_ context.Context, key, value string) error {
 	return nil
 }
 
-// Keys implements KeyStore.
 func (s *MemoryStore) Keys(_ context.Context, prefix string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -146,7 +140,6 @@ func EqualHash(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
-// SHA256Hex hashes arbitrary bytes.
 func SHA256Hex(b []byte) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])

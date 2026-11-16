@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -35,9 +36,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// ---- skills --------------------------------------------------------------------------------------
-
-// SkillRequest creates or updates a skill.
 type SkillRequest struct {
 	Body struct {
 		Name        string `json:"name" required:"true" maxLength:"120"`
@@ -46,14 +44,12 @@ type SkillRequest struct {
 	} `json:"body"`
 }
 
-// ListSkills lists skills.
 func (h *Handlers) ListSkills(c *okapi.Context) error {
 	var out []models.Skill
 	h.DB.Where("organization_id = ?", middlewares.OrgID(c)).Order("builtin DESC, name").Find(&out)
 	return ok(c, out)
 }
 
-// GetSkill returns a skill.
 func (h *Handlers) GetSkill(c *okapi.Context) error {
 	var s models.Skill
 	if err := h.DB.First(&s, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -62,7 +58,6 @@ func (h *Handlers) GetSkill(c *okapi.Context) error {
 	return ok(c, s)
 }
 
-// CreateSkill adds a skill.
 func (h *Handlers) CreateSkill(c *okapi.Context, req *SkillRequest) error {
 	s := models.Skill{Base: models.Base{ID: models.NewID("skl"), OrganizationID: middlewares.OrgID(c)}, Name: strings.TrimSpace(req.Body.Name),
 		Description: req.Body.Description, Content: req.Body.Content, Version: 1, Hash: crypto.SHA256Hex([]byte(req.Body.Content))}
@@ -73,8 +68,7 @@ func (h *Handlers) CreateSkill(c *okapi.Context, req *SkillRequest) error {
 	return created(c, s)
 }
 
-// UpdateSkill edits a skill and bumps its version. Running sessions keep the version they started
-// with; new sessions get the new one.
+// UpdateSkill bumps the version; running sessions keep the version they started with.
 func (h *Handlers) UpdateSkill(c *okapi.Context, req *SkillRequest) error {
 	var s models.Skill
 	if err := h.DB.First(&s, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -95,7 +89,6 @@ func (h *Handlers) UpdateSkill(c *okapi.Context, req *SkillRequest) error {
 	return ok(c, s)
 }
 
-// DeleteSkill removes a skill and its assignments.
 func (h *Handlers) DeleteSkill(c *okapi.Context) error {
 	var s models.Skill
 	if err := h.DB.First(&s, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -117,9 +110,6 @@ func (h *Handlers) DeleteSkill(c *okapi.Context) error {
 	return message(c, "deleted")
 }
 
-// ---- policies ------------------------------------------------------------------------------------
-
-// PolicyRequest creates or updates a policy.
 type PolicyRequest struct {
 	Body struct {
 		Name        string       `json:"name" required:"true" maxLength:"120"`
@@ -128,14 +118,12 @@ type PolicyRequest struct {
 	} `json:"body"`
 }
 
-// ListPolicies lists policies.
 func (h *Handlers) ListPolicies(c *okapi.Context) error {
 	var out []models.Policy
 	h.DB.Where("organization_id = ?", middlewares.OrgID(c)).Order("builtin DESC, name").Find(&out)
 	return ok(c, out)
 }
 
-// GetPolicy returns a policy.
 func (h *Handlers) GetPolicy(c *okapi.Context) error {
 	var p models.Policy
 	if err := h.DB.First(&p, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -144,7 +132,6 @@ func (h *Handlers) GetPolicy(c *okapi.Context) error {
 	return ok(c, p)
 }
 
-// CreatePolicy adds a policy.
 func (h *Handlers) CreatePolicy(c *okapi.Context, req *PolicyRequest) error {
 	doc := req.Body.Document
 	if doc.MaxRisk == 0 {
@@ -160,8 +147,7 @@ func (h *Handlers) CreatePolicy(c *okapi.Context, req *PolicyRequest) error {
 	return created(c, p)
 }
 
-// UpdatePolicy replaces a policy document and bumps its version. It applies to the next tool request
-// of every agent bound to it, including running sessions.
+// UpdatePolicy bumps the version; it applies to the next tool request of every bound agent, running sessions included.
 func (h *Handlers) UpdatePolicy(c *okapi.Context, req *PolicyRequest) error {
 	var p models.Policy
 	if err := h.DB.First(&p, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -202,7 +188,6 @@ func (h *Handlers) DeletePolicy(c *okapi.Context) error {
 	return message(c, "deleted")
 }
 
-// SimulateRequest evaluates a hypothetical tool call.
 type SimulateRequest struct {
 	Body struct {
 		Tool     string          `json:"tool" required:"true"`
@@ -212,7 +197,6 @@ type SimulateRequest struct {
 	} `json:"body"`
 }
 
-// SimulatePolicy answers "would this call be allowed?".
 func (h *Handlers) SimulatePolicy(c *okapi.Context, req *SimulateRequest) error {
 	var p models.Policy
 	if err := h.DB.First(&p, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -225,12 +209,9 @@ func (h *Handlers) SimulatePolicy(c *okapi.Context, req *SimulateRequest) error 
 	return ok(c, proto.Evaluate(p.Document, req.Body.Autonomy, wd, proto.Call{Tool: req.Body.Tool, Input: req.Body.Input}))
 }
 
-// ListTools returns the tool catalog.
 func (h *Handlers) ListTools(c *okapi.Context) error {
 	return ok(c, proto.Catalog())
 }
-
-// ---- model providers -----------------------------------------------------------------------------
 
 // ProviderRequest creates or updates a model provider. An empty api_key on update keeps the old key.
 type ProviderRequest struct {
@@ -302,7 +283,6 @@ func (h *Handlers) saveProvider(c *okapi.Context, p *models.ModelProvider, req *
 	return nil
 }
 
-// CreateProvider adds a provider.
 func (h *Handlers) CreateProvider(c *okapi.Context, req *ProviderRequest) error {
 	p := &models.ModelProvider{Base: models.Base{ID: models.NewID("prv"), OrganizationID: middlewares.OrgID(c)}}
 	if err := h.saveProvider(c, p, req); err != nil {
@@ -312,7 +292,6 @@ func (h *Handlers) CreateProvider(c *okapi.Context, req *ProviderRequest) error 
 	return created(c, p)
 }
 
-// ProviderAgent is an agent whose model calls go to a provider.
 type ProviderAgent struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -321,7 +300,6 @@ type ProviderAgent struct {
 	ViaDefault bool `json:"via_default"`
 }
 
-// ProviderUsage totals a provider's model calls.
 type ProviderUsage struct {
 	Calls        int64   `json:"calls"`
 	InputTokens  int64   `json:"input_tokens"`
@@ -336,7 +314,6 @@ type ProviderDetail struct {
 	Usage30d ProviderUsage   `json:"usage_30d"`
 }
 
-// GetProvider returns one provider (never its key).
 func (h *Handlers) GetProvider(c *okapi.Context) error {
 	org := middlewares.OrgID(c)
 	var p models.ModelProvider
@@ -361,7 +338,6 @@ func (h *Handlers) GetProvider(c *okapi.Context) error {
 	return ok(c, out)
 }
 
-// UpdateProvider edits a provider.
 func (h *Handlers) UpdateProvider(c *okapi.Context, req *ProviderRequest) error {
 	var p models.ModelProvider
 	if err := h.DB.First(&p, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -390,7 +366,6 @@ func (h *Handlers) DeleteProvider(c *okapi.Context) error {
 	return message(c, "deleted")
 }
 
-// TestResult reports a provider probe.
 type TestResult struct {
 	OK        bool   `json:"ok"`
 	Reply     string `json:"reply,omitempty"`
@@ -398,7 +373,6 @@ type TestResult struct {
 	LatencyMs int64  `json:"latency_ms"`
 }
 
-// TestProvider sends a tiny request to check connectivity and credentials.
 func (h *Handlers) TestProvider(c *okapi.Context) error {
 	var p models.ModelProvider
 	if err := h.DB.First(&p, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {

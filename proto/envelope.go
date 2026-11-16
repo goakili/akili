@@ -1,10 +1,24 @@
-// SPDX-FileCopyrightText: 2026 Jonas Kaninda
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jonas Kaninda.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 // Package proto is the wire contract between the Akili control plane and its agents.
-//
-// Both sides import it and nothing else in common, so every message that crosses the tunnel is
-// defined here. Messages travel as newline-delimited JSON envelopes over yamux streams.
 package proto
 
 import (
@@ -17,15 +31,12 @@ import (
 	"time"
 )
 
-// Version is the protocol version carried in every envelope. Bump it on a breaking change; peers
-// reject envelopes from a newer major version rather than misreading them.
+// Version is bumped on a breaking change; peers reject newer versions rather than misread them.
 const Version = 1
 
-// MaxEnvelopeSize bounds one encoded envelope. Tool output is truncated well below this, so a larger
-// line means a broken or hostile peer.
+// MaxEnvelopeSize is far above truncated tool output, so a larger line means a broken or hostile peer.
 const MaxEnvelopeSize = 8 << 20
 
-// Envelope is the unit of every stream.
 type Envelope struct {
 	V       int             `json:"v"`
 	Type    string          `json:"type"`
@@ -34,10 +45,8 @@ type Envelope struct {
 	Payload json.RawMessage `json:"payload,omitempty"`
 }
 
-// ErrVersion is returned when a peer speaks a newer protocol version.
 var ErrVersion = errors.New("proto: unsupported protocol version")
 
-// NewEnvelope marshals payload into an envelope of the given type.
 func NewEnvelope(typ string, payload any) (Envelope, error) {
 	env := Envelope{V: Version, Type: typ, TS: time.Now().UTC()}
 	if payload != nil {
@@ -50,7 +59,6 @@ func NewEnvelope(typ string, payload any) (Envelope, error) {
 	return env, nil
 }
 
-// Decode unmarshals the envelope payload into v.
 func (e Envelope) Decode(v any) error {
 	if len(e.Payload) == 0 {
 		return nil
@@ -61,20 +69,17 @@ func (e Envelope) Decode(v any) error {
 	return nil
 }
 
-// Conn frames envelopes over a byte stream. Send is safe for concurrent use; Recv is not (one reader
-// per stream).
+// Conn's Send is safe for concurrent use; Recv is not (one reader per stream).
 type Conn struct {
 	rwc io.ReadWriteCloser
 	r   *bufio.Reader
 	wmu sync.Mutex
 }
 
-// NewConn wraps a stream (typically a yamux stream).
 func NewConn(rwc io.ReadWriteCloser) *Conn {
 	return &Conn{rwc: rwc, r: bufio.NewReaderSize(rwc, 64<<10)}
 }
 
-// Send writes one envelope.
 func (c *Conn) Send(typ string, payload any) error {
 	env, err := NewEnvelope(typ, payload)
 	if err != nil {
@@ -83,7 +88,6 @@ func (c *Conn) Send(typ string, payload any) error {
 	return c.SendEnvelope(env)
 }
 
-// SendEnvelope writes a pre-built envelope.
 func (c *Conn) SendEnvelope(env Envelope) error {
 	if env.V == 0 {
 		env.V = Version
@@ -102,7 +106,6 @@ func (c *Conn) SendEnvelope(env Envelope) error {
 	return err
 }
 
-// Recv reads the next envelope.
 func (c *Conn) Recv() (Envelope, error) {
 	var env Envelope
 	line, err := c.readLine()
@@ -118,7 +121,6 @@ func (c *Conn) Recv() (Envelope, error) {
 	return env, nil
 }
 
-// readLine reads up to '\n', refusing lines larger than MaxEnvelopeSize.
 func (c *Conn) readLine() ([]byte, error) {
 	var buf []byte
 	for {
@@ -139,5 +141,4 @@ func (c *Conn) readLine() ([]byte, error) {
 	}
 }
 
-// Close closes the underlying stream.
 func (c *Conn) Close() error { return c.rwc.Close() }

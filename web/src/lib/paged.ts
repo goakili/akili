@@ -1,21 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { ref, type Ref } from 'vue'
 import type { Page } from '../api'
@@ -35,17 +19,13 @@ export interface Paged<T> {
   reload: () => Promise<void>
   /** Re-read the first page and put it on top, keeping the pages already scrolled through. */
   refresh: () => Promise<void>
-  /** Append the next page. */
   more: () => Promise<void>
   /** Replace an item in place, or insert it at the top. */
   upsert: (item: T) => void
   remove: (key: Key) => void
 }
 
-/**
- * A list loaded page by page for infinite scroll. Rows inserted on the server between two page loads
- * shift offsets, so a row can arrive twice; it is kept once, by key.
- */
+/** Server inserts between page loads shift offsets, so a row can arrive twice; it is kept once, by key. */
 export function usePaged<T>(fetchPage: (page: number) => Promise<Page<T>>, key: (t: T) => Key = (t) => (t as { id: Key }).id): Paged<T> {
   const items = ref<T[]>([]) as Ref<T[]>
   const loading = ref(true)

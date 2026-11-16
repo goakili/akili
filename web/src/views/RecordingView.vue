@@ -1,25 +1,8 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
-// Replays a recorded terminal (asciinema v2) into a read-only xterm: play/pause, speed, seek.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { Terminal } from '@xterm/xterm'
 import { api, ApiError, type TerminalSession, type User } from '../api'
@@ -145,14 +128,12 @@ function toggle() {
   else play()
 }
 
-/** Jump to the end: everything at once. */
 function instant() {
   pause()
   pos.value = total.value
   advance()
 }
 
-/** Re-render from the start up to the target time. */
 function seek(target: number) {
   const c = cast.value
   const t = term.value

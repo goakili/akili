@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package llm
 
@@ -35,8 +36,7 @@ import (
 // Anthropic calls the Claude Messages API through the official SDK.
 type Anthropic struct {
 	client anthropic.Client
-	// fallbacks enables server-side refusal fallback ("default" routing). Only the first-party API
-	// supports it, so it is off when a custom base URL is configured.
+	// fallbacks enables server-side refusal fallback; only the first-party API supports it, so a custom base URL turns it off.
 	fallbacks bool
 }
 
@@ -49,12 +49,10 @@ func NewAnthropic(apiKey, baseURL string) *Anthropic {
 	return &Anthropic{client: anthropic.NewClient(opts...), fallbacks: baseURL == ""}
 }
 
-// Stream implements Provider.
 func (a *Anthropic) Stream(ctx context.Context, req Request, onDelta DeltaFunc) (Result, error) {
 	res, err := a.stream(ctx, req, onDelta)
 	if err != nil && isThinkingBindingError(err) {
-		// The history no longer matches the conversation its thinking blocks were bound to (e.g. it
-		// was rebuilt). Recover once without the reasoning blocks rather than failing the session.
+		// The history no longer matches the conversation its thinking blocks were bound to: retry once without them.
 		logger.Warn("thinking blocks rejected as bound to a different conversation; retrying without them")
 		req.Messages = stripThinking(req.Messages)
 		return a.stream(ctx, req, onDelta)
@@ -125,8 +123,7 @@ func (a *Anthropic) params(req Request) (anthropic.MessageNewParams, error) {
 	p := anthropic.MessageNewParams{
 		Model:     anthropic.Model(req.Model),
 		MaxTokens: int64(maxTokens),
-		// The system prompt is fixed for a session's lifetime, so caching it (and the tools before it)
-		// pays off on every turn of the agent loop.
+		// The system prompt is fixed per session, so caching it (and the tools before it) pays off on every turn.
 		System: []anthropic.TextBlockParam{{Text: req.System, CacheControl: anthropic.NewCacheControlEphemeralParam()}},
 		// Top-level cache control also places a breakpoint on the growing message history.
 		CacheControl: anthropic.NewCacheControlEphemeralParam(),
@@ -135,8 +132,7 @@ func (a *Anthropic) params(req Request) (anthropic.MessageNewParams, error) {
 		p.OutputConfig = anthropic.OutputConfigParam{Effort: anthropic.OutputConfigEffort(req.Effort)}
 	}
 	if supportsAdaptiveThinking(req.Model) {
-		// Reasoning is hidden by default ("omitted"), which leaves operators watching a silent pause.
-		// Summaries stream while the model thinks; the blocks are replayed unchanged either way.
+		// Reasoning is hidden by default, which leaves operators watching a silent pause; summaries stream instead.
 		p.Thinking = anthropic.ThinkingConfigParamUnion{OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{
 			Display: anthropic.ThinkingConfigAdaptiveDisplaySummarized}}
 	}
@@ -190,9 +186,7 @@ func (a *Anthropic) params(req Request) (anthropic.MessageNewParams, error) {
 			Name:        t.Name,
 			Description: anthropic.String(t.Description),
 			InputSchema: anthropic.ToolInputSchemaParam{Properties: schema.Properties, Required: schema.Required},
-			// Stream large inputs (file bodies) as they are generated. Inputs are then unvalidated by
-			// the API: the policy engine decodes them strictly and the agent refuses to run a tool
-			// from a turn that stopped on max_tokens or refusal.
+			// Eagerly streamed inputs are unvalidated by the API: the policy engine decodes them strictly.
 			EagerInputStreaming: anthropic.Bool(true),
 		}
 		p.Tools = append(p.Tools, anthropic.ToolUnionParam{OfTool: &tp})
@@ -200,8 +194,7 @@ func (a *Anthropic) params(req Request) (anthropic.MessageNewParams, error) {
 	return p, nil
 }
 
-// supportsAdaptiveThinking reports whether a model takes {type: "adaptive"} thinking. Haiku 4.5 and
-// older models use a token budget instead, so they get no thinking config.
+// supportsAdaptiveThinking reports whether a model takes adaptive thinking; Haiku 4.5 and older get no thinking config.
 func supportsAdaptiveThinking(model string) bool {
 	if !strings.HasPrefix(model, "claude-") {
 		return false

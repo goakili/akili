@@ -1,29 +1,12 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
 import Icon, { type IconName } from './Icon'
 
-// One badge for every status-like value in the API, so colour, icon and wording stay consistent across
-// pages. Never colour alone: every tone carries an icon and a word.
+// Never colour alone: every tone carries an icon and a word.
 const props = defineProps<{ value: string | null | undefined; kind?: 'risk' | 'effect' | 'status'; label?: string; noIcon?: boolean }>()
 
 type Tone = '' | 'ok' | 'warn' | 'danger' | 'info' | 'accent' | 'violet'
@@ -35,13 +18,11 @@ interface Look {
 }
 
 const STATUS: Record<string, Look> = {
-  // agents
   online: { tone: 'ok', icon: 'circleDot' },
   offline: { tone: '', icon: 'circle' },
   pending: { tone: 'warn', icon: 'hourglass' },
   revoked: { tone: 'danger', icon: 'ban' },
   draining: { tone: 'warn', icon: 'pause' },
-  // tasks
   draft: { tone: '', icon: 'edit' },
   queued: { tone: '', icon: 'clock' },
   assigned: { tone: 'info', icon: 'loader', anim: 'spin' },
@@ -51,11 +32,9 @@ const STATUS: Record<string, Look> = {
   cancelled: { tone: '', icon: 'ban' },
   timed_out: { tone: 'danger', icon: 'hourglass', text: 'timed out' },
   needs_approval: { tone: 'warn', icon: 'approvals', text: 'needs approval' },
-  // approvals
   approved: { tone: 'ok', icon: 'checkCircle' },
   denied: { tone: 'danger', icon: 'xCircle' },
   expired: { tone: '', icon: 'hourglass' },
-  // sessions
   open: { tone: 'ok', icon: 'circleDot' },
   closed: { tone: '', icon: 'lock' },
   idle: { tone: '', icon: 'circle' },
@@ -66,17 +45,13 @@ const STATUS: Record<string, Look> = {
   needs_input: { tone: 'info', icon: 'help', text: 'needs your answer' },
   chat: { tone: 'info', icon: 'chat' },
   task: { tone: 'violet', icon: 'tasks' },
-  // results
   ok: { tone: 'ok', icon: 'check' },
   error: { tone: 'danger', icon: 'x' },
-  // keys / generic
   active: { tone: 'ok', icon: 'checkCircle' },
   default: { tone: 'accent', icon: 'zap' },
   builtin: { tone: 'info', icon: 'lock', text: 'built-in' },
-  // change plans
   rolled_back: { tone: 'warn', icon: 'undo', text: 'rolled back' },
   skipped: { tone: '', icon: 'skip' },
-  // project plans and steps
   in_progress: { tone: 'info', icon: 'loader', text: 'in progress' },
   done: { tone: 'ok', icon: 'checkCircle' },
   archived: { tone: '', icon: 'box' },
@@ -86,12 +61,10 @@ const STATUS: Record<string, Look> = {
   alert: { tone: 'warn', icon: 'siren' },
   enabled: { tone: 'ok', icon: 'checkCircle' },
   disabled: { tone: '', icon: 'pause' },
-  // Miabi app health
   healthy: { tone: 'ok', icon: 'checkCircle' },
   unhealthy: { tone: 'danger', icon: 'xCircle' },
   degraded: { tone: 'warn', icon: 'alert' },
   miabi: { tone: 'accent', icon: 'layers' },
-  // lessons
   proposed: { tone: 'warn', icon: 'lightbulb' },
   rejected: { tone: 'danger', icon: 'xCircle' },
 }

@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package sessions
 
@@ -34,27 +35,23 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// QuestionTTL is how long an ask_user question waits for an answer. The task's own timeout still
-// applies, so a question on a task with a shorter timeout ends with the task.
+// QuestionTTL is how long an ask_user question waits; a shorter task timeout still ends it first.
 const QuestionTTL = 24 * time.Hour
 
 // MaxAnswerLen bounds an answer written in the person's own words.
 const MaxAnswerLen = 4000
 
-// Session events for questions.
 const (
 	EvQuestionCreated  = "question.created"
 	EvQuestionResolved = "question.resolved"
 )
 
-// Question errors.
 var (
 	ErrQuestionClosed = errors.New("question is no longer waiting for an answer")
 	ErrBadAnswer      = errors.New("pick one option or write an answer, not both")
 )
 
-// askUser records an allowed ask_user call. The agent gets its decision only when someone answers or
-// the question expires, so nothing is returned on success; a failure is a deny the agent sees now.
+// askUser returns nil on success: the agent gets its decision only when someone answers or the question expires.
 func (h *Hub) askUser(ctx context.Context, s *models.ChatSession, req proto.ToolRequest) *proto.ToolDecision {
 	deny := func(reason string) *proto.ToolDecision {
 		return &proto.ToolDecision{RequestID: req.RequestID, Effect: proto.EffectDeny, Reason: reason}
@@ -88,8 +85,7 @@ func (h *Hub) askUser(ctx context.Context, s *models.ChatSession, req proto.Tool
 	return nil
 }
 
-// Answer records a person's answer to a pending question and hands it to the waiting agent. Exactly
-// one of choice (a 0-based option) and text (their own words) is given.
+// Answer takes exactly one of choice (a 0-based option) and text (the person's own words).
 func (h *Hub) Answer(ctx context.Context, org, questionID, userID string, choice *int, text string) (*models.Question, error) {
 	text = strings.TrimSpace(text)
 	if (choice == nil) == (text == "") || len([]rune(text)) > MaxAnswerLen {

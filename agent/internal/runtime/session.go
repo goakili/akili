@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package runtime runs chat and task sessions on the agent: the model/tool loop, local policy
-// enforcement, and the request/decision round-trip with the control plane for every tool call.
+// Package runtime runs agent sessions: the model/tool loop and the policy round-trip for every tool call.
 package runtime
 
 import (
@@ -37,19 +37,16 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// Completer is the model gateway.
 type Completer interface {
 	Complete(ctx context.Context, req proto.LLMRequest, onDelta func(kind, text string)) (*proto.LLMEvent, error)
 }
 
-// Conn is the session stream.
 type Conn interface {
 	Send(typ string, payload any) error
 	Recv() (proto.Envelope, error)
 	Close() error
 }
 
-// Config is what a session needs from the agent.
 type Config struct {
 	Workdir      string
 	CPSigningKey ed25519.PublicKey
@@ -58,11 +55,9 @@ type Config struct {
 	ShellEnv []string
 	// Protected are directories tools must never touch outside the workdir (the agent's state and key).
 	Protected []string
-	// GitRemote returns the local git proxy URL for a session (project sessions).
 	GitRemote func(sessionID string) string
 }
 
-// Session is one live session stream.
 type Session struct {
 	cfg    Config
 	conn   Conn
@@ -91,7 +86,6 @@ type Session struct {
 // ErrBadPolicy means the policy bundle was not signed by the pinned control-plane key.
 var ErrBadPolicy = errors.New("session policy failed signature verification")
 
-// NewSession validates a session.open and prepares the session.
 func NewSession(cfg Config, conn Conn, llm Completer, open proto.SessionOpen) (*Session, error) {
 	pol, err := open.Policy.Verify(cfg.CPSigningKey)
 	if err != nil {
@@ -119,7 +113,6 @@ func NewSession(cfg Config, conn Conn, llm Completer, open proto.SessionOpen) (*
 	return s, nil
 }
 
-// ID returns the session id.
 func (s *Session) ID() string { return s.open.SessionID }
 
 // Run drives the session until the stream closes or a task finishes.
@@ -200,7 +193,7 @@ func (s *Session) runTask(ctx context.Context) {
 	_ = s.conn.Send(proto.TypeDone, done)
 }
 
-// read dispatches control-plane frames. Closing the stream cancels the session.
+// read cancels the session when the stream closes.
 func (s *Session) read(cancel context.CancelFunc) {
 	defer close(s.closed)
 	defer cancel()
@@ -247,8 +240,7 @@ func (s *Session) read(cancel context.CancelFunc) {
 	}
 }
 
-// validImages keeps the references the control plane may resolve: accepted types, within the
-// per-message limit. The bytes never pass through the agent.
+// validImages keeps only accepted, in-limit references; the bytes never pass through the agent.
 func validImages(in []proto.ImageSource) []proto.ImageSource {
 	var out []proto.ImageSource
 	for _, img := range in {
@@ -259,20 +251,17 @@ func validImages(in []proto.ImageSource) []proto.ImageSource {
 	return out
 }
 
-// BlockedPrefix starts a task's final message when the agent could not complete it (the system prompt
-// asks for this).
+// BlockedPrefix starts a task's final message when the agent could not complete it, as the system prompt asks.
 const BlockedPrefix = "BLOCKED:"
 
 var errInterrupted = errors.New("interrupted by operator")
 
-// maxCutOffTurns caps turns whose tool input was cut off at the output limit. They do not count
-// toward MaxTurns, so a model writing a large file in parts is not charged for its retries.
+// maxCutOffTurns caps cut-off turns, which skip MaxTurns so writing a large file in parts is not charged.
 const maxCutOffTurns = 10
 
 // ErrTurnLimit is returned when the model is still working after MaxTurns turns (0 = no limit).
 var ErrTurnLimit = errors.New("turn limit reached")
 
-// turn runs the model/tool loop for one user message and returns the final assistant text.
 func (s *Session) turn(parent context.Context, user proto.Message) (string, error) {
 	ctx, cancel := context.WithCancel(parent)
 	s.mu.Lock()
@@ -343,8 +332,7 @@ func (s *Session) turn(parent context.Context, user proto.Message) (string, erro
 	return last, fmt.Errorf("%w: the agent was still working after %d model turns; continue the task to pick up where it stopped, or raise its max turns", ErrTurnLimit, s.open.MaxTurns)
 }
 
-// runTools executes tool calls in order. Every call gets a result block, so the history stays valid
-// even when the operator interrupts mid-way.
+// runTools gives every call a result block, so the history stays valid even when interrupted mid-way.
 func (s *Session) runTools(ctx context.Context, uses []proto.Block) []proto.Block {
 	var results []proto.Block
 	for _, u := range uses {
@@ -362,9 +350,7 @@ func (s *Session) runTool(ctx context.Context, u proto.Block) (string, bool) {
 	return s.call(ctx, proto.ToolRequest{RequestID: newID(), ToolUseID: u.ID, Tool: u.Name, Input: u.Input})
 }
 
-// call authorises one tool call with the control plane and runs it. The local check against the
-// signed bundle is made too; the control plane is asked (and audits) even when the local answer is
-// deny, and the call runs only if both allow.
+// call asks (and audits on) the control plane even when the local check denies; it runs only if both allow.
 func (s *Session) call(ctx context.Context, req proto.ToolRequest) (string, bool) {
 	local := proto.EvaluateAt(s.policy, s.open.Autonomy, s.cfg.Workdir, s.base(), proto.Call{Tool: req.Tool, Input: req.Input})
 	if req.ChangeID != "" && local.Effect == proto.EffectApprove {
@@ -475,8 +461,7 @@ func (s *Session) closeToolUses(uses []proto.Block, reason string) {
 	_ = s.appendMessage(proto.Message{Role: proto.RoleUser, Content: results})
 }
 
-// repairHistory closes a dangling tool call left by a crash or disconnect, so the resumed history is
-// a valid conversation. It only appends — history is never rewritten.
+// repairHistory closes a dangling tool call left by a crash; it only appends, never rewrites history.
 func (s *Session) repairHistory() {
 	if n := len(s.history); n > 0 && s.history[n-1].Role == proto.RoleAssistant {
 		s.closeToolUses(s.history[n-1].ToolUses(), "interrupted: the connection to the control plane was lost during this call, so it may or may not have run")
@@ -502,7 +487,6 @@ func toolResult(id, content string, isErr bool) proto.Block {
 
 func newID() string { return "req_" + strings.ToLower(rand.Text()[:16]) }
 
-// DecodeOpen parses a session.open envelope.
 func DecodeOpen(env proto.Envelope) (proto.SessionOpen, error) {
 	var open proto.SessionOpen
 	if env.Type != proto.TypeSessionOpen {

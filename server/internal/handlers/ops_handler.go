@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -45,9 +46,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// ---- changes ----
-
-// ListChanges lists change plans, newest first.
 func (h *Handlers) ListChanges(c *okapi.Context) error {
 	q := h.DB.Where("organization_id = ?", middlewares.OrgID(c))
 	for _, f := range []string{"status", "agent_id", "session_id", "task_id"} {
@@ -63,7 +61,6 @@ func (h *Handlers) ListChanges(c *okapi.Context) error {
 	return paged(c, out, total, p)
 }
 
-// GetChange returns one change plan with its call outcomes.
 func (h *Handlers) GetChange(c *okapi.Context) error {
 	var ch models.Change
 	if err := h.DB.First(&ch, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -72,9 +69,6 @@ func (h *Handlers) GetChange(c *okapi.Context) error {
 	return ok(c, ch)
 }
 
-// ---- alert routes ----
-
-// AlertRouteRequest creates or updates an alert route.
 type AlertRouteRequest struct {
 	Body struct {
 		Name         string            `json:"name" required:"true"`
@@ -115,14 +109,12 @@ func (h *Handlers) applyRoute(r *models.AlertRoute, req *AlertRouteRequest) erro
 	return nil
 }
 
-// ListAlertRoutes lists alert routes.
 func (h *Handlers) ListAlertRoutes(c *okapi.Context) error {
 	var out []models.AlertRoute
 	h.DB.Where("organization_id = ?", middlewares.OrgID(c)).Order("name").Find(&out)
 	return ok(c, out)
 }
 
-// CreateAlertRoute adds a route and returns its secret webhook URL once.
 func (h *Handlers) CreateAlertRoute(c *okapi.Context, req *AlertRouteRequest) error {
 	token := crypto.NewToken("akr")
 	r := &models.AlertRoute{Base: models.Base{ID: models.NewID("alr"), OrganizationID: middlewares.OrgID(c)}, TokenHash: crypto.HashToken(token),
@@ -137,7 +129,6 @@ func (h *Handlers) CreateAlertRoute(c *okapi.Context, req *AlertRouteRequest) er
 	return created(c, AlertRouteCreated{Route: r, WebhookURL: h.Cfg.PublicURL + "/api/v1/webhooks/alerts/" + token})
 }
 
-// UpdateAlertRoute edits a route.
 func (h *Handlers) UpdateAlertRoute(c *okapi.Context, req *AlertRouteRequest) error {
 	var r models.AlertRoute
 	if err := h.DB.First(&r, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -166,7 +157,6 @@ func (h *Handlers) RotateAlertRoute(c *okapi.Context) error {
 	return ok(c, AlertRouteCreated{Route: &r, WebhookURL: h.Cfg.PublicURL + "/api/v1/webhooks/alerts/" + token})
 }
 
-// DeleteAlertRoute removes a route.
 func (h *Handlers) DeleteAlertRoute(c *okapi.Context) error {
 	res := h.DB.Where("id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Delete(&models.AlertRoute{})
 	if res.RowsAffected == 0 {
@@ -176,13 +166,11 @@ func (h *Handlers) DeleteAlertRoute(c *okapi.Context) error {
 	return message(c, "deleted")
 }
 
-// AlertWebhookResult says what happened to each alert.
 type AlertWebhookResult struct {
 	Created []string `json:"created"`
 	Skipped []string `json:"skipped"`
 }
 
-// AlertWebhook receives Alertmanager (or generic) alerts on a route's secret URL.
 func (h *Handlers) AlertWebhook(c *okapi.Context) error {
 	ctx := c.Request().Context()
 	if !auth.RateLimit(ctx, h.Bus.Redis(), "alerts:"+c.RealIP(), 120, time.Minute, false) {
@@ -276,9 +264,6 @@ func nonNilList(s []string) []string {
 	return s
 }
 
-// ---- terminals ----
-
-// ListTerminals lists recorded terminal sessions.
 func (h *Handlers) ListTerminals(c *okapi.Context) error {
 	q := h.DB.Omit("recording").Where("organization_id = ?", middlewares.OrgID(c))
 	if a := c.Query("agent_id"); a != "" {
@@ -301,7 +286,6 @@ func (h *Handlers) GetTerminal(c *okapi.Context) error {
 	return ok(c, t)
 }
 
-// TerminalRecording returns a session's asciinema v2 cast.
 func (h *Handlers) TerminalRecording(c *okapi.Context) error {
 	var t models.TerminalSession
 	if err := h.DB.First(&t, "id = ? AND organization_id = ?", c.Param("id"), middlewares.OrgID(c)).Error; err != nil {
@@ -314,14 +298,11 @@ func (h *Handlers) TerminalRecording(c *okapi.Context) error {
 // terminalIdle closes a terminal nobody has typed into or read from for this long.
 const terminalIdle = 15 * time.Minute
 
-// Terminal opens a recorded interactive terminal on an agent over a browser WebSocket. Browser
-// frames: {"type":"input","data":"..."} and {"type":"resize","cols":N,"rows":N}. Server frames:
-// binary messages are terminal output; text messages are {"type":"exit","code":N,"error":"..."}.
+// Terminal relays over WebSocket: binary messages are output; text messages are JSON input/resize (in) or exit (out).
 func (h *Handlers) Terminal(c *okapi.Context) error {
 	ctx := c.Request().Context()
 	org, userID := middlewares.OrgID(c), middlewares.UserID(c)
-	// A root shell is too powerful for an API key of any scope: the same-origin check only stops
-	// browsers, so require an interactive browser session.
+	// A root shell needs an interactive browser session: the same-origin check stops only browsers, not API keys.
 	if c.GetString(middlewares.CtxAuthMethod) != "session" {
 		return c.AbortForbidden("open a terminal from the web UI with a browser session")
 	}
@@ -373,7 +354,7 @@ func (h *Handlers) Terminal(c *okapi.Context) error {
 		default:
 		}
 	}
-	go func() { // agent → browser
+	go func() {
 		for f := range frames {
 			touch()
 			wmu.Lock()
@@ -390,7 +371,7 @@ func (h *Handlers) Terminal(c *okapi.Context) error {
 			}
 		}
 	}()
-	go func() { // idle timeout
+	go func() {
 		t := time.NewTimer(terminalIdle)
 		defer t.Stop()
 		for {
@@ -410,7 +391,7 @@ func (h *Handlers) Terminal(c *okapi.Context) error {
 		}
 	}()
 	ws.SetReadLimit(64 << 10)
-	for { // browser → agent
+	for {
 		_, msg, err := ws.ReadMessage()
 		if err != nil {
 			return nil

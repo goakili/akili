@@ -26,7 +26,7 @@ The security-first platform for orchestrating, governing, and safely automating 
 [![Go](https://img.shields.io/github/go-mod/go-version/goakili/akili?filename=server%2Fgo.mod)](https://go.dev/)
 [![Go Reference](https://pkg.go.dev/badge/github.com/goakili/akili/proto.svg)](https://pkg.go.dev/github.com/goakili/akili/proto)
 [![GitHub Release](https://img.shields.io/github/v/release/goakili/akili)](https://github.com/goakili/akili/releases)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSING.md)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/jkaninda/akili?style=flat-square)
 ![Docker Pulls](https://img.shields.io/docker/pulls/jkaninda/akili?style=flat-square)
 [![Deploy on Miabi](https://miabi.io/badge.svg?style=flat-square&label=deploy)](https://marketplace.miabi.io/templates/akili)
@@ -64,7 +64,6 @@ The platform ships as three parts:
 - **MCP servers**: tools from MCP servers, run on the control plane so agents never hold their credentials. [MCP](#mcp-servers)
 - **Hardened by default**: multiple replicas, encryption at rest with Vault Transit, OIDC SSO, SIEM streaming, agent mTLS and an organization-wide kill switch. [High availability and hardening](#high-availability-and-security-hardening)
 - **Lessons and notifications**: agents propose what they learned and an admin approves it; approvals and results reach you by sound and email. [Lessons](#lessons-what-agents-remember) · [Notifications](#notifications-dashboard-sounds-and-email)
-- **Community and Enterprise**: the complete Community edition is AGPL; Akili Enterprise adds teams, SAML/SCIM, approval governance and compliance features. [License](#license)
 
 ## Architecture
 
@@ -176,7 +175,7 @@ One repository, three Go modules and a `go.work`; run everything from the root:
 |---|---|
 | [`server`](server) | The control plane (`github.com/goakili/akili/server`) |
 | [`agent`](agent) | The agent (`github.com/goakili/akili/agent`) |
-| [`proto`](proto) | The wire contract (`github.com/goakili/akili/proto`), Apache-2.0 |
+| [`proto`](proto) | The wire contract (`github.com/goakili/akili/proto`) |
 | [`web`](web) | The Vue UI, built into `server/internal/web/dist` and embedded in the `akili` binary |
 | [`docker`](docker) | `Dockerfile` (control plane) and `Dockerfile.agent`, both built from the repository root |
 | [`scripts`](scripts) | The end-to-end suites and the load test |
@@ -453,7 +452,6 @@ Settings come from environment variables. On start the server also loads `./.env
 | `AKILI_GIT_NAME_TEMPLATE` | `Akili Agent` | commit name of agents without their own; `{agent_id}` and `{agent_name}` expand |
 | `AKILI_GIT_EMAIL_TEMPLATE` | `agent@goakili.dev` | commit email of agents without their own; `{agent_id}` and `{agent_name}` expand |
 | `AKILI_GIT_EMAIL_DOMAINS` | – | comma-separated domains allowed for per-agent commit emails; empty allows any |
-| `AKILI_LICENSE` / `_FILE` | – | Akili Enterprise license token, installed on start when none is stored |
 
 **Upgrading from 0.0.5 or earlier:** the default port moved from `8080` to `9000`, matching Miabi, Posta and Goma Admin. Agents and forge webhooks keep the URL they were given. If those URLs include `:8080` and you don't put the port behind a proxy, set `AKILI_PORT=8080` to keep the old port. For Helm, set `config.port` and `service.port` to `8080`. Otherwise, re-point each agent and webhook to `:9000`.
 
@@ -468,6 +466,6 @@ Settings come from environment variables. On start the server also loads `./.env
 
 ## License
 
-Akili is free software, published under the [GNU Affero General Public License v3.0 or later](LICENSE) (`AGPL-3.0-or-later`). The wire contract in [`proto`](proto) is under the [Apache License 2.0](proto/LICENSE), so other clients can implement it.
+Akili is free software, published under the [MIT License](LICENSE).
 
 Copyright © 2026 [Jonas Kaninda](https://jkaninda.dev/)

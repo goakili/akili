@@ -1,26 +1,7 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
-// Typed client for the Akili control-plane API (/api/v1). Models mirror the Go JSON tags in
-// server/internal/models, server/internal/handlers and proto/.
-
-// ---- shared scalars -------------------------------------------------------------------------------
+// Models mirror the Go JSON tags in server/internal/models, server/internal/handlers and proto/.
 
 export type ISODate = string
 export type Role = 'viewer' | 'operator' | 'admin' | 'owner'
@@ -48,8 +29,6 @@ export const AUTONOMY_LEVELS: { value: Autonomy; label: string; help: string }[]
   { value: 2, label: 'L2 · Auto medium', help: 'Runs low and medium-risk tools on its own.' },
   { value: 3, label: 'L3 · Auto high', help: 'Runs up to high-risk tools on its own.' },
 ]
-
-// ---- models ----------------------------------------------------------------------------------------
 
 interface Base {
   id: string
@@ -271,37 +250,6 @@ export interface Attachment {
   created_at: ISODate
 }
 
-// ---- edition and license ----------------------------------------------------------------------
-
-export interface LicenseFeature {
-  name: string
-  description: string
-  granted: boolean
-}
-
-export type LicenseState = 'valid' | 'grace' | 'degraded' | 'none' | 'binding_mismatch'
-
-export interface LicenseInfo {
-  edition: 'community' | 'enterprise'
-  state: LicenseState
-  customer?: string
-  license_id?: string
-  /** This deployment's Install ID; customers quote it to get a license bound to it. */
-  install_id: string
-  /** The Install ID the installed license is bound to, if any. */
-  license_install_id?: string
-  url?: string
-  /** False for a Community build or one without a license public key. */
-  licensable: boolean
-  binding_error?: string
-  flags: Record<string, boolean>
-  limits: Record<string, number>
-  not_after?: ISODate
-  grace_ends?: ISODate
-  features: LicenseFeature[]
-  agents_in_use: number
-}
-
 /** Accepted image types and limits; the control plane enforces the same. */
 export const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -398,7 +346,6 @@ export interface Task extends Base {
   schedule_id: string | null
   created_by: string
   cost_usd: number
-  // coding tasks
   project_id: string | null
   branch: string
   pr_number: number
@@ -684,7 +631,6 @@ export interface BusEvent<T = unknown> {
   ts: ISODate
 }
 
-// Payloads of specific events.
 export interface ToolRequestPayload {
   request_id: string
   tool_use_id: string
@@ -735,8 +681,6 @@ export interface UsagePayload {
   output_tokens: number
   cost_usd: number
 }
-
-// ---- operations -----------------------------------------------------------------------------------
 
 export type ChangeStatus = 'pending' | 'approved' | 'denied' | 'running' | 'succeeded' | 'failed' | 'rolled_back' | 'expired'
 export type ChangePhase = 'step' | 'verify' | 'rollback'
@@ -921,8 +865,6 @@ export interface MCPServerCreated {
   error?: string
 }
 
-// ---- chat channels and lessons ---------------------------------------------------------------------
-
 export type ChatKind = 'slack' | 'telegram' | 'signal'
 
 /** A chat bot connection (Slack, Telegram, Signal). Credentials are write-only. */
@@ -991,8 +933,6 @@ export interface Lesson {
   note: string
   created_at: ISODate
 }
-
-// ---- request bodies ------------------------------------------------------------------------------
 
 export interface AgentInput {
   name?: string
@@ -1198,8 +1138,6 @@ export interface UserInput {
   active?: boolean
 }
 
-// ---- transport -------------------------------------------------------------------------------------
-
 export const API_BASE = '/api/v1'
 
 export class ApiError extends Error {
@@ -1356,10 +1294,7 @@ function qs(params: Record<string, string | number | boolean | undefined | null>
 
 const enc = encodeURIComponent
 
-// ---- endpoints -------------------------------------------------------------------------------------
-
 export const api = {
-  // auth
   login: (email: string, password: string) =>
     post<LoginResponse>('/auth/login', { email, password }, { noAuthRedirect: true, quiet: true }),
   loginMFA: (mfa_token: string, code: string) =>
@@ -1380,7 +1315,6 @@ export const api = {
   disableTwoFactor: (code: string) => post<MessageResponse>('/auth/2fa/disable', { code }, { quiet: true }),
   regenerateRecoveryCodes: (code: string) => post<{ recovery_codes: string[] }>('/auth/2fa/recovery-codes', { code }, { quiet: true }),
 
-  // users & keys
   listUsers: () => get<User[] | null>('/users'),
   createUser: (b: UserInput) => post<User>('/users', b),
   updateUser: (id: string, b: UserInput) => patch<User>(`/users/${enc(id)}`, b),
@@ -1390,7 +1324,6 @@ export const api = {
   revokeAPIKey: (id: string) => del<MessageResponse>(`/api-keys/${enc(id)}`),
   vscodeAuthorize: (b: { challenge: string; state: string; client: string; editor: string; window: string }) => post<{ redirect: string }>('/auth/vscode/authorize', b),
 
-  // agents
   listAgents: (o?: RequestOptions) => get<Agent[] | null>('/agents', o),
   getAgent: (id: string) => get<Agent>(`/agents/${enc(id)}`),
   createAgent: (b: AgentInput) => post<Enrollment>('/agents', b),
@@ -1400,7 +1333,6 @@ export const api = {
   drainAgent: (id: string, draining: boolean) => post<MessageResponse>(`/agents/${enc(id)}/drain`, { draining }),
   deleteAgent: (id: string) => del<MessageResponse>(`/agents/${enc(id)}`),
 
-  // sessions
   listSessions: (p: SessionQuery = {}) => get<ChatSession[] | null>('/sessions' + qs(p)),
   pageSessions: (p: SessionQuery = {}, o?: RequestOptions) => getPage<ChatSession>('/sessions' + qs(p), o),
   createSession: (agent_id: string, title = '', project_id = '') =>
@@ -1414,7 +1346,6 @@ export const api = {
   closeSession: (id: string) => post<MessageResponse>(`/sessions/${enc(id)}/close`),
   eventsStreamURL: (session?: string | null) => `${API_BASE}/events/stream${session ? `?session=${enc(session)}` : ''}`,
 
-  // approvals
   listApprovals: (p: { status?: string } & PageQuery = {}, o?: RequestOptions) => get<Approval[] | null>('/approvals' + qs(p), o),
   pageApprovals: (p: { status?: string } & PageQuery = {}, o?: RequestOptions) => getPage<Approval>('/approvals' + qs(p), o),
   pageQuestions: (p: { status?: QuestionStatus; task_id?: string; session_id?: string } & PageQuery = {}, o?: RequestOptions) =>
@@ -1423,7 +1354,6 @@ export const api = {
   approve: (id: string, note = '') => post<Approval>(`/approvals/${enc(id)}/approve`, { note }),
   deny: (id: string, note = '') => post<Approval>(`/approvals/${enc(id)}/deny`, { note }),
 
-  // tasks
   listTasks: (p: TaskQuery = {}, o?: RequestOptions) => get<Task[] | null>('/tasks' + qs(p), o),
   pageTasks: (p: TaskQuery = {}, o?: RequestOptions) => getPage<Task>('/tasks' + qs(p), o),
   createTask: (b: TaskInput) => post<Task>('/tasks', b),
@@ -1444,7 +1374,6 @@ export const api = {
   updatePlanPhase: (planId: string, phaseId: string, b: { status: PhaseStatus; note?: string }) => patch<PlanPhase>(`/plans/${enc(planId)}/phases/${enc(phaseId)}`, b),
   taskDiff: (id: string, o?: RequestOptions) => getText(`/tasks/${enc(id)}/diff`, o),
 
-  // integrations (admin): git forges and Miabi
   listIntegrations: (o?: RequestOptions) => get<Integration[] | null>('/integrations', o),
   createIntegration: (b: IntegrationInput) => post<Integration>('/integrations', b),
   updateIntegration: (id: string, b: IntegrationInput) => put<Integration>(`/integrations/${enc(id)}`, b),
@@ -1456,7 +1385,6 @@ export const api = {
   updateMiabiWorkspace: (id: string, wsId: string, enabled: boolean, o?: RequestOptions) =>
     put<MiabiWorkspace>(`/integrations/${enc(id)}/miabi-workspaces/${enc(wsId)}`, { enabled }, o),
 
-  // projects
   listProjects: (o?: RequestOptions) => get<Project[] | null>('/projects', o),
   getProject: (id: string, o?: RequestOptions) => get<Project>(`/projects/${enc(id)}`, o),
   createProject: (b: ProjectInput, o?: RequestOptions) => post<ProjectCreated>('/projects', b, o),
@@ -1465,21 +1393,18 @@ export const api = {
   addMaintenance: (id: string, b: PresetInput) => post<Schedule>(`/projects/${enc(id)}/maintenance`, b),
   projectTemplates: (o?: RequestOptions) => get<ProjectTemplates>('/project-templates', o),
 
-  // schedules
   listSchedules: () => get<Schedule[] | null>('/schedules'),
   createSchedule: (b: ScheduleInput) => post<Schedule>('/schedules', b),
   updateSchedule: (id: string, b: ScheduleInput) => put<Schedule>(`/schedules/${enc(id)}`, b),
   deleteSchedule: (id: string) => del<MessageResponse>(`/schedules/${enc(id)}`),
   runSchedule: (id: string) => post<Task>(`/schedules/${enc(id)}/run`),
 
-  // skills
   listSkills: () => get<Skill[] | null>('/skills'),
   getSkill: (id: string) => get<Skill>(`/skills/${enc(id)}`),
   createSkill: (b: { name: string; description: string; content: string }) => post<Skill>('/skills', b),
   updateSkill: (id: string, b: { name: string; description: string; content: string }) => put<Skill>(`/skills/${enc(id)}`, b),
   deleteSkill: (id: string) => del<MessageResponse>(`/skills/${enc(id)}`),
 
-  // policies
   listPolicies: () => get<Policy[] | null>('/policies'),
   getPolicy: (id: string) => get<Policy>(`/policies/${enc(id)}`),
   createPolicy: (b: PolicyInput) => post<Policy>('/policies', b),
@@ -1489,7 +1414,6 @@ export const api = {
     post<Decision>(`/policies/${enc(id)}/simulate`, b),
   listTools: (o?: RequestOptions) => get<ToolSpec[] | null>('/tools', o),
 
-  // providers (admin)
   listProviders: (o?: RequestOptions) => get<ModelProvider[] | null>('/providers', o),
   getProvider: (id: string, o?: RequestOptions) => get<ProviderDetail>(`/providers/${enc(id)}`, o),
   createProvider: (b: ProviderInput) => post<ModelProvider>('/providers', b),
@@ -1497,7 +1421,6 @@ export const api = {
   deleteProvider: (id: string) => del<MessageResponse>(`/providers/${enc(id)}`),
   testProvider: (id: string) => post<TestResult>(`/providers/${enc(id)}/test`),
 
-  // operations: change plans, alert routes, terminals
   listChanges: (p: ChangeQuery = {}, o?: RequestOptions) => get<Change[] | null>('/changes' + qs(p), o),
   pageChanges: (p: ChangeQuery = {}, o?: RequestOptions) => getPage<Change>('/changes' + qs(p), o),
   getChange: (id: string, o?: RequestOptions) => get<Change>(`/changes/${enc(id)}`, o),
@@ -1519,11 +1442,7 @@ export const api = {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
     return `${proto}//${location.host}${API_BASE}/agents/${enc(agentId)}/terminal${qs({ cols, rows })}`
   },
-  /**
-   * Explains a terminal refusal: browsers hide a failed WebSocket handshake's status, so ask the same
-   * URL over plain HTTP. The server checks the agent and its policy before upgrading (409 offline,
-   * 403 not allowed) and answers 400 to a non-WebSocket request that passed, so nothing opens.
-   */
+  /** Browsers hide a failed WebSocket handshake's status, so this asks the same URL over plain HTTP. */
   terminalPreflight: async (agentId: string): Promise<number> => {
     try {
       const r = await fetch(`${API_BASE}/agents/${enc(agentId)}/terminal`, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
@@ -1533,7 +1452,6 @@ export const api = {
     }
   },
 
-  // MCP gateway (admin)
   listMCPServers: (o?: RequestOptions) => get<MCPServer[] | null>('/mcp-servers', o),
   createMCPServer: (b: MCPServerInput, o?: RequestOptions) => post<MCPServerCreated>('/mcp-servers', b, o),
   updateMCPServer: (id: string, b: MCPServerInput, o?: RequestOptions) => put<MCPServer>(`/mcp-servers/${enc(id)}`, b, o),
@@ -1543,7 +1461,6 @@ export const api = {
   updateMCPTool: (id: string, toolId: string, b: { enabled: boolean; risk: '' | Risk }, o?: RequestOptions) =>
     put<MCPTool>(`/mcp-servers/${enc(id)}/tools/${enc(toolId)}`, b, o),
 
-  // chat channels (admin writes) and linked chat accounts
   listChatChannels: (o?: RequestOptions) => get<ChatChannel[] | null>('/chat/channels', o),
   createChatChannel: (b: ChatChannelInput) => post<ChatChannel>('/chat/channels', b),
   updateChatChannel: (id: string, b: ChatChannelInput) => put<ChatChannel>(`/chat/channels/${enc(id)}`, b),
@@ -1553,14 +1470,12 @@ export const api = {
   listChatIdentities: (o?: RequestOptions) => get<ChatIdentity[] | null>('/chat/identities', o),
   deleteChatIdentity: (id: string) => del<MessageResponse>(`/chat/identities/${enc(id)}`),
 
-  // lessons
   pageLessons: (p: { status?: LessonStatus; agent_id?: string } & PageQuery = {}, o?: RequestOptions) => getPage<Lesson>('/lessons' + qs(p), o),
   createLesson: (b: { text: string; agent_id?: string }) => post<Lesson>('/lessons', b),
   approveLesson: (id: string, b: { text: string; note: string }) => post<Lesson>(`/lessons/${enc(id)}/approve`, b),
   rejectLesson: (id: string, note = '') => post<Lesson>(`/lessons/${enc(id)}/reject`, { note }),
   deleteLesson: (id: string) => del<MessageResponse>(`/lessons/${enc(id)}`),
 
-  // system
   overview: (o?: RequestOptions) => get<Overview>('/overview', o),
   usage: (days = 30) => get<UsageRow[] | null>('/usage' + qs({ days })),
   pageAudit: (p: { action?: string; actor_id?: string; target_id?: string } & PageQuery, o?: RequestOptions) => getPage<AuditLog>('/audit' + qs(p), o),
@@ -1569,7 +1484,4 @@ export const api = {
   getSandboxSettings: () => get<{ root: boolean }>('/system/sandbox'),
   setSandboxSettings: (b: { root: boolean }) => put<{ root: boolean }>('/system/sandbox', b),
   setKillSwitch: (enabled: boolean) => post<{ enabled: boolean }>('/system/kill-switch', { enabled }),
-  getLicense: (o?: RequestOptions) => get<LicenseInfo>('/license', o),
-  installLicense: (token: string) => put<LicenseInfo>('/license', { token }),
-  removeLicense: () => del<LicenseInfo>('/license'),
 }

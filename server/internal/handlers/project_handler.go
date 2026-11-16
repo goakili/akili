@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -36,8 +37,6 @@ import (
 	"github.com/jkaninda/okapi"
 	"gorm.io/gorm"
 )
-
-// ---- integrations ----
 
 // IntegrationRequest creates or updates a forge integration. Secrets are write-only.
 type IntegrationRequest struct {
@@ -67,7 +66,6 @@ func (r *IntegrationRequest) input() coder.IntegrationInput {
 		Sender: b.Sender}
 }
 
-// IntegrationView adds the webhook URL to an integration.
 type IntegrationView struct {
 	models.Integration
 	WebhookURL string `json:"webhook_url"`
@@ -81,7 +79,6 @@ func (h *Handlers) integrationView(it models.Integration) IntegrationView {
 	return IntegrationView{Integration: it, WebhookURL: h.Cfg.PublicURL + path + it.ID}
 }
 
-// ListIntegrations lists forge integrations.
 func (h *Handlers) ListIntegrations(c *okapi.Context) error {
 	var list []models.Integration
 	h.DB.Where("organization_id = ?", middlewares.OrgID(c)).Order("name").Find(&list)
@@ -92,7 +89,6 @@ func (h *Handlers) ListIntegrations(c *okapi.Context) error {
 	return ok(c, out)
 }
 
-// CreateIntegration adds a forge integration.
 func (h *Handlers) CreateIntegration(c *okapi.Context, req *IntegrationRequest) error {
 	it := &models.Integration{Base: models.Base{ID: models.NewID("int"), OrganizationID: middlewares.OrgID(c)}, CreatedBy: middlewares.UserID(c)}
 	if err := h.Coder.SaveIntegration(c.Request().Context(), it, req.input()); err != nil {
@@ -163,7 +159,6 @@ func (h *Handlers) DeleteIntegration(c *okapi.Context) error {
 	return message(c, "deleted")
 }
 
-// TestIntegration checks an integration's credentials.
 func (h *Handlers) TestIntegration(c *okapi.Context) error {
 	start := time.Now()
 	var it models.Integration
@@ -190,9 +185,6 @@ func (h *Handlers) TestIntegration(c *okapi.Context) error {
 	return ok(c, out)
 }
 
-// ---- projects ----
-
-// ProjectRequest creates or updates a project.
 type ProjectRequest struct {
 	Body struct {
 		Name          string   `json:"name"`
@@ -219,20 +211,17 @@ func (r *ProjectRequest) input() coder.ProjectInput {
 		TriggerLabel: b.TriggerLabel, CreateRepo: b.CreateRepo, Private: b.Private}
 }
 
-// ProjectCreated returns the project and the scaffold task, if one was queued.
 type ProjectCreated struct {
 	Project *models.Project `json:"project"`
 	Task    *models.Task    `json:"task,omitempty"`
 }
 
-// ListProjects lists projects.
 func (h *Handlers) ListProjects(c *okapi.Context) error {
 	var out []models.Project
 	h.DB.Where("organization_id = ?", middlewares.OrgID(c)).Order("name").Find(&out)
 	return ok(c, out)
 }
 
-// GetProject returns a project.
 func (h *Handlers) GetProject(c *okapi.Context) error {
 	p, err := h.Coder.Project(c.Request().Context(), middlewares.OrgID(c), c.Param("id"))
 	if err != nil {
@@ -278,7 +267,6 @@ func (h *Handlers) CreateProject(c *okapi.Context, req *ProjectRequest) error {
 	return created(c, out)
 }
 
-// UpdateProject edits a project.
 func (h *Handlers) UpdateProject(c *okapi.Context, req *ProjectRequest) error {
 	p, err := h.Coder.UpdateProject(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), c.Param("id"), req.input())
 	if err != nil {
@@ -297,18 +285,15 @@ func (h *Handlers) DeleteProject(c *okapi.Context) error {
 	return message(c, "deleted")
 }
 
-// ProjectTemplates lists templates and maintenance presets.
 type ProjectTemplates struct {
 	Templates []coder.Template `json:"templates"`
 	Presets   []coder.Preset   `json:"presets"`
 }
 
-// ListProjectTemplates returns built-in templates and maintenance presets.
 func (h *Handlers) ListProjectTemplates(c *okapi.Context) error {
 	return ok(c, ProjectTemplates{Templates: coder.Templates, Presets: coder.Presets})
 }
 
-// PresetRequest schedules a maintenance preset on a project.
 type PresetRequest struct {
 	Body struct {
 		Preset   string `json:"preset" required:"true"`
@@ -318,7 +303,6 @@ type PresetRequest struct {
 	} `json:"body"`
 }
 
-// AddMaintenance creates a schedule from a maintenance preset.
 func (h *Handlers) AddMaintenance(c *okapi.Context, req *PresetRequest) error {
 	p, err := h.Coder.Project(c.Request().Context(), middlewares.OrgID(c), c.Param("id"))
 	if err != nil {
@@ -352,7 +336,6 @@ func (h *Handlers) AddMaintenance(c *okapi.Context, req *PresetRequest) error {
 	return h.CreateSchedule(c, sreq)
 }
 
-// TaskDiff returns the pull request diff of a coding task.
 func (h *Handlers) TaskDiff(c *okapi.Context) error {
 	t, err := h.Tasks.Get(c.Request().Context(), middlewares.OrgID(c), c.Param("id"))
 	if err != nil {

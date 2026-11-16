@@ -1,25 +1,9 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { defineComponent, h, type PropType } from 'vue'
 
-// Static stroke icons (24x24 viewBox, Lucide-style). Paths are constants, never user data.
+// Paths are constants, never user data.
 const PATHS = {
   overview: ['M3 13h8V3H3z', 'M13 21h8V11h-8z', 'M3 21h8v-6H3z', 'M13 3v6h8V3z'],
   agents: ['M4 5h16v10H4z', 'M8 19h8', 'M12 15v4', 'M8 9h.01', 'M12 9h4'],
@@ -96,7 +80,6 @@ const PATHS = {
   gauge: ['M12 14l4-4', 'M3.3 19a10 10 0 1 1 17.4 0'],
   eye: ['M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
   moreH: ['M12 12h.01', 'M19 12h.01', 'M5 12h.01'],
-  // coding
   repo: ['M9 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.7.9l.8 1.2a2 2 0 0 0 1.7.9H20a2 2 0 0 1 2 2v4', 'M18 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4z', 'M18 17v4', 'M18 13v-2'],
   gitBranch: ['M6 3v12', 'M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M18 9a9 9 0 0 1-9 9'],
   gitCommit: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M3 12h6', 'M15 12h6'],
@@ -111,7 +94,6 @@ const PATHS = {
   tag: ['M12 2H2v10l9.3 9.3a1 1 0 0 0 1.4 0l7.3-7.3a1 1 0 0 0 0-1.4z', 'M7 7h.01'],
   link: ['M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7', 'M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'],
   wrap: ['M3 6h18', 'M3 12h15a3 3 0 1 1 0 6h-4', 'M16 16l-2 2 2 2', 'M3 18h7'],
-  // operations
   hardDrive: ['M22 12H2', 'M5.5 5.1L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z', 'M6 16h.01', 'M10 16h.01'],
   package: ['M16.5 9.4L7.5 4.2', 'M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7z', 'M3.3 7L12 12l8.7-5', 'M12 22V12'],
   undo: ['M3 7v6h6', 'M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13'],

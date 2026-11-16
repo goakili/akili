@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -25,7 +26,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// ListPlans lists a project's plans with their progress.
 func (h *Handlers) ListPlans(c *okapi.Context) error {
 	ctx := c.Request().Context()
 	if _, err := h.Coder.Project(ctx, middlewares.OrgID(c), c.Param("id")); err != nil {
@@ -38,12 +38,10 @@ func (h *Handlers) ListPlans(c *okapi.Context) error {
 	return ok(c, out)
 }
 
-// PlanRequest creates a plan.
 type PlanRequest struct {
 	Body plans.CreateInput `json:"body"`
 }
 
-// CreatePlan adds a plan to a project.
 func (h *Handlers) CreatePlan(c *okapi.Context, req *PlanRequest) error {
 	d, err := h.Plans.Create(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), c.Param("id"), req.Body)
 	if err != nil {
@@ -53,7 +51,6 @@ func (h *Handlers) CreatePlan(c *okapi.Context, req *PlanRequest) error {
 	return created(c, d)
 }
 
-// GetPlan returns a plan with its phases and linked tasks.
 func (h *Handlers) GetPlan(c *okapi.Context) error {
 	d, err := h.Plans.Get(c.Request().Context(), middlewares.OrgID(c), c.Param("id"))
 	if err != nil {
@@ -67,7 +64,6 @@ type PlanUpdateRequest struct {
 	Body plans.UpdateInput `json:"body"`
 }
 
-// UpdatePlan changes a plan's title, description, status or position.
 func (h *Handlers) UpdatePlan(c *okapi.Context, req *PlanUpdateRequest) error {
 	p, err := h.Plans.Update(c.Request().Context(), middlewares.OrgID(c), c.Param("id"), req.Body)
 	if err != nil {
@@ -77,7 +73,6 @@ func (h *Handlers) UpdatePlan(c *okapi.Context, req *PlanUpdateRequest) error {
 	return ok(c, p)
 }
 
-// DeletePlan removes a plan.
 func (h *Handlers) DeletePlan(c *okapi.Context) error {
 	if err := h.Plans.Delete(c.Request().Context(), middlewares.OrgID(c), c.Param("id")); err != nil {
 		return mapErr(c, err)
@@ -86,7 +81,6 @@ func (h *Handlers) DeletePlan(c *okapi.Context) error {
 	return message(c, "plan deleted")
 }
 
-// PlanPhasesRequest replaces a plan's phase list.
 type PlanPhasesRequest struct {
 	Body struct {
 		Phases []plans.PhaseInput `json:"phases" maxItems:"100"`
@@ -103,7 +97,6 @@ func (h *Handlers) ReplacePlanPhases(c *okapi.Context, req *PlanPhasesRequest) e
 	return ok(c, d)
 }
 
-// PlanPhaseRequest changes one phase.
 type PlanPhaseRequest struct {
 	Body struct {
 		Status string `json:"status" required:"true" description:"todo, in_progress, done or skipped"`
@@ -111,7 +104,6 @@ type PlanPhaseRequest struct {
 	} `json:"body"`
 }
 
-// UpdatePlanPhase sets a phase's status and note.
 func (h *Handlers) UpdatePlanPhase(c *okapi.Context, req *PlanPhaseRequest) error {
 	st, err := h.Plans.SetPhase(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), c.Param("id"), c.Param("phase"), req.Body.Status, req.Body.Note)
 	if err != nil {

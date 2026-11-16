@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package mcp
 
@@ -44,13 +45,11 @@ import (
 // MaxOutput bounds what one MCP call returns to the model.
 const MaxOutput = 64 << 10
 
-// CallTimeout bounds one tool call.
 var CallTimeout = 5 * time.Minute
 
 // NameRE is an MCP server's name: it becomes part of tool names.
 var NameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)
 
-// Service manages MCP servers and runs their tools.
 type Service struct {
 	db       *gorm.DB
 	box      *crypto.Box
@@ -68,8 +67,7 @@ type cached struct {
 	c   *Client
 }
 
-// New returns the service. commands is the allowlist of executables for stdio servers, looked up
-// in binDir (if set) before PATH.
+// New looks up the allowlisted stdio commands in binDir (if set) before PATH.
 func New(db *gorm.DB, box *crypto.Box, a *audit.Logger, commands []string, binDir string) *Service {
 	dir := filepath.Join(os.TempDir(), "akili-mcp")
 	_ = os.MkdirAll(dir, 0o700)
@@ -87,8 +85,7 @@ func (s *Service) CheckCommand(command string) error {
 	return nil
 }
 
-// resolveCommand finds a stdio command in binDir, then PATH. A binDir binary the server could
-// rewrite is refused: it runs with integration keys, so a compromised server could swap it.
+// resolveCommand refuses a binDir binary the server could rewrite: it runs with integration keys.
 func (s *Service) resolveCommand(command string) (string, error) {
 	if s.binDir != "" && !strings.ContainsRune(command, filepath.Separator) {
 		p := filepath.Join(s.binDir, command)
@@ -141,7 +138,6 @@ func (s *Service) SealEnv(env map[string]string) (string, []string, error) {
 	return enc, keys, err
 }
 
-// connect returns a live client for a server, starting it if needed.
 func (s *Service) connect(ctx context.Context, srv *models.MCPServer) (*Client, error) {
 	key := srv.ID + srv.UpdatedAt.String()
 	if srv.IntegrationID != nil {
@@ -210,8 +206,7 @@ func (s *Service) connect(ctx context.Context, srv *models.MCPServer) (*Client, 
 	return c, nil
 }
 
-// miabiEnv points `miabi mcp` at a Miabi integration: its URL and key, and a private config file so
-// the CLI never reads someone's ~/.miabi.
+// miabiEnv gives `miabi mcp` a private config file so the CLI never reads someone's ~/.miabi.
 func (s *Service) miabiEnv(ctx context.Context, srv *models.MCPServer, env map[string]string, home string) error {
 	var it models.Integration
 	if err := s.db.WithContext(ctx).First(&it, "id = ? AND organization_id = ? AND kind = ?", *srv.IntegrationID, srv.OrganizationID, models.KindMiabi).Error; err != nil {
@@ -242,8 +237,7 @@ func (s *Service) drop(id string) {
 	}
 }
 
-// Sync lists a server's tools and records them. New read-only tools start enabled at low risk; the
-// rest stay disabled until an admin enables them and sets a risk.
+// Sync enables new read-only tools at low risk; the rest stay disabled until an admin enables them and sets a risk.
 func (s *Service) Sync(ctx context.Context, srv *models.MCPServer) ([]models.MCPTool, error) {
 	c, err := s.connect(ctx, srv)
 	if err == nil {
@@ -310,8 +304,7 @@ func (s *Service) store(ctx context.Context, srv *models.MCPServer, tools []Tool
 	return nil
 }
 
-// Refresh publishes the enabled tools of every enabled server to the tool registry, so policy
-// checks and sessions see them. Every replica runs it.
+// Refresh publishes enabled tools to the tool registry; every replica runs it.
 func (s *Service) Refresh(ctx context.Context) {
 	var servers []models.MCPServer
 	s.db.WithContext(ctx).Find(&servers)
@@ -372,7 +365,6 @@ func (s *Service) RunRefresh(ctx context.Context) {
 	}
 }
 
-// RunRemote executes an MCP tool for a session (a remote tool runner).
 func (s *Service) RunRemote(ctx context.Context, sess *models.ChatSession, tool string, input json.RawMessage) proto.RemoteResult {
 	rest, ok := strings.CutPrefix(tool, "mcp__")
 	server, name, ok2 := strings.Cut(rest, "__")

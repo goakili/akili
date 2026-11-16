@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package llm
 
@@ -31,25 +32,7 @@ import (
 	"github.com/goakili/akili/proto"
 )
 
-// Fake is a deterministic scripted provider for development and end-to-end tests. Each line of the
-// latest user message can be a directive; they run one tool per turn, in order:
-//
-//	run: <command>             → shell
-//	read: <path>               → fs_read
-//	list: <path>               → fs_list
-//	write: <path> :: <content> → fs_write (content until the end of the line; \n for newlines)
-//	host                       → host_info
-//	status | diff | push       → git_status | git_diff | git_push
-//	commit: <message>          → git_commit
-//	sandbox: <command>         → sandbox_exec
-//	pr: <title>                → pr_open
-//	checks                     → pr_status
-//	tool: <name> <json input>  → any tool
-//	change: <json plan>        → change_run
-//	system-has: <text>         → replies "system-has: yes" or "no" (whether the system prompt contains it)
-//	images?                    → replies with the type and size of each image it received
-//
-// When every directive has run it summarises the last tool result; text without directives is echoed.
+// Fake is a scripted provider for tests: each line of the latest user message can be a directive (run:, read:, tool:, ...), one tool per turn.
 type Fake struct {
 	// Delay between streamed words, to make streaming visible in the UI.
 	Delay time.Duration
@@ -114,15 +97,13 @@ func parseDirective(line string) (directive, bool) {
 	return directive{}, false
 }
 
-// Stream implements Provider.
 func (f *Fake) Stream(ctx context.Context, req Request, onDelta DeltaFunc) (Result, error) {
 	if len(req.Messages) == 0 {
 		return Result{}, fmt.Errorf("fake: no messages")
 	}
 	usage := Usage{InputTokens: 10 * len(req.Messages), OutputTokens: 20}
 
-	// The instruction is the latest user message with text; count the tools run since. A resumed
-	// task continues the script it was running.
+	// Count the tools run since the latest user text, so a resumed task continues its script.
 	start := -1
 	for i := len(req.Messages) - 1; i >= 0; i-- {
 		if m := req.Messages[i]; m.Role == proto.RoleUser && strings.TrimSpace(m.Text()) != "" && m.Text() != proto.ResumeGoal {
@@ -219,8 +200,7 @@ func hasTool(tools []proto.ToolDef, name string) bool {
 	return false
 }
 
-// describeImages answers "images?" with the images the provider received, so tests can check that the
-// gateway resolved them.
+// describeImages answers "images?" so tests can check that the gateway resolved the images.
 func describeImages(m proto.Message) string {
 	var seen []string
 	for _, b := range m.Content {

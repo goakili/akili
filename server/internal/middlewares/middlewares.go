@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package middlewares authenticates operators (session JWT or API key) and enforces roles and
-// API-key scopes.
+// Package middlewares authenticates operators (session JWT or API key) and enforces roles and API-key scopes.
 package middlewares
 
 import (
@@ -35,7 +35,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Context keys.
 const (
 	CtxUserID     = "akili_user_id"
 	CtxOrgID      = "akili_org_id"
@@ -46,18 +45,15 @@ const (
 	CtxExp        = "akili_exp"
 )
 
-// SessionCookie holds the browser session JWT. HttpOnly keeps it from scripts; SameSite=Strict keeps
-// it off cross-site requests (CSRF).
+// SessionCookie is HttpOnly (no script access) and SameSite=Strict (CSRF).
 const SessionCookie = "akili_session"
 
-// Authenticator builds the auth middleware.
 type Authenticator struct {
 	db   *gorm.DB
 	auth *auth.Service
 	jwt  okapi.JWTAuth
 }
 
-// NewAuthenticator returns the authenticator.
 func NewAuthenticator(db *gorm.DB, a *auth.Service) *Authenticator {
 	au := &Authenticator{db: db, auth: a}
 	au.jwt = okapi.JWTAuth{
@@ -74,8 +70,7 @@ func NewAuthenticator(db *gorm.DB, a *auth.Service) *Authenticator {
 	return au
 }
 
-// validateClaims re-reads the user on every request, so a role change or deactivation applies
-// immediately rather than when the token expires.
+// validateClaims re-reads the user on every request, so a role change or deactivation applies immediately.
 func (au *Authenticator) validateClaims(c *okapi.Context, claims jwt.Claims) error {
 	mc, ok := claims.(jwt.MapClaims)
 	if !ok {
@@ -117,9 +112,7 @@ func (au *Authenticator) Authenticate(c *okapi.Context) error {
 		c.Set(CtxRole, u.Role)
 		c.Set(CtxAuthMethod, "api_key")
 		c.Set(CtxScopes, strings.Join(key.Scopes, ","))
-		// Scope from the method: reads need "read", anything that changes state needs "write".
-		// A WebSocket upgrade is a GET but opens a live channel (an interactive root terminal, say),
-		// so it must not ride on a read-only key.
+		// Reads need "read", anything else "write"; a WebSocket upgrade is a GET but opens a live channel, so it needs "write".
 		need := models.ScopeWrite
 		if m := c.Request().Method; (m == http.MethodGet || m == http.MethodHead) && !isWebSocketUpgrade(c.Request()) {
 			need = models.ScopeRead
@@ -132,7 +125,6 @@ func (au *Authenticator) Authenticate(c *okapi.Context) error {
 	return au.jwt.Middleware(c)
 }
 
-// isWebSocketUpgrade reports whether the request asks to switch to the WebSocket protocol.
 func isWebSocketUpgrade(r *http.Request) bool {
 	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		return false
@@ -145,7 +137,6 @@ func isWebSocketUpgrade(r *http.Request) bool {
 	return false
 }
 
-// RequireRole allows the request only for users at or above min.
 func RequireRole(min string) okapi.Middleware {
 	return func(c *okapi.Context) error {
 		if models.RoleRank(c.GetString(CtxRole)) < models.RoleRank(min) {
@@ -155,13 +146,10 @@ func RequireRole(min string) okapi.Middleware {
 	}
 }
 
-// UserID returns the authenticated user.
 func UserID(c *okapi.Context) string { return c.GetString(CtxUserID) }
 
-// OrgID returns the authenticated user's organization.
 func OrgID(c *okapi.Context) string { return c.GetString(CtxOrgID) }
 
-// Role returns the authenticated user's role.
 func Role(c *okapi.Context) string { return c.GetString(CtxRole) }
 
 // SessionToken returns the current session's jti and expiry (session auth only).
@@ -170,7 +158,6 @@ func SessionToken(c *okapi.Context) (string, time.Time) {
 	return c.GetString(CtxJTI), exp
 }
 
-// SetSessionCookie writes the session cookie.
 func SetSessionCookie(c *okapi.Context, token string, maxAge int, secure bool) {
 	http.SetCookie(c.ResponseWriter(), &http.Cookie{Name: SessionCookie, Value: token, Path: "/", MaxAge: maxAge,
 		HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode})

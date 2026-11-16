@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package chat
 
@@ -29,19 +30,16 @@ import (
 	"strings"
 )
 
-// Signal talks to a signal-cli REST API server (github.com/bbernhard/signal-cli-rest-api) that holds
-// the bot's registered number. Signal has no buttons: approvals use /approve and /deny.
+// Signal talks to a signal-cli REST API server; Signal has no buttons, so approvals use /approve and /deny.
 type Signal struct {
 	base    string
 	account string // the bot's number, e.g. +15550001111
 }
 
-// NewSignal returns a client.
 func NewSignal(base, account string) *Signal {
 	return &Signal{base: strings.TrimRight(base, "/"), account: account}
 }
 
-// Test implements Platform.
 func (s *Signal) Test(ctx context.Context) (string, error) {
 	if s.base == "" || s.account == "" {
 		return "", errors.New("signal needs the REST server URL and the account number")
@@ -74,7 +72,7 @@ type signalEnvelope struct {
 	} `json:"envelope"`
 }
 
-// Poll implements Poller. signal-cli hands each message out once, so there is no cursor.
+// Poll implements Poller; signal-cli hands each message out once, so there is no cursor.
 func (s *Signal) Poll(ctx context.Context, cursor int64) ([]Incoming, int64, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.base+"/v1/receive/"+url.PathEscape(s.account)+"?timeout=10", nil)
 	if err != nil {
@@ -114,7 +112,7 @@ func (s *Signal) Poll(ctx context.Context, cursor int64) ([]Incoming, int64, err
 	return out, cursor, nil
 }
 
-// Send implements Platform. Buttons become text commands.
+// Send implements Platform; buttons become text commands.
 func (s *Signal) Send(ctx context.Context, chatID string, msg Outgoing) error {
 	text := msg.Text
 	if len(msg.Buttons) > 0 {

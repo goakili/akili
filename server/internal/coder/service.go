@@ -1,25 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package coder is the control-plane side of coding work: forge integrations, projects, the git
-// proxy agents clone and push through, and the server-side tools that open and inspect pull
-// requests. Forge credentials stay here; agents never see them.
+// Package coder is the control-plane side of coding work; forge credentials never leave it.
 package coder
 
 import (
@@ -45,7 +44,6 @@ import (
 
 type forgeClient = forge.Forge
 
-// Service is the coder service.
 type Service struct {
 	db      *gorm.DB
 	box     *crypto.Box
@@ -64,18 +62,14 @@ type cachedForge struct {
 	f       forge.Forge
 }
 
-// New returns the coder service.
 func New(db *gorm.DB, box *crypto.Box, a *audit.Logger, git gitid.Config) *Service {
 	return &Service{db: db, box: box, audit: a, gitHTTP: &http.Client{Timeout: gitClientTimeout}, git: git, forges: map[string]cachedForge{}}
 }
 
-// Errors.
 var (
 	ErrNotFound  = errors.New("not found")
 	ErrNoProject = errors.New("this session is not bound to a project")
 )
-
-// ---- integrations ----
 
 // IntegrationInput creates or updates an integration. Empty secrets on update keep the old ones.
 type IntegrationInput struct {
@@ -99,12 +93,10 @@ type IntegrationInput struct {
 // hasDefault reports whether a kind has a default integration (used when a call names none).
 func hasDefault(kind string) bool { return kind == models.KindMiabi || kind == models.KindPosta }
 
-// SaveIntegration validates, encrypts secrets and stores an integration.
 func (s *Service) SaveIntegration(ctx context.Context, it *models.Integration, in IntegrationInput) error {
 	switch in.Kind {
 	case models.KindMiabi:
-		// The workspace is optional: an account-wide key reaches every workspace of its user; the
-		// workspaces are discovered and enabled one by one.
+		// The workspace is optional: an account-wide key reaches every workspace of its user.
 		if in.BaseURL == "" {
 			return errors.New("a Miabi integration needs base_url")
 		}
@@ -254,8 +246,7 @@ func validSender(s string) error {
 	return nil
 }
 
-// ErrNotMiabi refuses a default on a forge integration: only Miabi tool calls and Posta email pick
-// one implicitly.
+// ErrNotMiabi refuses a default on a forge integration: only Miabi and Posta pick one implicitly.
 var ErrNotMiabi = errors.New("only a Miabi or Posta integration can be the default")
 
 // SetDefault makes a Miabi or Posta integration the one used when none is named.
@@ -330,8 +321,7 @@ func (s *Service) integration(ctx context.Context, org, id string) (*models.Inte
 	return &it, nil
 }
 
-// TestIntegration checks an integration's credentials. For GitLab it also records the token's kind
-// and expiry, which the result mentions.
+// TestIntegration also records a GitLab token's kind and expiry.
 func (s *Service) TestIntegration(ctx context.Context, org, id string) (string, error) {
 	it, err := s.integration(ctx, org, id)
 	if err != nil {
@@ -391,9 +381,6 @@ func sameDay(a, b *time.Time) bool {
 	return a.UTC().Format("2006-01-02") == b.UTC().Format("2006-01-02")
 }
 
-// ---- projects ----
-
-// ProjectInput creates or updates a project.
 type ProjectInput struct {
 	Name          string
 	Description   string
@@ -510,8 +497,7 @@ func (s *Service) CreateProject(ctx context.Context, org, userID string, in Proj
 	return p, nil
 }
 
-// checkGitLabAccess refuses a project or group token with the Owner role on the repository: Akili
-// needs Developer, and an owner token could change protected branches behind the push guard.
+// checkGitLabAccess refuses Owner-role tokens: Akili needs Developer, and an owner could change protected branches behind the push guard.
 func (s *Service) checkGitLabAccess(ctx context.Context, it *models.Integration, f forge.Forge, repo *forge.Repo) error {
 	gl, ok := f.(*forge.GitLab)
 	if !ok {
@@ -551,7 +537,6 @@ func (s *Service) UpdateProject(ctx context.Context, org, userID, id string, in 
 	return p, nil
 }
 
-// Project loads a project.
 func (s *Service) Project(ctx context.Context, org, id string) (*models.Project, error) {
 	var p models.Project
 	if err := s.db.WithContext(ctx).First(&p, "id = ? AND organization_id = ?", id, org).Error; err != nil {
@@ -585,8 +570,7 @@ func (s *Service) uniqueSlug(ctx context.Context, org, base string) string {
 	}
 }
 
-// BranchFor names the working branch of a task or chat session. A task keeps its branch across
-// attempts, so a retry continues the same pull request.
+// BranchFor keeps a task's branch across attempts, so a retry continues the same pull request.
 func BranchFor(taskID, sessionID string) string {
 	if taskID != "" {
 		return "akili/" + taskID

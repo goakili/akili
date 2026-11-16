@@ -1,25 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package sessions owns chat and task sessions: what an agent is told when a session opens, and
-// what happens to every frame it sends back — persistence, the authoritative policy check on each
-// tool request, approvals, audit and the live event feed.
+// Package sessions owns chat and task sessions and the authoritative policy check on every tool request.
 package sessions
 
 import (
@@ -43,7 +42,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Event types emitted to browsers.
 const (
 	EvSessionCreated   = "session.created"
 	EvSessionState     = "session.state"
@@ -77,7 +75,6 @@ type TaskHooks interface {
 	TaskLost(ctx context.Context, taskID string, reason string)
 }
 
-// Hub is the session service.
 type Hub struct {
 	db         *gorm.DB
 	bus        *bus.Bus
@@ -92,7 +89,6 @@ type Hub struct {
 	mcpRun     RemoteRunner
 }
 
-// SetRemoteTools wires the coder service.
 func (h *Hub) SetRemoteTools(r RemoteTools) { h.remote = r }
 
 // SetMCP connects MCP tools: tools lists an organization's usable ones; run executes a call.
@@ -103,12 +99,10 @@ func (h *Hub) SetMCP(tools func(ctx context.Context, org string) []proto.Dynamic
 // SetLessons supplies the approved lessons added to new sessions' system prompts.
 func (h *Hub) SetLessons(f func(ctx context.Context, org, agentID string) []string) { h.lessons = f }
 
-// New returns a hub.
 func New(db *gorm.DB, b *bus.Bus, a *audit.Logger, n *notify.Notifier, key ed25519.PrivateKey) *Hub {
 	return &Hub{db: db, bus: b, audit: a, notify: n, signingKey: key}
 }
 
-// SetTaskHooks wires the task service.
 func (h *Hub) SetTaskHooks(t TaskHooks) { h.tasks = t }
 
 // SigningPublicKey is pinned by agents at enrollment.
@@ -117,7 +111,6 @@ func (h *Hub) SigningPublicKey() ed25519.PublicKey { return h.signingKey.Public(
 // ErrNotFound is returned for unknown or foreign sessions.
 var ErrNotFound = errors.New("session not found")
 
-// Create opens a session row.
 func (h *Hub) Create(ctx context.Context, org, agentID, userID, title, mode string, taskID *string, projectID ...string) (*models.ChatSession, error) {
 	if title == "" {
 		title = "Session " + time.Now().UTC().Format("2006-01-02 15:04")
@@ -136,7 +129,6 @@ func (h *Hub) Create(ctx context.Context, org, agentID, userID, title, mode stri
 	return s, nil
 }
 
-// Get loads a session within an organization.
 func (h *Hub) Get(ctx context.Context, org, id string) (*models.ChatSession, error) {
 	var s models.ChatSession
 	if err := h.db.WithContext(ctx).First(&s, "id = ? AND organization_id = ?", id, org).Error; err != nil {
@@ -145,8 +137,7 @@ func (h *Hub) Get(ctx context.Context, org, id string) (*models.ChatSession, err
 	return &s, nil
 }
 
-// BuildOpen assembles the session.open message for an agent. It fixes the system prompt and tool
-// set on first open, so a reconnect replays the conversation against exactly the same prefix.
+// BuildOpen fixes the system prompt and tool set on first open, so a reconnect replays against the same prefix.
 func (h *Hub) BuildOpen(ctx context.Context, sessionID, agentID string) (proto.SessionOpen, error) {
 	var open proto.SessionOpen
 	var s models.ChatSession
@@ -244,8 +235,7 @@ func (h *Hub) BuildOpen(ctx context.Context, sessionID, agentID string) (proto.S
 	return open, nil
 }
 
-// historyTokens sizes the agent's history bound from the context window of the provider the gateway
-// will use: the agent's own, or the organization default.
+// historyTokens sizes history from the context window of the provider the gateway will use.
 func (h *Hub) historyTokens(ctx context.Context, agent *models.Agent, system string, toolNames []string) int {
 	var p models.ModelProvider
 	q := h.db.WithContext(ctx).Where("organization_id = ?", agent.OrganizationID)
@@ -301,8 +291,7 @@ func (h *Hub) agentPolicy(ctx context.Context, agent *models.Agent) (proto.Polic
 	return doc, nil
 }
 
-// HandleFrame processes one envelope an agent sent on a session stream. A non-nil decision must be
-// sent back to the agent.
+// HandleFrame returns a decision that, when non-nil, must be sent back to the agent.
 func (h *Hub) HandleFrame(ctx context.Context, agentID, sessionID string, env proto.Envelope) (*proto.ToolDecision, error) {
 	var s models.ChatSession
 	if err := h.db.WithContext(ctx).First(&s, "id = ? AND agent_id = ?", sessionID, agentID).Error; err != nil {
@@ -348,8 +337,7 @@ func (h *Hub) HandleFrame(ctx context.Context, agentID, sessionID string, env pr
 			return h.askUser(ctx, &s, req), nil
 		}
 		if d.Effect == proto.EffectAllow && isRemote(req.Tool) {
-			// Remote tools (forge, Miabi) can take minutes; answer when they finish so the session
-			// stream keeps flowing.
+			// Remote tools can take minutes; answer when they finish so the session stream keeps flowing.
 			h.completeRemote(&s, d, req.Tool, req.Input)
 			return nil, nil
 		}
@@ -389,8 +377,7 @@ func (h *Hub) HandleFrame(ctx context.Context, agentID, sessionID string, env pr
 	return nil, nil
 }
 
-// authorize is the authoritative policy check. It never trusts the agent's view of risk: the tool,
-// its risk and what it touches all come from the shared catalog and the current policy.
+// authorize never trusts the agent's view of risk: tool, risk and targets come from the catalog and current policy.
 func (h *Hub) authorize(ctx context.Context, s *models.ChatSession, req proto.ToolRequest) proto.ToolDecision {
 	out := proto.ToolDecision{RequestID: req.RequestID}
 	var agent models.Agent
@@ -513,7 +500,6 @@ func (h *Hub) runRemote(ctx context.Context, s *models.ChatSession, tool string,
 	return &res
 }
 
-// RemoteRunner executes one remote tool.
 type RemoteRunner func(ctx context.Context, s *models.ChatSession, tool string, input json.RawMessage) proto.RemoteResult
 
 // AddRemoteRunner registers the executor of remote tools (e.g. the Miabi service).
@@ -529,8 +515,7 @@ func (h *Hub) AddRemoteRunner(tools []string, run RemoteRunner) {
 // remoteTimeout bounds one remote tool call (a Miabi deploy waits for the deployment).
 const remoteTimeout = 20 * time.Minute
 
-// completeRemote runs an allowed remote tool in the background and sends the final decision, with
-// its result, to the agent.
+// completeRemote runs the tool in the background and sends the final decision with its result.
 func (h *Hub) completeRemote(s *models.ChatSession, d proto.ToolDecision, tool string, input json.RawMessage) {
 	sess := *s
 	go func() {
@@ -600,16 +585,12 @@ func (h *Hub) close(ctx context.Context, s *models.ChatSession) {
 	h.bus.Emit(ctx, s.OrganizationID, bus.Event{Type: EvSessionClosed, SessionID: s.ID, AgentID: s.AgentID})
 }
 
-// SessionLost is called when one session stream ends without a done frame while the tunnel is up
-// (the agent crashed the session or refused it). Chat sessions go idle and reopen on the next
-// message; tasks are handed back to the task service to retry.
+// SessionLost handles a stream ending without a done frame while the tunnel is up: chats go idle, tasks retry.
 func (h *Hub) SessionLost(ctx context.Context, sessionID string, reason string) {
 	h.sessionEnded(ctx, sessionID, reason, true)
 }
 
-// SessionDetached is called when the whole tunnel dropped (agent disconnected, or its replica went
-// away). A task keeps its lease: the agent resumes it on reconnect, to any replica, and the sweep
-// requeues it only if the agent does not come back in time.
+// SessionDetached keeps a task's lease so the agent can resume on any replica; the sweep requeues it if it doesn't return.
 func (h *Hub) SessionDetached(ctx context.Context, sessionID string, reason string) {
 	h.sessionEnded(ctx, sessionID, reason, false)
 }
@@ -667,7 +648,6 @@ func (h *Hub) PostUserMessage(ctx context.Context, org, sessionID, userID, text 
 		proto.UserMessage{Text: text, UserID: userID, Images: images})
 }
 
-// Interrupt stops the agent's current turn.
 func (h *Hub) Interrupt(ctx context.Context, org, sessionID, userID string) error {
 	s, err := h.Get(ctx, org, sessionID)
 	if err != nil {
@@ -783,7 +763,6 @@ func (h *Hub) expire(ctx context.Context, ap *models.Approval) {
 			Deadline: h.resumeTask(ctx, ap.SessionID, ap.TaskID)})
 }
 
-// RecordUsage adds a model call's cost to the session.
 func (h *Hub) RecordUsage(ctx context.Context, s *models.ChatSession, in, out int, cost float64) {
 	h.db.WithContext(ctx).Model(&models.ChatSession{}).Where("id = ?", s.ID).Updates(map[string]any{
 		"input_tokens":  gorm.Expr("input_tokens + ?", in),

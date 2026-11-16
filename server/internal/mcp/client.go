@@ -1,25 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package mcp connects the control plane to MCP (Model Context Protocol) servers and exposes their
-// tools to agents as remote tools named "mcp__<server>__<tool>". Calls run here, never on agents,
-// so the servers' credentials stay on the control plane.
+// Package mcp runs MCP server tools on the control plane, so the servers' credentials never reach agents.
 package mcp
 
 import (
@@ -70,7 +69,6 @@ type Client struct {
 	nextID int64
 }
 
-// Tool is a tool a server offers.
 type Tool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
@@ -106,7 +104,6 @@ func (c *Client) notify(ctx context.Context, method string) error {
 	return err
 }
 
-// initialize performs the MCP handshake.
 func (c *Client) initialize(ctx context.Context) error {
 	var res struct {
 		ProtocolVersion string `json:"protocolVersion"`
@@ -175,8 +172,7 @@ func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage
 // Close ends the connection (and the process, for stdio).
 func (c *Client) Close() error { return c.t.close() }
 
-// StartStdio launches a server process. env is its whole environment: nothing is inherited from the
-// control plane, whose own secrets must never reach a tool server.
+// StartStdio takes env as the whole environment: the control plane's own secrets must never reach a tool server.
 func StartStdio(ctx context.Context, path string, args, env []string, dir string) (*Client, error) {
 	cmd := exec.Command(path, args...)
 	cmd.Env, cmd.Dir = env, dir
@@ -283,8 +279,7 @@ func (s *stdio) close() error {
 	return nil
 }
 
-// DialHTTP connects to a Streamable HTTP server. headers are sent with every request (e.g.
-// Authorization).
+// DialHTTP sends headers (e.g. Authorization) with every request.
 func DialHTTP(ctx context.Context, url string, headers map[string]string) (*Client, error) {
 	t := &httpT{url: url, headers: headers, client: &http.Client{Timeout: 5 * time.Minute}}
 	c := &Client{t: t}

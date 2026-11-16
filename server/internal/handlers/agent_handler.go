@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -63,7 +64,6 @@ func (r *AgentRequest) input() fleet.Input {
 	return in
 }
 
-// ListAgents lists agents.
 func (h *Handlers) ListAgents(c *okapi.Context) error {
 	agents, err := h.Fleet.List(c.Request().Context(), middlewares.OrgID(c))
 	if err != nil {
@@ -72,7 +72,6 @@ func (h *Handlers) ListAgents(c *okapi.Context) error {
 	return ok(c, agents)
 }
 
-// GetAgent returns an agent.
 func (h *Handlers) GetAgent(c *okapi.Context) error {
 	a, err := h.Fleet.Get(c.Request().Context(), middlewares.OrgID(c), c.Param("id"))
 	if err != nil {
@@ -90,7 +89,6 @@ func (h *Handlers) CreateAgent(c *okapi.Context, req *AgentRequest) error {
 	return created(c, enr)
 }
 
-// UpdateAgent edits an agent.
 func (h *Handlers) UpdateAgent(c *okapi.Context, req *AgentRequest) error {
 	a, err := h.Fleet.Update(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), c.Param("id"), req.input())
 	if err != nil {
@@ -116,7 +114,6 @@ func (h *Handlers) RevokeAgent(c *okapi.Context) error {
 	return message(c, "agent revoked")
 }
 
-// DrainRequest toggles draining.
 type DrainRequest struct {
 	Body struct {
 		Draining bool `json:"draining"`
@@ -131,7 +128,6 @@ func (h *Handlers) DrainAgent(c *okapi.Context, req *DrainRequest) error {
 	return message(c, "updated")
 }
 
-// DeleteAgent revokes and removes an agent.
 func (h *Handlers) DeleteAgent(c *okapi.Context) error {
 	if err := h.Fleet.Delete(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), c.Param("id")); err != nil {
 		return mapErr(c, err)
@@ -139,14 +135,10 @@ func (h *Handlers) DeleteAgent(c *okapi.Context) error {
 	return message(c, "agent deleted")
 }
 
-// ---- agent-facing endpoints (no user auth) -------------------------------------------------------
-
-// Enroll exchanges a join token for an agent identity.
 func (h *Handlers) Enroll(c *okapi.Context) error {
 	ctx := c.Request().Context()
 	ip := c.RealIP()
-	// Only failures count per IP: each success spends a one-time token an admin created, and a
-	// whole fleet may enroll from behind one NAT.
+	// Only failures count per IP: each success spends an admin-created one-time token, and a fleet may enroll behind one NAT.
 	if auth.FailureBlocked(ctx, h.Bus.Redis(), "enroll:"+ip, 20) {
 		return c.AbortTooManyRequests("too many failed enrollment attempts")
 	}
@@ -169,9 +161,7 @@ func (h *Handlers) Enroll(c *okapi.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// checkAgentCert enforces AKILI_AGENT_MTLS. The TLS layer already verified any presented
-// certificate against the agent CA (VerifyClientCertIfGiven); "required" rejects agents without one.
-// Browsers are unaffected because only the agent endpoints check.
+// checkAgentCert enforces AKILI_AGENT_MTLS=required; the TLS layer already verified any presented cert against the agent CA.
 func (h *Handlers) checkAgentCert(c *okapi.Context) error {
 	if h.Cfg.TLS.AgentMTLS != "required" {
 		return nil
@@ -183,20 +173,17 @@ func (h *Handlers) checkAgentCert(c *okapi.Context) error {
 	return nil
 }
 
-// agentUpgrader refuses browser origins: agents never send an Origin header, so any request that
-// does is a browser being used for cross-site WebSocket hijacking.
+// agentUpgrader refuses any Origin header: agents never send one, so a request that does is cross-site WebSocket hijacking.
 var agentUpgrader = websocket.Upgrader{
 	ReadBufferSize:  32 << 10,
 	WriteBufferSize: 32 << 10,
 	CheckOrigin:     func(r *http.Request) bool { return r.Header.Get("Origin") == "" },
 }
 
-// Connect authenticates an agent's signed handshake and upgrades to the tunnel.
 func (h *Handlers) Connect(c *okapi.Context) error {
 	ctx := c.Request().Context()
 	ip := c.RealIP()
-	// Failed handshakes are limited per IP; signed (successful) ones per agent, so a fleet behind one
-	// NAT can all reconnect at once after a control-plane restart.
+	// Failures are limited per IP, successes per agent, so a fleet behind one NAT can reconnect at once after a restart.
 	if auth.FailureBlocked(ctx, h.Bus.Redis(), "connect:"+ip, 60) {
 		return c.AbortTooManyRequests("too many failed connection attempts")
 	}

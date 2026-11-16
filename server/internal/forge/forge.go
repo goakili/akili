@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package forge talks to git forges (Gitea, GitHub, GitLab). Only the control plane uses it: agents never
-// hold forge credentials.
+// Package forge talks to git forges; only the control plane uses it, so agents never hold forge credentials.
 package forge
 
 import (
@@ -33,7 +33,6 @@ import (
 	"time"
 )
 
-// Repo is a repository.
 type Repo struct {
 	Owner         string `json:"owner"`
 	Name          string `json:"name"`
@@ -43,7 +42,6 @@ type Repo struct {
 	Empty         bool   `json:"empty"`
 }
 
-// PR is a pull request.
 type PR struct {
 	Number int    `json:"number"`
 	URL    string `json:"url"`
@@ -70,13 +68,11 @@ type Status struct {
 	Checks []Check `json:"checks"`
 }
 
-// Forge is a git hosting service.
 type Forge interface {
 	// Verify checks the credentials and returns who they authenticate as.
 	Verify(ctx context.Context) (string, error)
 	GetRepo(ctx context.Context, owner, name string) (*Repo, error)
-	// CreateRepo creates owner/name with an initial commit on main. owner may be the authenticated
-	// user or an organization.
+	// CreateRepo creates owner/name with an initial commit on main; owner may be a user or an organization.
 	CreateRepo(ctx context.Context, owner, name, description string, private bool) (*Repo, error)
 	FindOpenPR(ctx context.Context, owner, name, head string) (*PR, error)
 	CreatePR(ctx context.Context, owner, name, head, base, title, body string, draft bool) (*PR, error)
@@ -89,7 +85,6 @@ type Forge interface {
 	GitURL(owner, name string) string
 }
 
-// ErrNotFound is returned for missing repositories or pull requests.
 var ErrNotFound = errors.New("not found")
 
 // APIError is a non-2xx forge response.
@@ -100,7 +95,6 @@ type APIError struct {
 
 func (e *APIError) Error() string { return fmt.Sprintf("forge: %d: %s", e.Status, e.Message) }
 
-// client is a small JSON HTTP client shared by the implementations.
 type client struct {
 	base string
 	http *http.Client

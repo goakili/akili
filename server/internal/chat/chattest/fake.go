@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package chattest fakes the Telegram Bot API, the Slack Web API and a signal-cli REST server for
-// tests, with /_fake controls to inject user messages and read what the bot sent.
+// Package chattest fakes the Telegram, Slack and signal-cli REST APIs for tests, with /_fake controls to inject and inspect messages.
 package chattest
 
 import (
@@ -30,7 +30,6 @@ import (
 	"time"
 )
 
-// Sent is one message the bot sent.
 type Sent struct {
 	Platform string   `json:"platform"`
 	Chat     string   `json:"chat"`
@@ -38,7 +37,6 @@ type Sent struct {
 	Buttons  []string `json:"buttons,omitempty"` // button data
 }
 
-// Fake is the fake server.
 type Fake struct {
 	TelegramToken string
 	SlackToken    string
@@ -52,7 +50,6 @@ type Fake struct {
 	wake     chan struct{}
 }
 
-// New returns a fake.
 func New(telegramToken, slackToken, signalAccount string) *Fake {
 	return &Fake{TelegramToken: telegramToken, SlackToken: slackToken, SignalAccount: signalAccount, wake: make(chan struct{}, 1)}
 }
@@ -69,7 +66,6 @@ func (f *Fake) record(s Sent) {
 	f.mu.Unlock()
 }
 
-// ServeHTTP routes the three APIs and the controls.
 func (f *Fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Path
 	switch {

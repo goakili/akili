@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package state
 
@@ -33,16 +34,13 @@ import (
 // CAFileName is where the trusted control-plane CA is kept, next to the state.
 const CAFileName = "ca.pem"
 
-// InstallCA validates a CA bundle, given as a file path or inline PEM (inline wins), and copies it
-// into the state directory, so the agent keeps trusting it after the source is gone (a temporary
-// mount, a deleted download). It returns the installed path, or "" when neither is given.
+// InstallCA copies the CA into the state dir so it survives its source (a temporary mount, a deleted download).
 func InstallCA(dir, file, inline string) (string, error) {
 	var data []byte
 	switch {
 	case inline != "":
 		data = []byte(inline)
-		// Single-line inputs (a marketplace form, some env editors) cannot hold PEM line breaks,
-		// so base64-encoded PEM is accepted too.
+		// Single-line inputs (marketplace forms, some env editors) cannot hold PEM line breaks, so base64 is accepted.
 		if !strings.Contains(inline, "-----BEGIN") {
 			b, err := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(inline), ""))
 			if err != nil {
@@ -76,8 +74,7 @@ func InstallCA(dir, file, inline string) (string, error) {
 	return dst, os.Rename(tmp, dst)
 }
 
-// checkPEM requires at least one parseable certificate, so a wrong file fails at setup rather than
-// as a TLS error on every connection attempt.
+// checkPEM fails a wrong file at setup rather than as a TLS error on every connection attempt.
 func checkPEM(data []byte) error {
 	n := 0
 	for {

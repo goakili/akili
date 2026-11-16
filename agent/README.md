@@ -22,4 +22,4 @@ make vet
 
 ## License
 
-[AGPL-3.0-or-later](../LICENSE). Copyright © 2026 [Jonas Kaninda](https://jkaninda.dev/)
+[MIT](../LICENSE). Copyright © 2026 [Jonas Kaninda](https://jkaninda.dev/)

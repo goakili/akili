@@ -1,5 +1,22 @@
-// SPDX-FileCopyrightText: 2026 Jonas Kaninda
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jonas Kaninda.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package proto
 
@@ -8,43 +25,33 @@ import (
 	"slices"
 )
 
-// Provider-neutral conversation types. The agent speaks these to the control plane's LLM gateway,
-// which translates them for the configured provider. The agent never chooses the model or sees a key.
-
-// Roles.
+// Conversation types are provider-neutral: the gateway translates them, so the agent never sees a model key.
 const (
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
 )
 
-// Block types.
 const (
 	BlockText       = "text"
 	BlockToolUse    = "tool_use"
 	BlockToolResult = "tool_result"
-	// Provider reasoning blocks. They are opaque: stored and replayed byte-for-byte in an
-	// append-only history, because the provider binds them to the exact conversation prefix.
+	// Reasoning blocks are replayed byte-for-byte because the provider binds them to the exact prefix.
 	BlockThinking         = "thinking"
 	BlockRedactedThinking = "redacted_thinking"
-	// BlockImage is an image the user attached. History carries only a reference to the stored
-	// attachment; the control plane fills in the bytes when it calls the provider.
+	// BlockImage history carries only an attachment reference; the control plane fills in the bytes.
 	BlockImage = "image"
 )
 
-// Image limits shared by the UI, the control plane and the agent.
 const (
 	MaxImageBytes       = 5 << 20 // the strictest provider limit (Anthropic)
 	MaxImagesPerMessage = 5
 )
 
-// ImageTypes are the media types accepted for image attachments. SVG is excluded: it is a document
-// that can carry script, not a picture.
+// ImageTypes excludes SVG because it can carry script.
 var ImageTypes = []string{"image/png", "image/jpeg", "image/gif", "image/webp"}
 
-// IsImageType reports whether mediaType is an accepted image type.
 func IsImageType(mediaType string) bool { return slices.Contains(ImageTypes, mediaType) }
 
-// ImageSource locates an image block's bytes.
 type ImageSource struct {
 	AttachmentID string `json:"attachment_id"`
 	MediaType    string `json:"media_type"`
@@ -52,13 +59,11 @@ type ImageSource struct {
 	Data string `json:"data,omitempty"`
 }
 
-// Message is one conversation turn.
 type Message struct {
 	Role    string  `json:"role"`
 	Content []Block `json:"content"`
 }
 
-// Block is one piece of message content.
 type Block struct {
 	Type string `json:"type"`
 	// text
@@ -79,12 +84,10 @@ type Block struct {
 	Source *ImageSource `json:"source,omitempty"`
 }
 
-// TextMessage builds a single-text-block message.
 func TextMessage(role, text string) Message {
 	return Message{Role: role, Content: []Block{{Type: BlockText, Text: text}}}
 }
 
-// Text concatenates the text blocks of a message.
 func (m Message) Text() string {
 	var s string
 	for _, b := range m.Content {
@@ -95,7 +98,6 @@ func (m Message) Text() string {
 	return s
 }
 
-// ToolUses returns the tool_use blocks of a message.
 func (m Message) ToolUses() []Block {
 	var out []Block
 	for _, b := range m.Content {
@@ -106,14 +108,12 @@ func (m Message) ToolUses() []Block {
 	return out
 }
 
-// ToolDef is a tool offered to the model.
 type ToolDef struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"input_schema"`
 }
 
-// LLMRequest is posted by the agent to InternalLLMPath.
 type LLMRequest struct {
 	SessionID string    `json:"session_id"`
 	System    string    `json:"system"`
@@ -122,14 +122,12 @@ type LLMRequest struct {
 	MaxTokens int       `json:"max_tokens,omitempty"`
 }
 
-// LLM stream event types (NDJSON lines in the response body).
 const (
 	LLMEventDelta   = "delta"   // Text
 	LLMEventMessage = "message" // Message, StopReason, Usage — the final assembled message
 	LLMEventError   = "error"   // Error
 )
 
-// Stop reasons.
 const (
 	StopEndTurn   = "end_turn"
 	StopToolUse   = "tool_use"
@@ -137,7 +135,6 @@ const (
 	StopRefusal   = "refusal"
 )
 
-// LLMEvent is one line of the gateway's streamed response.
 type LLMEvent struct {
 	Type       string   `json:"type"`
 	Text       string   `json:"text,omitempty"`
@@ -146,17 +143,15 @@ type LLMEvent struct {
 	StopReason string   `json:"stop_reason,omitempty"`
 	Usage      *Usage   `json:"usage,omitempty"`
 	Error      string   `json:"error,omitempty"`
-	// Code is set on errors the agent should treat as final (e.g. "budget_exhausted").
+	// Code is set on errors the agent should treat as final.
 	Code string `json:"code,omitempty"`
 }
 
-// Usage is token accounting for one model call.
 type Usage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
 }
 
-// Error codes on LLMEvent.
 const (
 	CodeBudgetExhausted = "budget_exhausted"
 	CodeNoProvider      = "no_provider"
@@ -165,6 +160,5 @@ const (
 	CodeProviderError = "provider_error"
 	// CodeProviderRejected means the provider refused the request itself; resending it will not help.
 	CodeProviderRejected = "provider_rejected"
-	// CodeContextTooLong means the conversation no longer fits the model's context window.
-	CodeContextTooLong = "context_too_long"
+	CodeContextTooLong   = "context_too_long"
 )

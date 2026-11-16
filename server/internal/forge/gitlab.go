@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package forge
 
@@ -33,9 +34,7 @@ import (
 	"github.com/goakili/akili/server/internal/crypto"
 )
 
-// GitLab implements Forge for gitlab.com and self-managed GitLab (API v4). Owners are namespace
-// paths and may be nested groups (platform/backend); every call addresses a project by its
-// URL-encoded path, so GitLab's numeric ids are never stored.
+// GitLab addresses projects by URL-encoded path, so owners may be nested groups and numeric ids are never stored.
 type GitLab struct {
 	c         *client
 	webURL    string
@@ -50,8 +49,7 @@ const (
 	GitLabOwner      = 50
 )
 
-// NewGitLab returns a GitLab client. base is the instance URL (https://gitlab.com); webURL defaults
-// to it. caPEM is an extra CA to trust, for a self-managed instance on a private CA.
+// NewGitLab takes caPEM as an extra CA to trust, for a self-managed instance on a private CA.
 func NewGitLab(base, webURL, token, caPEM string) (*GitLab, error) {
 	base = strings.TrimSuffix(strings.TrimRight(base, "/"), "/api/v4")
 	if base == "" {
@@ -122,7 +120,6 @@ func (m gitlabMR) pr() *PR {
 	return p
 }
 
-// Verify implements Forge.
 func (g *GitLab) Verify(ctx context.Context) (string, error) {
 	u, err := g.user(ctx)
 	if err != nil {
@@ -193,7 +190,6 @@ func (g *GitLab) AccessLevel(ctx context.Context, owner, name string) (int, erro
 	return m.AccessLevel, nil
 }
 
-// GetRepo implements Forge.
 func (g *GitLab) GetRepo(ctx context.Context, owner, name string) (*Repo, error) {
 	var p gitlabProject
 	if err := g.c.do(ctx, http.MethodGet, g.project(owner, name), nil, &p); err != nil {
@@ -202,10 +198,9 @@ func (g *GitLab) GetRepo(ctx context.Context, owner, name string) (*Repo, error)
 	return p.repo(), nil
 }
 
-// ErrProjectToken explains why a project access token can't create repositories.
 var ErrProjectToken = errors.New("a GitLab project access token can't create projects; use a group access token with the Maintainer role, or a personal token")
 
-// CreateRepo implements Forge. owner is a group path, or the token user's own namespace.
+// CreateRepo takes owner as a group path, or the token user's own namespace.
 func (g *GitLab) CreateRepo(ctx context.Context, owner, name, description string, private bool) (*Repo, error) {
 	visibility := "public"
 	if private {
@@ -236,7 +231,6 @@ func (g *GitLab) CreateRepo(ctx context.Context, owner, name, description string
 	return p.repo(), nil
 }
 
-// FindOpenPR implements Forge.
 func (g *GitLab) FindOpenPR(ctx context.Context, owner, name, head string) (*PR, error) {
 	var mrs []gitlabMR
 	q := url.Values{"source_branch": {head}, "state": {"opened"}, "per_page": {"20"}}
@@ -251,7 +245,7 @@ func (g *GitLab) FindOpenPR(ctx context.Context, owner, name, head string) (*PR,
 	return nil, ErrNotFound
 }
 
-// CreatePR implements Forge. GitLab marks drafts with a "Draft:" title prefix.
+// CreatePR marks drafts with GitLab's "Draft:" title prefix.
 func (g *GitLab) CreatePR(ctx context.Context, owner, name, head, base, title, body string, draft bool) (*PR, error) {
 	if draft && !strings.HasPrefix(title, "Draft:") {
 		title = "Draft: " + title
@@ -265,7 +259,6 @@ func (g *GitLab) CreatePR(ctx context.Context, owner, name, head, base, title, b
 	return m.pr(), nil
 }
 
-// GetPR implements Forge.
 func (g *GitLab) GetPR(ctx context.Context, owner, name string, number int) (*PR, error) {
 	var m gitlabMR
 	if err := g.c.do(ctx, http.MethodGet, fmt.Sprintf("%s/merge_requests/%d", g.project(owner, name), number), nil, &m); err != nil {
@@ -274,8 +267,7 @@ func (g *GitLab) GetPR(ctx context.Context, owner, name string, number int) (*PR
 	return m.pr(), nil
 }
 
-// gitlabState maps a commit status to Akili's; "" leaves it out (manual and skipped jobs would hold
-// every merge request pending forever).
+// gitlabState returns "" for manual and skipped jobs, which would otherwise hold every merge request pending forever.
 func gitlabState(s string, allowFailure bool) string {
 	switch s {
 	case "success":
@@ -293,7 +285,7 @@ func gitlabState(s string, allowFailure bool) string {
 	return ""
 }
 
-// CommitStatus implements Forge. ref is a branch; GitLab CI and external CI both report commit statuses.
+// CommitStatus takes ref as a branch; GitLab CI and external CI both report commit statuses.
 func (g *GitLab) CommitStatus(ctx context.Context, owner, name, ref string) (*Status, error) {
 	var br struct {
 		Commit struct {
@@ -340,7 +332,7 @@ func (g *GitLab) CommitStatus(ctx context.Context, owner, name, ref string) (*St
 	return out, nil
 }
 
-// PRDiff implements Forge. raw_diffs is GitLab 17.6+; older instances page through /diffs.
+// PRDiff uses raw_diffs (GitLab 17.6+) and pages through /diffs on older instances.
 func (g *GitLab) PRDiff(ctx context.Context, owner, name string, number int) (string, error) {
 	mr := fmt.Sprintf("%s/merge_requests/%d", g.project(owner, name), number)
 	var diff string
@@ -388,10 +380,9 @@ func (g *GitLab) PRDiff(ctx context.Context, owner, name string, number int) (st
 	return b.String(), nil
 }
 
-// GitAuth implements Forge: every GitLab token type authenticates git as oauth2.
+// GitAuth authenticates git as oauth2, which every GitLab token type accepts.
 func (g *GitLab) GitAuth(context.Context) (string, string, error) { return "oauth2", g.token, nil }
 
-// GitURL implements Forge.
 func (g *GitLab) GitURL(owner, name string) string {
 	return g.webURL + "/" + owner + "/" + name + ".git"
 }

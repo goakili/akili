@@ -1,21 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import type { Agent, AgentInput, Autonomy } from '../api'
 import { splitList } from './format'
@@ -54,10 +38,7 @@ export function agentFormFrom(a?: Agent | null): AgentForm {
 
 const sameList = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n')
 
-/**
- * Builds the request body. With `initial`, only changed fields are included (PATCH semantics: the
- * server leaves omitted fields alone; "" clears policy_id / provider_id).
- */
+/** With `initial`, only changed fields are included (PATCH: "" clears policy_id / provider_id). */
 export function agentInput(f: AgentForm, initial?: AgentForm): AgentInput {
   const out: AgentInput = {}
   const labels = splitList(f.labels)

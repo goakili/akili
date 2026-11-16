@@ -1,21 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -24,13 +8,7 @@ import { LiveStream, type StreamStatus } from '../lib/sse'
 
 type Listener = (ev: BusEvent) => void
 
-/**
- * The organization event feed (/events/stream): the ONE live connection a tab holds. Browsers allow
- * ~6 HTTP/1.1 connections per host and each SSE stream pins one, so per-view streams starved ordinary
- * requests once a few tabs were open. The session a tab is showing is named with focus(); only that
- * session's token deltas are added to the feed. It also keeps the shell's global facts: pending
- * approvals and the kill switch.
- */
+/** The ONE live connection a tab holds: each SSE stream pins one of ~6 per-host connections. */
 export const useLive = defineStore('live', () => {
   const status = ref<StreamStatus>('closed')
   const pendingApprovals = ref(0)
@@ -121,10 +99,7 @@ export const useLive = defineStore('live', () => {
     stream = null
   }
 
-  /**
-   * Show token deltas for one session (the one on screen), or none. Reconnects the feed; views
-   * resync through onReconnect-style reloads, so nothing is lost across the switch.
-   */
+  /** Reconnects the feed; views resync on reconnect, so nothing is lost across the switch. */
   function focus(sessionId: string | null) {
     if (focused === sessionId) return
     focused = sessionId

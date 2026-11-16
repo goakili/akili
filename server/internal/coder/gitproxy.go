@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package coder
 
@@ -39,17 +40,12 @@ import (
 	"github.com/jkaninda/logger"
 )
 
-// The git proxy is the only way an agent reaches a repository. It serves git smart-HTTP for one
-// session: the session must be open, belong to the calling agent (identity is the tunnel) and be
-// bound to a project. It adds the forge credentials, which never leave the control plane, and it
-// inspects every push, refusing anything but updates to the session's own akili/* branch made of
-// commits that carry the agent's git identity.
+// Every push is inspected: only the session's own akili/* branch, with commits carrying the agent's git identity.
 
 const maxPushCommands = 64 << 10
 
 var zeroSHA = strings.Repeat("0", 40)
 
-// GitProxy handles GitProxyPath requests for an agent.
 func (s *Service) GitProxy(agentID string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rest := strings.TrimPrefix(r.URL.Path, proto.GitProxyPath)
@@ -162,8 +158,7 @@ func (s *Service) GitProxy(agentID string) http.Handler {
 			http.Error(w, "forge unreachable: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		// The forge itself refusing a push means the integration's credentials can't write. Say so,
-		// or the agent guesses at the cause and tries again from elsewhere.
+		// A forge refusing the push means the integration can't write; say so, or the agent retries from elsewhere.
 		if service == "git-receive-pack" && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
 			said, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 			resp.Body.Close()
@@ -236,8 +231,7 @@ func forgeLabel(kind string) string {
 	return "Gitea"
 }
 
-// forgeWriteRefusal explains a push the forge refused: an integration permission to fix, which no
-// retry or other session can work around.
+// forgeWriteRefusal explains a forge-refused push as an integration permission no retry or other session can work around.
 func forgeWriteRefusal(forge, integration, repo string, status int, said string) string {
 	who := "the integration"
 	if integration != "" {
@@ -263,7 +257,6 @@ func forgeWriteRefusal(forge, integration, repo string, status int, said string)
 	return msg
 }
 
-// sessionRepo checks the session and returns its project and forge client.
 func (s *Service) sessionRepo(ctx context.Context, agentID, sessionID string) (*models.ChatSession, *models.Project, forgeClient, error) {
 	var sess models.ChatSession
 	if err := s.db.WithContext(ctx).First(&sess, "id = ? AND agent_id = ?", sessionID, agentID).Error; err != nil {
@@ -286,9 +279,7 @@ type pushCommand struct {
 	Old, New, Ref string
 }
 
-// readPushCommands reads the pkt-line command list that starts a receive-pack request, up to the
-// flush packet. It returns the raw command bytes and the start of the pack it already read, so the
-// request can be replayed upstream.
+// readPushCommands also returns the pack bytes it already buffered, so the request can be replayed upstream.
 func readPushCommands(r io.Reader) ([]byte, []byte, []pushCommand, error) {
 	var raw bytes.Buffer
 	br := bufio.NewReader(io.LimitReader(r, maxPushCommands))

@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package alerts parses incoming alerts (Prometheus Alertmanager webhooks or a simple generic JSON
-// shape) and turns them into triage goals.
+// Package alerts parses incoming alerts (Alertmanager webhooks or generic JSON) into triage goals.
 package alerts
 
 import (
@@ -32,7 +32,6 @@ import (
 	"strings"
 )
 
-// Alert is one alert, normalised.
 type Alert struct {
 	Status      string            `json:"status"` // firing | resolved
 	Name        string            `json:"name"`
@@ -68,8 +67,7 @@ type genericPayload struct {
 	URL         string            `json:"url"`
 }
 
-// Parse reads an Alertmanager webhook ({"alerts": [...]}) or a generic alert
-// ({"title", "description", "severity", "host", "labels", "fingerprint"}).
+// Parse reads an Alertmanager webhook ({"alerts": [...]}) or a single generic alert object.
 func Parse(body []byte) ([]Alert, error) {
 	var probe map[string]json.RawMessage
 	if err := json.Unmarshal(body, &probe); err != nil {
@@ -140,7 +138,6 @@ func (a Alert) Host(label string) string {
 	return h
 }
 
-// Title is a short task title.
 func (a Alert) Title(host string) string {
 	t := "Alert: " + orDefault(a.Name, "unnamed")
 	if host != "" {
@@ -152,8 +149,7 @@ func (a Alert) Title(host string) string {
 	return t
 }
 
-// Goal is the triage goal for an alert. Alert text comes from monitoring systems and is fenced as
-// data; the instructions come from the platform and the route.
+// Goal is the triage goal for an alert; alert text is untrusted and fenced as data after the platform's instructions.
 func (a Alert) Goal(routeInstructions string) string {
 	data, _ := json.MarshalIndent(map[string]any{"name": a.Name, "severity": a.Severity, "summary": a.Summary, "description": a.Description,
 		"labels": a.Labels, "annotations": a.Annotations, "starts_at": a.StartsAt, "url": a.URL}, "", "  ")

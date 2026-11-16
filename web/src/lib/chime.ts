@@ -1,26 +1,9 @@
 // Copyright (c) 2026 Jonas Kaninda.
-//
-// This file is part of Akili.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: MIT
 
 import type { SoundKind } from './sounds'
 
-// Notes are synthesized, not loaded: no audio assets, and each sound stays recognizable at any
-// volume. [frequency Hz, start s, duration s]
+// Synthesized, so no audio assets: [frequency Hz, start s, duration s]
 const NOTES: Record<SoundKind, [number, number, number][]> = {
   approval: [
     [880, 0, 0.16],
@@ -35,10 +18,7 @@ const NOTES: Record<SoundKind, [number, number, number][]> = {
 
 let ctx: AudioContext | null = null
 
-/**
- * Creates or resumes the audio context. Browsers only allow this from a user gesture, so it is
- * called on the first click or key press. Resolves to whether audio can now play.
- */
+/** Browsers allow audio only after a user gesture, so this runs on the first click or key press. */
 export async function unlockAudio(): Promise<boolean> {
   try {
     ctx ??= new AudioContext()

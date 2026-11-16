@@ -1,22 +1,6 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -276,7 +260,6 @@ onUnmounted(() => {
 
       <div v-else-if="!loaded" class="vsc-center"><span class="spinner" aria-label="Loading" /></div>
 
-      <!-- Chat -->
       <section v-else-if="tab === 'chat' && currentSession" class="vsc-panel vsc-session">
         <div class="vsc-bar">
           <button class="btn btn-ghost btn-sm btn-icon" title="All chats" @click="current = null"><Icon name="chevronLeft" /></button>
@@ -323,7 +306,6 @@ onUnmounted(() => {
         <p v-else-if="!shownSessions.length" class="small muted">No chat matches "{{ search }}".</p>
       </section>
 
-      <!-- Tasks -->
       <section v-else class="vsc-panel">
         <div v-if="newTask" class="card vsc-form stack">
           <label for="vsc-goal">What should the agent do?</label>

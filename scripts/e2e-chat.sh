@@ -1,33 +1,10 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-#
-# This file is part of Akili.
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-#
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: AGPL-3.0-or-later
-# Chat gateways and lessons end to end, against fake Telegram, Slack and Signal APIs:
-#  - linking chat accounts with one-time codes; unlinked users and viewers are refused
-#  - chatting with an agent from Telegram; approving a high-risk call with a button (and an
-#    unlinked user's button press is ignored)
-#  - /task from Signal with the result posted back; Slack signed events (bad signature, replay)
-#  - ask_user questions from chat tasks: a Telegram option button, and /answer in own words from Signal
-#  - lessons: proposed by the agent, absent from prompts until approved, then present
+# SPDX-License-Identifier: MIT
+# Chat gateways and lessons end to end, against fake Telegram, Slack and Signal APIs.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-# The agent is its own repository, checked out next to this one.
 AGENT_DIR="${AGENT_DIR:-$ROOT/agent}"
 WORK="$(mktemp -d)"
 PG_PORT=${PG_PORT:-55562}

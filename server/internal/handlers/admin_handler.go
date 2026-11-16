@@ -1,21 +1,22 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package handlers
 
@@ -30,7 +31,6 @@ import (
 	"github.com/jkaninda/okapi"
 )
 
-// ListAudit pages through the audit log with optional filters.
 func (h *Handlers) ListAudit(c *okapi.Context) error {
 	q := h.DB.Where("organization_id = ?", middlewares.OrgID(c))
 	if a := c.Query("action"); a != "" {
@@ -50,7 +50,6 @@ func (h *Handlers) ListAudit(c *okapi.Context) error {
 	return paged(c, out, total, p)
 }
 
-// VerifyAudit walks the hash chain.
 func (h *Handlers) VerifyAudit(c *okapi.Context) error {
 	res, err := h.Audit.Verify(c.Request().Context())
 	if err != nil {
@@ -60,7 +59,6 @@ func (h *Handlers) VerifyAudit(c *okapi.Context) error {
 	return ok(c, res)
 }
 
-// Overview is the dashboard summary.
 type Overview struct {
 	Agents struct {
 		Total   int64 `json:"total"`
@@ -82,7 +80,6 @@ type Overview struct {
 	Version          string  `json:"version"`
 }
 
-// GetOverview returns dashboard counts.
 func (h *Handlers) GetOverview(c *okapi.Context) error {
 	org := middlewares.OrgID(c)
 	var o Overview
@@ -116,7 +113,6 @@ func (h *Handlers) GetOverview(c *okapi.Context) error {
 	return ok(c, o)
 }
 
-// UsageRow is spend grouped by agent and model.
 type UsageRow struct {
 	AgentID      string  `json:"agent_id"`
 	Model        string  `json:"model"`
@@ -139,15 +135,13 @@ func (h *Handlers) GetUsage(c *okapi.Context) error {
 	return ok(c, rows)
 }
 
-// KillSwitchRequest engages or releases the kill switch.
 type KillSwitchRequest struct {
 	Body struct {
 		Enabled bool `json:"enabled"`
 	} `json:"body"`
 }
 
-// SetKillSwitch stops every model call and tool call in the organization, and interrupts every
-// running session. Releasing it lets agents continue on new input.
+// SetKillSwitch stops every model and tool call and interrupts running sessions; releasing lets agents continue on new input.
 func (h *Handlers) SetKillSwitch(c *okapi.Context, req *KillSwitchRequest) error {
 	ctx := c.Request().Context()
 	org := middlewares.OrgID(c)
@@ -169,18 +163,15 @@ func (h *Handlers) SetKillSwitch(c *okapi.Context, req *KillSwitchRequest) error
 	return ok(c, map[string]bool{"enabled": req.Body.Enabled})
 }
 
-// SandboxSettings is how project sandboxes (sandbox_exec) run.
 type SandboxSettings struct {
 	// Root runs sandboxes as root. They keep --cap-drop=ALL and no-new-privileges either way.
 	Root bool `json:"root"`
 }
 
-// SandboxSettingsRequest changes the sandbox settings.
 type SandboxSettingsRequest struct {
 	Body SandboxSettings `json:"body"`
 }
 
-// GetSandboxSettings returns the organization's sandbox settings.
 func (h *Handlers) GetSandboxSettings(c *okapi.Context) error {
 	var o models.Organization
 	if err := h.DB.Select("sandbox_root").First(&o, "id = ?", middlewares.OrgID(c)).Error; err != nil {
@@ -189,7 +180,7 @@ func (h *Handlers) GetSandboxSettings(c *okapi.Context) error {
 	return ok(c, SandboxSettings{Root: o.SandboxRoot})
 }
 
-// SetSandboxSettings changes how sandboxes run. It applies to sessions opened afterwards.
+// SetSandboxSettings applies to sessions opened afterwards.
 func (h *Handlers) SetSandboxSettings(c *okapi.Context, req *SandboxSettingsRequest) error {
 	ctx := c.Request().Context()
 	org := middlewares.OrgID(c)
@@ -203,18 +194,15 @@ func (h *Handlers) SetSandboxSettings(c *okapi.Context, req *SandboxSettingsRequ
 	return ok(c, req.Body)
 }
 
-// Health is the liveness/readiness response.
 type Health struct {
 	Status  string `json:"status"`
 	Version string `json:"version"`
 }
 
-// Healthz is the liveness probe.
 func (h *Handlers) Healthz(c *okapi.Context) error {
 	return c.JSON(200, Health{Status: "ok", Version: config.Version})
 }
 
-// Readyz checks the database and Redis.
 func (h *Handlers) Readyz(c *okapi.Context) error {
 	ctx := c.Request().Context()
 	sqlDB, err := h.DB.DB()

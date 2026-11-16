@@ -1,44 +1,14 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-
-  This file is part of Akili.
-
-  This program is free software: you can redistribute it and/or modify
-  it under the terms of the GNU Affero General Public License as published by
-  the Free Software Foundation, either version 3 of the License, or
-  (at your option) any later version.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU Affero General Public License for more details.
-
-  You should have received a copy of the GNU Affero General Public License
-  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-License-Identifier: MIT
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { api, type LicenseInfo } from '../api'
+import { computed } from 'vue'
 import { useLive } from '../stores/live'
 import PageHeader from '../components/PageHeader.vue'
 import Icon from '../components/Icon'
 
 const live = useLive()
-const license = ref<LicenseInfo | null>(null)
-const edition = computed(() => {
-  const l = license.value
-  if (!l) return '—'
-  return l.edition === 'enterprise' ? `Enterprise · licensed to ${l.customer}` : 'Community'
-})
-onMounted(async () => {
-  try {
-    license.value = await api.getLicense({ quiet: true })
-  } catch {
-    /* the edition row stays empty */
-  }
-})
 const version = computed(() => (/^\d/.test(live.version) ? `v${live.version}` : live.version || 'unknown'))
 </script>
 
@@ -77,12 +47,10 @@ const version = computed(() => (/^\d/.test(live.version) ? `v${live.version}` : 
       <div class="card-body">
         <dl class="kv">
           <dt>Version</dt><dd class="mono">{{ version }}</dd>
-          <dt>Edition</dt>
-          <dd>{{ edition }}</dd>
           <dt>Source</dt>
           <dd><a href="https://github.com/goakili/akili" target="_blank" rel="noopener noreferrer">github.com/goakili/akili</a></dd>
           <dt>License</dt>
-          <dd><a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">AGPL-3.0-or-later</a></dd>
+          <dd><a href="https://github.com/goakili/akili/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a></dd>
           <dt>API docs</dt><dd><a href="/docs" target="_blank" rel="noopener">/docs</a></dd>
           <dt>Author</dt><dd><a href="https://jkaninda.dev/" target="_blank" rel="noopener noreferrer">Jonas Kaninda</a></dd>
           <dt>Copyright</dt><dd>© 2026 <a href="https://jkaninda.dev/" target="_blank" rel="noopener noreferrer">Jonas Kaninda</a></dd>

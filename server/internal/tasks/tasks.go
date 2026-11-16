@@ -1,24 +1,24 @@
 // Copyright (c) 2026 Jonas Kaninda.
 //
-// This file is part of Akili.
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
-// Package tasks queues work for agents, dispatches it with leases, retries lost work and runs
-// schedules. The tasks table is the source of truth; Redis only wakes the dispatcher.
+// Package tasks queues, dispatches and retries agent work; the tasks table is the source of truth, Redis only wakes the dispatcher.
 package tasks
 
 import (
@@ -47,12 +47,10 @@ import (
 // Lease is how long an assigned task may go without a progress frame before it is considered lost.
 const Lease = 3 * time.Minute
 
-// Event types.
 const (
 	EvTaskUpdated = "task.updated"
 )
 
-// Service is the task service.
 type Service struct {
 	db     *gorm.DB
 	bus    *bus.Bus
@@ -69,7 +67,6 @@ func New(db *gorm.DB, b *bus.Bus, a *audit.Logger, hub *sessions.Hub, n *notify.
 	return s
 }
 
-// Input creates a task.
 type Input struct {
 	Title       string
 	Goal        string
@@ -93,9 +90,7 @@ type Input struct {
 	Draft bool
 }
 
-// DefaultAutonomy is used when a task does not set one. Project tasks run at L2: file edits, commits,
-// pushes and pull requests proceed unattended (the git proxy still refuses anything but the task's
-// own branch), while host shell commands still need approval.
+// DefaultAutonomy (L2) lets edits, commits, pushes and PRs run unattended, while host shell commands still need approval.
 func DefaultAutonomy(projectID *string) proto.Autonomy {
 	if projectID != nil && *projectID != "" {
 		return proto.AutonomyL2
@@ -103,10 +98,8 @@ func DefaultAutonomy(projectID *string) proto.Autonomy {
 	return proto.AutonomyL1
 }
 
-// ErrNotFound is returned for unknown tasks.
 var ErrNotFound = errors.New("task not found")
 
-// Create queues a task.
 func (s *Service) Create(ctx context.Context, org, userID string, in Input) (*models.Task, error) {
 	if strings.TrimSpace(in.Goal) == "" {
 		return nil, errors.New("goal is required")
@@ -149,8 +142,7 @@ func (s *Service) Create(ctx context.Context, org, userID string, in Input) (*mo
 	if in.MaxAttempts <= 0 {
 		in.MaxAttempts = 2
 	}
-	// Zero budget, turn limit and timeout mean no cap: large tasks must not die half-way and need a
-	// manual continue. Leases still catch lost agents, and agent budgets and the kill switch still apply.
+	// Zero budget, turn limit and timeout mean no cap; leases, agent budgets and the kill switch still apply.
 	in.BudgetUSD, in.MaxTurns, in.TimeoutSec = max(in.BudgetUSD, 0), max(in.MaxTurns, 0), max(in.TimeoutSec, 0)
 	if in.Selector == nil {
 		in.Selector = []string{}
@@ -203,10 +195,8 @@ type ErrInvalidPlans struct{ Err error }
 func (e ErrInvalidPlans) Error() string { return e.Err.Error() }
 func (e ErrInvalidPlans) Unwrap() error { return e.Err }
 
-// ErrNotDraft is returned when Start is called on a task that is not a draft.
 var ErrNotDraft = errors.New("only a draft task can be started")
 
-// Start queues a draft task.
 func (s *Service) Start(ctx context.Context, org, userID, id string) (*models.Task, error) {
 	res := s.db.WithContext(ctx).Model(&models.Task{}).Where("id = ? AND organization_id = ? AND status = ?", id, org, models.TaskDraft).
 		Update("status", models.TaskQueued)
@@ -226,7 +216,6 @@ func (s *Service) Start(ctx context.Context, org, userID, id string) (*models.Ta
 	return t, nil
 }
 
-// Get loads a task.
 func (s *Service) Get(ctx context.Context, org, id string) (*models.Task, error) {
 	var t models.Task
 	if err := s.db.WithContext(ctx).First(&t, "id = ? AND organization_id = ?", id, org).Error; err != nil {
@@ -235,7 +224,7 @@ func (s *Service) Get(ctx context.Context, org, id string) (*models.Task, error)
 	return &t, nil
 }
 
-// ListFilter narrows List. Status is a comma-separated list.
+// ListFilter narrows List; Status is a comma-separated list.
 type ListFilter struct {
 	Status    string
 	ProjectID string
@@ -290,12 +279,9 @@ func (s *Service) Retry(ctx context.Context, org, userID, id string) (*models.Ta
 		Autonomy: t.Autonomy, BudgetUSD: t.BudgetUSD, MaxTurns: t.MaxTurns, TimeoutSec: t.TimeoutSec, MaxAttempts: t.MaxAttempts, ProjectID: t.ProjectID})
 }
 
-// ErrNotContinuable is returned when a task has no stopped run to continue.
 var ErrNotContinuable = errors.New("only failed, timed-out or cancelled tasks that ran can be continued")
 
-// Continue requeues a stopped task on the agent that ran it. The next run starts from the previous
-// run's conversation, so the agent picks up where it stopped. maxTurns replaces the turn limit (0 = no
-// limit), and a spent budget is lifted: otherwise the continued run would stop where the last one did.
+// Continue requeues a stopped task on the agent that ran it, from that run's conversation, lifting a spent budget.
 func (s *Service) Continue(ctx context.Context, org, userID, id string, maxTurns int) (*models.Task, error) {
 	t, err := s.Get(ctx, org, id)
 	if err != nil {
@@ -333,8 +319,6 @@ func (s *Service) Continue(ctx context.Context, org, userID, id string, maxTurns
 	return t, nil
 }
 
-// ---- session hooks -------------------------------------------------------------------------------
-
 // TaskProgress renews the lease and marks the task running.
 func (s *Service) TaskProgress(ctx context.Context, taskID string) {
 	now := time.Now().UTC()
@@ -351,7 +335,6 @@ func (s *Service) TaskProgress(ctx context.Context, taskID string) {
 		Update("lease_until", lease)
 }
 
-// TaskDone records the agent's outcome.
 func (s *Service) TaskDone(ctx context.Context, taskID string, d proto.Done) {
 	t, err := s.byID(ctx, taskID)
 	if err != nil || models.TaskTerminal(t.Status) {
@@ -435,8 +418,6 @@ func (s *Service) emit(ctx context.Context, t *models.Task) {
 	s.bus.EmitData(ctx, t.OrganizationID, bus.Event{Type: EvTaskUpdated, TaskID: t.ID, SessionID: deref(t.SessionID)}, t)
 }
 
-// ---- leader loops --------------------------------------------------------------------------------
-
 // Run drives dispatch, sweeping and schedules while this replica leads.
 func (s *Service) Run(ctx context.Context) {
 	wake := s.bus.SubscribeWake(ctx)
@@ -465,7 +446,6 @@ func (s *Service) Run(ctx context.Context) {
 	}
 }
 
-// dispatch assigns queued tasks to available agents.
 func (s *Service) dispatch(ctx context.Context) {
 	var queued []models.Task
 	if err := s.db.WithContext(ctx).Where("status = ?", models.TaskQueued).Order("priority DESC, created_at").Limit(50).Find(&queued).Error; err != nil {
@@ -639,8 +619,6 @@ func (s *Service) waitingOnPerson(ctx context.Context, t *models.Task) bool {
 	s.db.WithContext(ctx).Model(&models.Question{}).Where("session_id = ? AND status = ?", *t.SessionID, models.QuestionPending).Count(&q)
 	return n+q > 0
 }
-
-// ---- schedules -----------------------------------------------------------------------------------
 
 var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 

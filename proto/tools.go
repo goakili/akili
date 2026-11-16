@@ -1,5 +1,22 @@
-// SPDX-FileCopyrightText: 2026 Jonas Kaninda
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jonas Kaninda.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package proto
 
@@ -13,8 +30,7 @@ import (
 	"sync"
 )
 
-// Risk is a tool's blast radius. The control plane derives it from this catalog, never from what an
-// agent claims, so a compromised agent cannot relabel a destructive call as harmless.
+// Risk is a tool's blast radius, always taken from this catalog so an agent cannot relabel a call.
 type Risk int
 
 const (
@@ -26,7 +42,6 @@ const (
 
 var riskNames = map[Risk]string{RiskLow: "low", RiskMedium: "medium", RiskHigh: "high", RiskCritical: "critical"}
 
-// Valid reports whether r is one of the four risk levels.
 func (r Risk) Valid() bool { return r >= RiskLow && r <= RiskCritical }
 
 func (r Risk) String() string {
@@ -36,7 +51,6 @@ func (r Risk) String() string {
 	return "unknown"
 }
 
-// ParseRisk parses "low".."critical".
 func ParseRisk(s string) (Risk, error) {
 	for r, n := range riskNames {
 		if strings.EqualFold(s, n) {
@@ -71,22 +85,18 @@ func (r *Risk) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// ToolSpec is the control plane's and agent's shared definition of a tool.
 type ToolSpec struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	Risk        Risk            `json:"risk"`
 	InputSchema json.RawMessage `json:"input_schema"`
-	// Remote tools run on the control plane (which holds the forge credentials); the agent only
-	// relays the call and receives the result in the tool decision.
+	// Remote tools run on the control plane, which holds the credentials; the agent only relays them.
 	Remote bool `json:"remote,omitempty"`
 	// Project tools need a session bound to a project workspace.
-	Project bool `json:"project,omitempty"`
-	// resources extracts what the call touches, for policy checks.
+	Project   bool `json:"project,omitempty"`
 	resources func(json.RawMessage) (Resources, error)
 }
 
-// Resources is what a tool call touches.
 type Resources struct {
 	Paths      []string `json:"paths,omitempty"`
 	Commands   []string `json:"commands,omitempty"`
@@ -96,13 +106,11 @@ type Resources struct {
 	Apps       []string `json:"apps,omitempty"`
 }
 
-// Def returns the model-facing definition.
 func (t ToolSpec) Def() ToolDef {
 	return ToolDef{Name: t.Name, Description: t.Description, InputSchema: t.InputSchema}
 }
 
-// Resources parses input and returns what the call touches. Malformed input is an error, which the
-// policy engine treats as deny.
+// Resources returns what the call touches; malformed input is an error, which policy treats as deny.
 func (t ToolSpec) Resources(input json.RawMessage) (Resources, error) {
 	if t.resources == nil {
 		return Resources{}, nil
@@ -110,7 +118,6 @@ func (t ToolSpec) Resources(input json.RawMessage) (Resources, error) {
 	return t.resources(input)
 }
 
-// Tool names.
 const (
 	ToolFSRead    = "fs_read"
 	ToolFSList    = "fs_list"
@@ -121,7 +128,6 @@ const (
 	ToolHTTPFetch = "http_fetch"
 	ToolHostInfo  = "host_info"
 
-	// Project (coding) tools.
 	ToolGitStatus   = "git_status"
 	ToolGitDiff     = "git_diff"
 	ToolGitCommit   = "git_commit"
@@ -130,7 +136,6 @@ const (
 	ToolPROpen      = "pr_open"
 	ToolPRStatus    = "pr_status"
 
-	// Operator (host) tools.
 	ToolServiceStatus  = "service_status"
 	ToolServiceRestart = "service_restart"
 	ToolJournalLogs    = "journal_logs"
@@ -142,7 +147,7 @@ const (
 	ToolCertCheck      = "cert_check"
 	ToolPackageUpdates = "package_updates"
 	ToolNetProbe       = "net_probe"
-	// Miabi (PaaS) tools; they run on the control plane, which holds the Miabi API key.
+	// Miabi tools run on the control plane, which holds the Miabi API key.
 	ToolMiabiWorkspaces   = "miabi_workspaces"
 	ToolMiabiOverview     = "miabi_overview"
 	ToolMiabiAlerts       = "miabi_alerts"
@@ -175,14 +180,11 @@ const (
 	ToolLessonPropose     = "lesson_propose"
 	ToolPlanPhaseUpdate   = "plan_phase_update"
 	ToolPlanPropose       = "plan_propose"
-	// ToolAskUser asks the person who runs the task to choose between options or answer in their own words.
-	ToolAskUser = "ask_user"
-	// ToolChangeRun executes an approved change plan: steps, verification, automatic rollback.
-	ToolChangeRun = "change_run"
+	ToolAskUser           = "ask_user"
+	ToolChangeRun         = "change_run"
 )
 
-// Tool inputs. Agents decode into these; the catalog's resource extractors use the same types, so
-// both sides agree on what a call touches.
+// Agents and the catalog's resource extractors decode the same input types, so both agree on what a call touches.
 type (
 	FSReadInput struct {
 		Path   string `json:"path"`
@@ -265,7 +267,6 @@ type (
 		Port int    `json:"port,omitempty"`
 	}
 
-	// PlanPhaseInput reports progress on a phase of a project plan linked to the task.
 	PlanPhaseInput struct {
 		Plan   string `json:"plan"`
 		Phase  string `json:"phase"`
@@ -280,21 +281,18 @@ type (
 		Phases      []PlanProposalPhase `json:"phases"`
 	}
 
-	// PlanProposalPhase is one phase of a proposed plan.
 	PlanProposalPhase struct {
 		Title    string `json:"title"`
 		Detail   string `json:"detail,omitempty"`
 		DoneWhen string `json:"done_when,omitempty"`
 	}
 
-	// AskUserInput is a question for the user: they pick one of the options or write their own answer.
 	AskUserInput struct {
 		Question string          `json:"question"`
 		Options  []AskUserOption `json:"options"`
 	}
 
-	// AskUserOption is one suggested answer. At most one is Recommended: the agent's own pick, which it
-	// may fall back to when nobody answers.
+	// AskUserOption is one suggested answer; at most one is Recommended, the agent's fallback when nobody answers.
 	AskUserOption struct {
 		Label       string `json:"label"`
 		Description string `json:"description,omitempty"`
@@ -306,9 +304,7 @@ type (
 		Lesson string `json:"lesson"`
 	}
 
-	// MiabiInput addresses a Miabi app. Workspace and app are names (handles), never numeric ids or
-	// uids: policy rules match "workspace/app", so the name must be the only way to address it.
-	// Integration names the Miabi integration when there are several.
+	// MiabiInput addresses an app by name only, never by id, because policy rules match "workspace/app".
 	MiabiInput struct {
 		Workspace   string `json:"workspace"`
 		App         string `json:"app"`
@@ -342,7 +338,6 @@ type (
 		Integration string `json:"integration,omitempty"`
 	}
 
-	// MiabiWorkspaceInput addresses a whole Miabi workspace (overview, alerts, events, lists).
 	MiabiWorkspaceInput struct {
 		Workspace   string `json:"workspace"`
 		Integration string `json:"integration,omitempty"`
@@ -356,8 +351,7 @@ type (
 		Alert       int64  `json:"alert"`
 		Action      string `json:"action"` // ack | resolve
 	}
-	// MiabiDatabaseInput addresses a database instance by name and, optionally, one logical database
-	// on it (default: the only one).
+	// MiabiDatabaseInput addresses a database instance; DB picks a logical database on it (default: the only one).
 	MiabiDatabaseInput struct {
 		Workspace   string `json:"workspace"`
 		Integration string `json:"integration,omitempty"`
@@ -400,7 +394,6 @@ type (
 		Integration string `json:"integration,omitempty"`
 		Action      string `json:"action"` // promote | abort
 	}
-	// MiabiNamedInput addresses a stack, cron job or pipeline by name.
 	MiabiNamedInput struct {
 		Workspace   string `json:"workspace"`
 		Integration string `json:"integration,omitempty"`
@@ -408,7 +401,6 @@ type (
 		Branch      string `json:"branch,omitempty"` // pipeline runs
 	}
 
-	// ChangeCall is one tool call inside a change plan.
 	ChangeCall struct {
 		Tool        string          `json:"tool"`
 		Input       json.RawMessage `json:"input"`
@@ -488,10 +480,8 @@ func hostResources(in json.RawMessage) (Resources, error) {
 	return Resources{Domains: []string{strings.ToLower(v.Host)}}, err
 }
 
-// wsSchema is the workspace and integration properties shared by workspace-level Miabi tools.
 const wsSchema = `"workspace":{"type":"string","description":"Miabi workspace name"},"integration":{"type":"string","description":"Miabi integration name; omit to use the default"}`
 
-// miabiSchema builds a Miabi tool schema: workspace and app plus extra properties.
 func miabiSchema(extra string, required ...string) json.RawMessage {
 	props := `"workspace":{"type":"string","description":"Miabi workspace name (from miabi_workspaces)"},"app":{"type":"string","description":"app name (slug)"},"integration":{"type":"string","description":"Miabi integration name; omit to use the default"}`
 	if extra != "" {
@@ -515,7 +505,6 @@ func validApp(a string) error {
 	return nil
 }
 
-// workspaceRE is a Miabi workspace handle (lowercase letters, digits, dashes).
 var workspaceRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // miabiApp validates a workspace and app and returns the "workspace/app" resource policies match.
@@ -529,8 +518,7 @@ func miabiApp(ws, app string) (Resources, error) {
 	return Resources{Apps: []string{ws + "/" + app}}, nil
 }
 
-// miabiNamed is a non-app resource: "workspace/<kind>:<name>" (":" never appears in names, so it
-// cannot be confused with an app). A rule such as "prod/*" covers every kind.
+// miabiNamed returns "workspace/<kind>:<name>"; ":" never appears in names, so it cannot collide with an app.
 func miabiNamed(ws, kind, name string) (Resources, error) {
 	if !workspaceRE.MatchString(ws) {
 		return Resources{}, fmt.Errorf("workspace must be a Miabi workspace name (lowercase handle)")
@@ -888,7 +876,6 @@ var catalog = map[string]ToolSpec{
 			if err != nil {
 				return Resources{}, err
 			}
-			// Listing a workspace is checked as its "workspace/*" resource.
 			if !workspaceRE.MatchString(v.Workspace) {
 				return Resources{}, fmt.Errorf("workspace must be a Miabi workspace name (lowercase handle)")
 			}
@@ -1148,8 +1135,7 @@ var catalog = map[string]ToolSpec{
 	},
 }
 
-// Bounds of a proposed plan. They are tighter than what people can write: an agent's proposal is a
-// starting point for review, and every linked plan ends up in a task's goal.
+// Proposed-plan bounds are tighter than human ones because every linked plan ends up in a task's goal.
 const (
 	MaxProposedPhases      = 30
 	MaxProposedTitle       = 200
@@ -1184,7 +1170,6 @@ func planProposeResources(in json.RawMessage) (Resources, error) {
 	return Resources{}, nil
 }
 
-// MaxPlanNote bounds the note an agent leaves on a plan phase.
 const MaxPlanNote = 1000
 
 func planPhaseResources(in json.RawMessage) (Resources, error) {
@@ -1206,10 +1191,9 @@ func planPhaseResources(in json.RawMessage) (Resources, error) {
 	return Resources{}, nil
 }
 
-// MaxLessonLen bounds a proposed lesson: lessons land in every future system prompt of the agent.
+// MaxLessonLen is small because lessons land in every future system prompt of the agent.
 const MaxLessonLen = 400
 
-// Bounds of an ask_user question.
 const (
 	MaxQuestionLen       = 1000
 	MinQuestionOpts      = 2
@@ -1274,7 +1258,6 @@ func init() {
 	catalog[ToolChangeRun] = t
 }
 
-// LookupTool returns a tool spec from the catalog.
 func LookupTool(name string) (ToolSpec, bool) {
 	if t, ok := catalog[name]; ok {
 		return t, ok
@@ -1285,22 +1268,17 @@ func LookupTool(name string) (ToolSpec, bool) {
 	return t, ok
 }
 
-// MCP tools are discovered at run time from MCP servers the control plane connects to. They are
-// named "mcp__<server>__<tool>", always run on the control plane, and carry the risk an admin
-// assigned. Their inputs are opaque to policy: they are allowed or denied by name and risk only.
+// MCP tool inputs are opaque to policy: they are allowed or denied by name and admin-assigned risk only.
 var (
 	dynMu   sync.RWMutex
 	dynamic = map[string]ToolSpec{}
 	mcpRE   = regexp.MustCompile(`^mcp__[a-z0-9][a-z0-9-]{0,31}__[A-Za-z0-9_.-]{1,64}$`)
 )
 
-// MCPToolName builds a dynamic tool's name.
 func MCPToolName(server, tool string) string { return "mcp__" + server + "__" + tool }
 
-// IsMCPTool reports whether name is a well-formed MCP tool name.
 func IsMCPTool(name string) bool { return mcpRE.MatchString(name) }
 
-// DynamicTool describes an MCP tool for an agent's session.
 type DynamicTool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
@@ -1308,8 +1286,7 @@ type DynamicTool struct {
 	Risk        Risk            `json:"risk"`
 }
 
-// SetDynamicTools replaces the registered MCP tools whose names start with prefix (one server's
-// tools: "mcp__<server>__"). Inputs must be JSON objects; nothing else is checked.
+// SetDynamicTools replaces the MCP tools under prefix ("mcp__<server>__"); inputs are only checked to be JSON objects.
 func SetDynamicTools(prefix string, tools []DynamicTool) {
 	dynMu.Lock()
 	defer dynMu.Unlock()
@@ -1333,7 +1310,6 @@ func SetDynamicTools(prefix string, tools []DynamicTool) {
 	}
 }
 
-// DynamicTools returns the registered MCP tools.
 func DynamicTools() []ToolSpec {
 	dynMu.RLock()
 	defer dynMu.RUnlock()
@@ -1345,7 +1321,6 @@ func DynamicTools() []ToolSpec {
 	return out
 }
 
-// Catalog returns every tool, sorted by name.
 func Catalog() []ToolSpec {
 	out := make([]ToolSpec, 0, len(catalog))
 	for _, t := range catalog {
