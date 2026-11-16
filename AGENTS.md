@@ -105,12 +105,12 @@ These apply to every change. A change that weakens one is wrong, however conveni
 
 ### License header
 
-Akili is MIT licensed.
+Akili is licensed under Apache-2.0 (`LICENSE`, attribution in `NOTICE`).
 
-- **Go files** start with the copyright line and the full MIT permission text, as a `//` block,
+- **Go files** start with the copyright line and the standard Apache-2.0 notice, as a `//` block,
   followed by a blank line. No SPDX line. Copy it from any existing `.go` file.
 - **Other source files** (TypeScript, Vue, shell) use two lines: `Copyright (c) 2026 Jonas Kaninda.`
-  then `SPDX-License-Identifier: MIT`.
+  then `SPDX-License-Identifier: Apache-2.0`.
 
 ## Comment rules
 

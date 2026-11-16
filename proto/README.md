@@ -15,4 +15,4 @@ go vet ./...
 
 ## License
 
-MIT. See [LICENSE](../LICENSE).
+Apache-2.0. See [LICENSE](../LICENSE).

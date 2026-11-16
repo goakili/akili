@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # End-to-end test: real Postgres + Redis (Docker), the control plane and one agent, with the scripted provider.
 set -euo pipefail
 

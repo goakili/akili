@@ -31,6 +31,7 @@ RUN go mod init build && go get github.com/miabi-io/cli@${MIABI_CLI_VERSION} && 
     -o /out/miabi github.com/miabi-io/cli
 
 FROM alpine:3
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 akili
 COPY --from=build /out/akili /usr/local/bin/akili
 COPY --from=miabi /out/miabi /usr/local/bin/miabi

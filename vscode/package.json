@@ -4,7 +4,7 @@
   "description": "Chat with Akili agents, run coding tasks, approve actions and review their changes from VS Code.",
   "version": "0.1.0",
   "publisher": "goakili",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "homepage": "https://goakili.dev",
   "repository": {
     "type": "git",

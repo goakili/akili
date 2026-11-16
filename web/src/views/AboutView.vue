@@ -1,6 +1,6 @@
 <!--
   Copyright (c) 2026 Jonas Kaninda.
-  SPDX-License-Identifier: MIT
+  SPDX-License-Identifier: Apache-2.0
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
@@ -50,7 +50,7 @@ const version = computed(() => (/^\d/.test(live.version) ? `v${live.version}` : 
           <dt>Source</dt>
           <dd><a href="https://github.com/goakili/akili" target="_blank" rel="noopener noreferrer">github.com/goakili/akili</a></dd>
           <dt>License</dt>
-          <dd><a href="https://github.com/goakili/akili/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a></dd>
+          <dd><a href="https://github.com/goakili/akili/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Apache-2.0</a></dd>
           <dt>API docs</dt><dd><a href="/docs" target="_blank" rel="noopener">/docs</a></dd>
           <dt>Author</dt><dd><a href="https://jkaninda.dev/" target="_blank" rel="noopener noreferrer">Jonas Kaninda</a></dd>
           <dt>Copyright</dt><dd>© 2026 <a href="https://jkaninda.dev/" target="_blank" rel="noopener noreferrer">Jonas Kaninda</a></dd>

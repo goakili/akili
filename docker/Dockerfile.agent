@@ -12,6 +12,7 @@ WORKDIR /src/agent
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.Version=${VERSION}" -o /out/akili-agent ./cmd/akili-agent
 
 FROM alpine:3
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 # Tools the agent commonly shells out to.
 RUN apk add --no-cache ca-certificates bash curl git jq procps coreutils findutils grep \
  && install -d -m 0700 /var/lib/akili-agent

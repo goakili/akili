@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Chat gateways and lessons end to end, against fake Telegram, Slack and Signal APIs.
 set -euo pipefail
 

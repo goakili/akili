@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Hardening end-to-end test: TLS with agent mTLS, SSO against a fake OIDC provider, SIEM sinks and a KMS move to Vault Transit.
 set -euo pipefail
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Load test: AGENTS simulated agents run TASKS tasks against one dev-mode control plane (knobs: RAMP, HOLD, SERVER_BIN, KEEP).
 set -euo pipefail
 

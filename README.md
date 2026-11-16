@@ -26,7 +26,7 @@ The security-first platform for orchestrating, governing, and safely automating 
 [![Go](https://img.shields.io/github/go-mod/go-version/goakili/akili?filename=server%2Fgo.mod)](https://go.dev/)
 [![Go Reference](https://pkg.go.dev/badge/github.com/goakili/akili/proto.svg)](https://pkg.go.dev/github.com/goakili/akili/proto)
 [![GitHub Release](https://img.shields.io/github/v/release/goakili/akili)](https://github.com/goakili/akili/releases)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 ![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/jkaninda/akili?style=flat-square)
 ![Docker Pulls](https://img.shields.io/docker/pulls/jkaninda/akili?style=flat-square)
 [![Deploy on Miabi](https://miabi.io/badge.svg?style=flat-square&label=deploy)](https://marketplace.miabi.io/templates/akili)
@@ -468,6 +468,8 @@ Settings come from environment variables. On start the server also loads `./.env
 
 ## License
 
-Akili is free software, published under the [MIT License](LICENSE).
+Akili is free software, published under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).
+
+"Akili" and the Akili logo are not licensed under Apache-2.0; forks must use a different name.
 
 Copyright © 2026 [Jonas Kaninda](https://jkaninda.dev/)

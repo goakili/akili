@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # End-to-end test of coding work against a real Gitea, with the scripted provider; needs Docker.
 set -euo pipefail
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # End-to-end test of operations: alert, triage, approved change plan, verify or rollback, and a recorded terminal.
 set -euo pipefail
 

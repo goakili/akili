@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // Builds VNodes, never HTML strings: untrusted agent and tool output only ever becomes text nodes.
 

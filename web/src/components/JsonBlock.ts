@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Jonas Kaninda.
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 
 // Built from VNodes: every token is a text node, so untrusted content cannot execute.
 import { defineComponent, h, ref, type VNode } from 'vue'

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Jonas Kaninda.
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: Apache-2.0
 # Chaos test: the replica holding the agent's tunnel is killed mid-task, and the task resumes on the survivor.
 set -euo pipefail
 
