@@ -22,7 +22,7 @@ RUN cd server && CGO_ENABLED=0 go build -trimpath \
 
 # The Miabi CLI, for the Miabi MCP preset (`miabi mcp`). Cross-compiled, so arm64 builds natively.
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS miabi
-ARG MIABI_CLI_VERSION=v0.20.5
+ARG MIABI_CLI_VERSION=v0.24.1
 ARG TARGETOS TARGETARCH
 WORKDIR /src
 RUN go mod init build && go get github.com/miabi-io/cli@${MIABI_CLI_VERSION} && \
