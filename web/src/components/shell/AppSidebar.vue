@@ -47,6 +47,7 @@ const SECTIONS: { label: string; items: Item[] }[] = [
     label: 'Govern',
     items: [
       { to: '/policies', label: 'Policies', icon: 'policies' },
+      { to: '/autonomy', label: 'Autonomy', icon: 'key' },
       { to: '/skills', label: 'Skills', icon: 'skills' },
       { to: '/lessons', label: 'Lessons', icon: 'lightbulb' },
       { to: '/audit', label: 'Audit log', icon: 'scroll', minRole: 'admin' },

@@ -210,6 +210,9 @@ func hasShellMeta(cmd string) bool {
 
 func globMatch(pattern, s string) bool { return wildcard(pattern, s, false) }
 
+// GlobMatch is the policy's glob: "*" and "?" also match "/".
+func GlobMatch(pattern, s string) bool { return globMatch(pattern, s) }
+
 // commandMatch: "*" matches anything, including spaces and slashes.
 func commandMatch(pattern, s string) bool { return wildcard(strings.TrimSpace(pattern), s, false) }
 

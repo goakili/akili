@@ -128,8 +128,11 @@ func (h *Hub) Answer(ctx context.Context, org, questionID, userID string, choice
 		reopen()
 		return nil, fmt.Errorf("audit unavailable: %w", err)
 	}
-	d := proto.ToolDecision{RequestID: q.RequestID, Effect: proto.EffectAllow, Reason: "answered",
-		Result: &proto.RemoteResult{Output: answerText(&q)}, Deadline: h.resumeTask(ctx, q.SessionID, q.TaskID)}
+	d := proto.ToolDecision{RequestID: q.RequestID, Effect: proto.EffectAllow, Reason: "answered", Result: &proto.RemoteResult{Output: answerText(&q)}}
+	if q.Kind == models.QuestionStop {
+		d = stopDecision(&q, false)
+	}
+	d.Deadline = h.resumeTask(ctx, q.SessionID, q.TaskID)
 	if err := h.bus.SendCommandData(ctx, q.AgentID, bus.Command{Type: bus.CmdToolDecision, SessionID: q.SessionID}, d); err != nil {
 		// The agent cannot receive it now; leave the question open rather than lose the answer.
 		reopen()
@@ -171,9 +174,12 @@ func (h *Hub) expireQuestion(ctx context.Context, q *models.Question, why string
 		out = fmt.Sprintf("No answer: %s. If your recommended option %q is safe and easy to undo, continue with it and say so in your summary; "+
 			"otherwise stop and start your final message with \"BLOCKED:\" followed by the question.", why, r.Label)
 	}
-	if err := h.bus.SendCommandData(ctx, q.AgentID, bus.Command{Type: bus.CmdToolDecision, SessionID: q.SessionID},
-		proto.ToolDecision{RequestID: q.RequestID, Effect: proto.EffectAllow, Reason: "expired", Result: &proto.RemoteResult{Output: out},
-			Deadline: h.resumeTask(ctx, q.SessionID, q.TaskID)}); err != nil {
+	d := proto.ToolDecision{RequestID: q.RequestID, Effect: proto.EffectAllow, Reason: "expired", Result: &proto.RemoteResult{Output: out}}
+	if q.Kind == models.QuestionStop {
+		d = stopDecision(q, true)
+	}
+	d.Deadline = h.resumeTask(ctx, q.SessionID, q.TaskID)
+	if err := h.bus.SendCommandData(ctx, q.AgentID, bus.Command{Type: bus.CmdToolDecision, SessionID: q.SessionID}, d); err != nil {
 		logger.Debug("question expired; agent not reachable", "question", q.ID, "error", err)
 	}
 }

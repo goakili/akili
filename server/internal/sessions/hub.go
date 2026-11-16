@@ -32,6 +32,7 @@ import (
 
 	"github.com/goakili/akili/proto"
 	"github.com/goakili/akili/server/internal/audit"
+	"github.com/goakili/akili/server/internal/autonomy"
 	"github.com/goakili/akili/server/internal/bus"
 	"github.com/goakili/akili/server/internal/crypto"
 	"github.com/goakili/akili/server/internal/llm"
@@ -87,7 +88,11 @@ type Hub struct {
 	lessons    func(ctx context.Context, org, agentID string) []string
 	mcpTools   func(ctx context.Context, org string) []proto.DynamicTool
 	mcpRun     RemoteRunner
+	autonomy   *autonomy.Service
 }
+
+// SetAutonomy enables grants, change windows and stop conditions.
+func (h *Hub) SetAutonomy(a *autonomy.Service) { h.autonomy = a }
 
 func (h *Hub) SetRemoteTools(r RemoteTools) { h.remote = r }
 
@@ -431,6 +436,13 @@ func (h *Hub) authorize(ctx context.Context, s *models.ChatSession, req proto.To
 		}
 	}
 
+	review := h.review(ctx, s, &agent, req, plan, d)
+	d = review.Decision
+	stop := ""
+	if d.Effect != proto.EffectDeny && s.Mode == proto.ModeTask && req.Tool != proto.ToolAskUser && req.ChangeID == "" {
+		stop = h.stopReason(ctx, s, req)
+	}
+
 	inputHash := crypto.SHA256Hex(append([]byte(req.Tool+"\n"), req.Input...))
 	meta := map[string]any{
 		"session_id": s.ID, "request_id": req.RequestID, "tool": req.Tool, "risk": d.Risk.String(),
@@ -439,6 +451,15 @@ func (h *Hub) authorize(ctx context.Context, s *models.ChatSession, req proto.To
 	}
 	if req.ChangeID != "" {
 		meta["change_id"], meta["phase"] = req.ChangeID, req.Phase
+	}
+	if review.GrantID != "" {
+		meta["grant_id"] = review.GrantID
+	}
+	if review.WindowID != "" {
+		meta["window_id"] = review.WindowID
+	}
+	if stop != "" {
+		meta["decision"], meta["stopped"] = "stop", stop
 	}
 	if s.TaskID != nil {
 		meta["task_id"] = *s.TaskID
@@ -451,7 +472,15 @@ func (h *Hub) authorize(ctx context.Context, s *models.ChatSession, req proto.To
 	}
 	out.Effect, out.Reason = d.Effect, d.Reason
 
-	if d.Effect == proto.EffectApprove {
+	if stop != "" && d.Effect != proto.EffectDeny {
+		out = h.pauseForOperator(ctx, s, req, stop)
+	} else if d.Effect == proto.EffectAllow && plan != nil {
+		if id, err := h.grantedChange(ctx, s, &agent, req, inputHash, plan, d); err != nil {
+			out.Effect, out.Reason = proto.EffectDeny, "could not start the granted change"
+		} else {
+			out.ChangeID = id
+		}
+	} else if d.Effect == proto.EffectApprove {
 		ap := models.Approval{Base: models.Base{ID: models.NewID("apr"), OrganizationID: s.OrganizationID}, SessionID: s.ID,
 			TaskID: s.TaskID, AgentID: agent.ID, RequestID: req.RequestID, Tool: req.Tool, Input: req.Input, InputHash: inputHash,
 			Risk: d.Risk.String(), Reason: d.Reason, Status: models.ApprovalPending, ExpiresAt: time.Now().UTC().Add(ApprovalTTL)}

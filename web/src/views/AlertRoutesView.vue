@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, AUTONOMY_LEVELS, type AlertRoute, type AlertRouteCreated, type AlertRouteInput, type Autonomy } from '../api'
+import { api, AUTONOMY_LEVELS, type AlertRoute, type AlertRouteCreated, type AlertRouteInput, type Autonomy, type Runbook } from '../api'
 import { useCatalog } from '../stores/catalog'
 import { useConfirm } from '../stores/confirm'
 import { useToast } from '../stores/toast'
@@ -59,7 +59,10 @@ interface Form {
   selector: string
   autonomy: Autonomy
   instructions: string
+  runbook_id: string
 }
+
+const runbooks = ref<Runbook[]>([])
 
 const show = ref(false)
 const editing = ref<AlertRoute | null>(null)
@@ -68,7 +71,7 @@ const tried = ref(false)
 const form = ref<Form>(blank())
 
 function blank(): Form {
-  return { name: '', enabled: true, match: [{ k: 'severity', v: 'critical' }], host_label: 'instance', fallback: 'any', agent_id: '', selector: '', autonomy: 2, instructions: '' }
+  return { name: '', enabled: true, match: [{ k: 'severity', v: 'critical' }], host_label: 'instance', fallback: 'any', agent_id: '', selector: '', autonomy: 2, instructions: '', runbook_id: '' }
 }
 
 function formFrom(r: AlertRoute): Form {
@@ -83,6 +86,7 @@ function formFrom(r: AlertRoute): Form {
     selector: (r.selector ?? []).join(', '),
     autonomy: r.autonomy,
     instructions: r.instructions,
+    runbook_id: r.runbook_id ?? '',
   }
 }
 
@@ -98,6 +102,7 @@ function inputFrom(f: Form): AlertRouteInput {
     selector: f.fallback === 'labels' ? splitList(f.selector) : [],
     autonomy: f.autonomy,
     instructions: f.instructions,
+    runbook_id: f.runbook_id || null,
   }
 }
 
@@ -269,9 +274,10 @@ async function copy(text: string, what: string) {
   if (await copyText(text)) toast.success(`${what} copied`)
 }
 
-onMounted(() => {
+onMounted(async () => {
   load()
   catalog.loadAgents()
+  runbooks.value = (await api.listRunbooks({ quiet: true }).catch(() => null)) ?? []
 })
 </script>
 
@@ -416,6 +422,15 @@ onMounted(() => {
           <label for="ar-instr">Instructions <span class="opt">(optional)</span></label>
           <textarea id="ar-instr" v-model="form.instructions" class="textarea" rows="5" placeholder="Runbook hints, escalation contacts, what never to touch…" />
           <span class="hint">Added to every triage goal from this route. The alert itself is passed to the agent as data, never as instructions.</span>
+        </div>
+
+        <div class="field">
+          <label for="ar-runbook">Runbook <span class="opt">(optional)</span></label>
+          <select id="ar-runbook" v-model="form.runbook_id" class="select">
+            <option value="">None</option>
+            <option v-for="rb in runbooks" :key="rb.id" :value="rb.id" :disabled="!rb.enabled">{{ rb.name }}{{ rb.enabled ? '' : ' (disabled)' }}</option>
+          </select>
+          <span class="hint">The triage agent is shown this runbook as the likely fix. It still needs approval unless a grant covers it.</span>
         </div>
       </form>
       <template #footer>

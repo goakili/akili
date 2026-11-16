@@ -153,6 +153,7 @@ func (h *Handlers) SetKillSwitch(c *okapi.Context, req *KillSwitchRequest) error
 		return c.AbortInternalServerError("audit unavailable", err)
 	}
 	if req.Body.Enabled {
+		h.Autonomy.RevokeAll(ctx, org, middlewares.UserID(c), "kill switch engaged")
 		var open []models.ChatSession
 		h.DB.Where("organization_id = ? AND status = ? AND state <> ?", org, models.SessionOpen, "idle").Find(&open)
 		for _, s := range open {

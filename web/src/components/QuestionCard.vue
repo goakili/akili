@@ -50,11 +50,12 @@ function sendOwn() {
 </script>
 
 <template>
-  <div class="question-card" :class="{ resolved: !pending }" role="group" :aria-label="`Question from ${catalog.agentName(question.agent_id)}`">
+  <div class="question-card" :class="{ resolved: !pending }" role="group" :aria-label="question.kind === 'stop' ? 'Paused task' : `Question from ${catalog.agentName(question.agent_id)}`">
     <div class="row wrap between">
       <div class="qc-title">
-        <Icon name="help" class="mark" />
-        <strong>{{ pending ? 'The agent needs your decision' : 'Question' }}</strong>
+        <Icon :name="question.kind === 'stop' ? 'pause' : 'help'" class="mark" />
+        <strong v-if="question.kind === 'stop'">{{ pending ? 'Akili paused this task' : 'Paused task' }}</strong>
+        <strong v-else>{{ pending ? 'The agent needs your decision' : 'Question' }}</strong>
         <Badge v-if="!pending" :value="question.status" />
       </div>
       <span v-if="pending" class="countdown" :title="`Expires ${fmtDate(question.expires_at)}`"><Icon name="clock" />{{ left === 'expired' ? 'expired' : `expires in ${left}` }}</span>

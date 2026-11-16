@@ -5,6 +5,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api, ApiError, type Approval, type Change, type ChangeCall } from '../api'
+import { useAuth } from '../stores/auth'
 import { useCatalog } from '../stores/catalog'
 import { useLive } from '../stores/live'
 import { useToast } from '../stores/toast'
@@ -20,6 +21,7 @@ import JsonBlock from '../components/JsonBlock'
 import Icon, { type IconName } from '../components/Icon'
 
 const props = defineProps<{ id: string }>()
+const auth = useAuth()
 const catalog = useCatalog()
 const live = useLive()
 const toast = useToast()
@@ -156,6 +158,9 @@ onUnmounted(() => {
       <template #subtitle>
         Proposed by <RouterLink :to="`/agents/${change.agent_id}`">{{ catalog.agentName(change.agent_id) }}</RouterLink> · {{ relTime(change.created_at, now) }}
       </template>
+      <RouterLink v-if="auth.isAdmin && change.status === 'succeeded'" :to="{ path: '/autonomy', query: { tab: 'runbooks', from_change: change.id } }" class="btn btn-sm">
+        <Icon name="skills" />Save as runbook
+      </RouterLink>
     </PageHeader>
 
     <div v-if="banner" class="banner" :class="banner.tone" role="status">

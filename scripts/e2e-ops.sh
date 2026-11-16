@@ -139,6 +139,90 @@ wait_for "rolled back" 60 rolled
 [ "$(api GET /changes/$CHG2 | json "[c['status'] for c in d['data']['calls']]")" = "['ok', 'failed', 'ok']" ] || fail "failed check not recorded as failed: $(api GET /changes/$CHG2 | json "[c['status'] for c in d['data']['calls']]")"
 [ "$(api GET '/approvals' | json "[a.get('change_id') for a in d['data'] if a['tool']=='change_run'][0]")" != "None" ] || fail "approval does not link its change"
 
+task() { api POST /tasks "$(python3 -c 'import json,sys; print(json.dumps({"goal": sys.argv[1], "agent_id": sys.argv[2], "autonomy": 2}))' "$1" "$AGENT")" | json "d['data']['id']"; }
+tstatus() { api GET "/tasks/$1" | json "d['data']['status']"; }
+finished() { case "$(tstatus "$1")" in succeeded|failed|cancelled|timed_out) return 0;; *) return 1;; esac; }
+approval_for() { api GET '/approvals?status=pending' | json "[a['id'] for a in d['data'] if a['task_id']=='$1'][0]"; }
+code() {
+  if [ $# -ge 3 ]; then curl -s -o "$WORK/code.out" -w '%{http_code}' -b "$JAR" -X "$1" -H 'Content-Type: application/json' -d "$3" "$API$2"
+  else curl -s -o "$WORK/code.out" -w '%{http_code}' -b "$JAR" -X "$1" "$API$2"; fi
+}
+
+step "Grants: approve once and allow similar calls; denials and API keys never grant"
+TG1=$(task 'tool: fs_write {"path":"cache/granted.txt","content":"one"}')
+wait_for "fs_write approval" 30 approval_for "$TG1"
+APG=$(approval_for "$TG1")
+api POST "/approvals/$APG/approve" '{}' >/dev/null
+GRANT_BODY="{\"agent_id\":\"$AGENT\",\"tool\":\"fs_write\",\"match\":{\"path\":{\"equals\":\"cache/granted.txt\"},\"content\":{\"glob\":\"*\"}},\"max_risk\":\"medium\",\"expires_in_hours\":1,\"max_uses\":1,\"reason\":\"e2e: routine writes\",\"approval_id\":\"$APG\"}"
+KEY=$(api POST /api-keys '{"name":"e2e","scopes":["read","write"],"expires_in_days":1}' | json "d['data']['secret']")
+[ "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -d "$GRANT_BODY" "$API/grants")" = "403" ] || fail "an API key created a grant"
+[ "$(api GET /grants | json "len(d['data'])")" = "0" ] || fail "a refused API-key request still stored a grant"
+[ "$(code POST /grants "$(echo "$GRANT_BODY" | sed 's/"max_risk":"medium"/"max_risk":"critical"/')")" = "400" ] && grep -q critical "$WORK/code.out" || fail "a critical grant was accepted: $(cat "$WORK/code.out")"
+GRANT=$(api POST /grants "$GRANT_BODY" | json "d['data']['id']")
+wait_for "first write" 30 finished "$TG1"
+TG2=$(task 'tool: fs_write {"path":"cache/granted.txt","content":"two"}')
+wait_for "granted write" 30 finished "$TG2"
+[ "$(tstatus "$TG2")" = "succeeded" ] || fail "granted task: $(tstatus "$TG2")"
+[ "$(cat "$WORK/wk/cache/granted.txt")" = "two" ] || fail "the granted call did not run"
+[ "$(api GET "/grants?agent_id=$AGENT" | json "[g['uses'] for g in d['data'] if g['id']=='$GRANT'][0]")" = "1" ] || fail "grant use not counted"
+[ "$(api GET '/audit?action=tool.request&size=200' | json "len([e for e in d['data'] if (e.get('metadata') or {}).get('grant_id')=='$GRANT'])")" -ge 1 ] || fail "granted call not audited with its grant"
+TG3=$(task 'tool: fs_write {"path":"cache/granted.txt","content":"three"}')
+wait_for "approval once the grant is used up" 30 approval_for "$TG3"
+api POST "/approvals/$(approval_for "$TG3")/deny" '{}' >/dev/null
+TG3B=$(task 'tool: fs_write {"path":"cache/other.txt","content":"x"}')
+wait_for "approval outside the grant" 30 approval_for "$TG3B"
+api POST "/approvals/$(approval_for "$TG3B")/deny" '{}' >/dev/null
+
+step "Freeze: grants pause and the call needs a person again"
+GRANT2=$(api POST /grants "$(echo "$GRANT_BODY" | sed 's/"max_uses":1/"max_uses":0/')" | json "d['data']['id']")
+FROM=$(python3 -c 'import datetime as d; print((d.datetime.now(d.timezone.utc)-d.timedelta(hours=1)).isoformat())')
+TO=$(python3 -c 'import datetime as d; print((d.datetime.now(d.timezone.utc)+d.timedelta(hours=1)).isoformat())')
+FREEZE=$(api POST /change-windows "{\"name\":\"launch\",\"kind\":\"freeze\",\"starts_at\":\"$FROM\",\"ends_at\":\"$TO\",\"enabled\":true}" | json "d['data']['id']")
+[ "$(api GET /change-windows | json "[w['active'] for w in d['data'] if w['id']=='$FREEZE'][0]")" = "True" ] || fail "freeze not active"
+TG4=$(task 'tool: fs_write {"path":"cache/granted.txt","content":"frozen"}')
+wait_for "approval during the freeze" 30 approval_for "$TG4"
+api POST "/approvals/$(approval_for "$TG4")/deny" '{}' >/dev/null
+api DELETE "/change-windows/$FREEZE" >/dev/null
+api POST "/grants/$GRANT2/revoke" >/dev/null
+
+step "Runbooks: a granted plan within bounds runs without a person; outside them it asks"
+python3 - "$WORK/runbook.json" <<'PY'
+import json, sys
+plan = {"steps": [{"tool": "fs_write", "input": {"path": "cache/rb.conf", "content": "v={{v}}"}}],
+        "verify": [{"tool": "fs_read", "input": {"path": "cache/rb.conf"}, "expect": "v="}], "rollback": []}
+json.dump({"name": "set rb", "plan": plan, "params": [{"name": "v", "bounds": {"one_of": ["1", "2"]}}], "enabled": True}, open(sys.argv[1], "w"))
+PY
+RB=$(api_file POST /runbooks "$WORK/runbook.json" | json "d['data']['id']")
+BARE="{\"agent_id\":\"$AGENT\",\"tool\":\"change_run\",\"max_risk\":\"high\",\"expires_in_hours\":1,\"reason\":\"x\"}"
+[ "$(code POST /grants "$BARE")" = "400" ] && grep -q runbook "$WORK/code.out" || fail "a bare change_run grant was accepted: $(cat "$WORK/code.out")"
+api POST /grants "{\"agent_id\":\"$AGENT\",\"tool\":\"change_run\",\"runbook_id\":\"$RB\",\"max_risk\":\"high\",\"expires_in_hours\":1,\"reason\":\"e2e runbook\"}" >/dev/null
+rb_plan() { python3 -c 'import json,sys; print("change: "+json.dumps({"title":"Set rb","reason":"e2e","steps":[{"tool":"fs_write","input":{"path":"cache/rb.conf","content":"v="+sys.argv[1]}}],"verify":[{"tool":"fs_read","input":{"path":"cache/rb.conf"},"expect":"v="}],"rollback":[]}))' "$1"; }
+TG5=$(task "$(rb_plan 2)")
+wait_for "granted runbook task" 60 finished "$TG5"
+[ "$(cat "$WORK/wk/cache/rb.conf")" = "v=2" ] || fail "the granted runbook did not run"
+[ "$(api GET '/changes?status=succeeded' | json "len([c for c in d['data'] if c['task_id']=='$TG5'])")" = "1" ] || fail "the granted change is not recorded"
+TG6=$(task "$(rb_plan 3)")
+wait_for "approval outside the runbook bounds" 30 approval_for "$TG6"
+api POST "/approvals/$(approval_for "$TG6")/deny" '{}' >/dev/null
+[ "$(cat "$WORK/wk/cache/rb.conf")" = "v=2" ] || fail "a plan outside the bounds ran"
+[ "$(code GET "/agents/$AGENT/autonomy")" = "200" ] || fail "agent autonomy: $(cat "$WORK/code.out")"
+
+step "Stop conditions: a task repeating a failing call is paused for an operator"
+api PUT /system/autonomy '{"stop_repeat_failures":2}' >/dev/null
+TG7=$(task "$(printf 'read: cache/missing.txt\nread: cache/missing.txt\nread: cache/missing.txt')")
+stop_q() { api GET "/questions?status=pending&task_id=$TG7" | json "[q['id'] for q in d['data'] if q.get('kind')=='stop'][0]"; }
+wait_for "stop question" 30 stop_q
+api POST "/questions/$(stop_q)/answer" '{"choice":1}' >/dev/null
+wait_for "paused task ends" 30 finished "$TG7"
+[ "$(api GET '/audit?action=task.paused' | json "len(d['data'])")" -ge 1 ] || fail "pause not audited"
+api PUT /system/autonomy '{}' >/dev/null
+
+step "Kill switch revokes every grant"
+api POST /grants "$(echo "$GRANT_BODY" | sed 's/"max_uses":1/"max_uses":0/')" >/dev/null
+api POST /system/kill-switch '{"enabled":true}' >/dev/null
+[ "$(api GET '/grants?active=true' | json "len(d['data'])")" = "0" ] || fail "grants survived the kill switch"
+api POST /system/kill-switch '{"enabled":false}' >/dev/null
+
 step "Recorded terminal (admin, policy allows it)"
 cat > "$WORK/term.mjs" <<'JS'
 const [,, url, cookie, origin] = process.argv
