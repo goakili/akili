@@ -24,6 +24,7 @@ import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import InfiniteScroll from '../components/InfiniteScroll.vue'
 import SkeletonRows from '../components/SkeletonRows.vue'
+import AgentAutonomyPanel from '../components/AgentAutonomyPanel.vue'
 import Icon, { type IconName } from '../components/Icon'
 
 const props = defineProps<{ id: string }>()
@@ -55,11 +56,12 @@ const saving = ref(false)
 const busy = ref(false)
 const enrollment = ref<Enrollment | null>(null)
 
-type TabId = 'overview' | 'config' | 'sessions' | 'terminals' | 'activity'
+type TabId = 'overview' | 'config' | 'autonomy' | 'sessions' | 'terminals' | 'activity'
 const TABS = computed(() => {
   const t: { id: TabId; label: string; icon: IconName; count?: number }[] = [
     { id: 'overview', label: 'Overview', icon: 'overview' },
     { id: 'config', label: 'Configuration', icon: 'settings' },
+    { id: 'autonomy', label: 'Autonomy', icon: 'key' },
     { id: 'sessions', label: 'Sessions', icon: 'chat', count: countOf(sessionsPaged) },
   ]
   if (auth.isAdmin) t.push({ id: 'terminals', label: 'Terminal sessions', icon: 'terminal', count: countOf(terminalsPaged) })
@@ -427,6 +429,10 @@ onUnmounted(() => off?.())
         </button>
       </div>
     </form>
+
+    <div v-else-if="tab === 'autonomy'" id="apanel-autonomy" role="tabpanel" aria-labelledby="atab-autonomy">
+      <AgentAutonomyPanel :agent-id="id" />
+    </div>
 
     <section v-else-if="tab === 'sessions'" id="apanel-sessions" role="tabpanel" aria-labelledby="atab-sessions" class="card">
       <div class="table-wrap">

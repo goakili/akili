@@ -79,6 +79,7 @@ type AlertRouteRequest struct {
 		Match        map[string]string `json:"match" description:"labels an alert must carry"`
 		Autonomy     *proto.Autonomy   `json:"autonomy" description:"default L2; fixes still need an approved change plan"`
 		Instructions string            `json:"instructions"`
+		RunbookID    *string           `json:"runbook_id" description:"a runbook the triage agent is pointed to; only a grant lets it run unattended"`
 	} `json:"body"`
 }
 
@@ -97,6 +98,7 @@ func (h *Handlers) applyRoute(r *models.AlertRoute, req *AlertRouteRequest) erro
 	if r.Match == nil {
 		r.Match = map[string]string{}
 	}
+	r.RunbookID = emptyNil(b.RunbookID)
 	if b.Enabled != nil {
 		r.Enabled = *b.Enabled
 	}
@@ -205,7 +207,11 @@ func (h *Handlers) AlertWebhook(c *okapi.Context) error {
 			continue
 		}
 		host := a.Host(route.HostLabel)
-		in := tasks.Input{Title: a.Title(host), Goal: a.Goal(route.Instructions), AgentID: route.AgentID, Selector: route.Selector,
+		instructions := route.Instructions
+		if route.RunbookID != nil {
+			instructions = strings.TrimSpace(instructions + "\n\n" + h.Autonomy.Hint(ctx, route.OrganizationID, *route.RunbookID))
+		}
+		in := tasks.Input{Title: a.Title(host), Goal: a.Goal(instructions), AgentID: route.AgentID, Selector: route.Selector,
 			Priority: severityPriority(a.Severity), Autonomy: route.Autonomy, TimeoutSec: 1800, MaxAttempts: 1,
 			Trigger: "alert", TriggerRef: ref}
 		if agentID := h.agentForHost(ctx, route.OrganizationID, host); agentID != "" {

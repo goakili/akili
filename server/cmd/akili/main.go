@@ -30,6 +30,7 @@ import (
 	"github.com/goakili/akili/proto"
 	"github.com/goakili/akili/server/internal/audit"
 	"github.com/goakili/akili/server/internal/auth"
+	"github.com/goakili/akili/server/internal/autonomy"
 	"github.com/goakili/akili/server/internal/bus"
 	"github.com/goakili/akili/server/internal/chat"
 	"github.com/goakili/akili/server/internal/coder"
@@ -149,6 +150,8 @@ func runServer(cli *okapicli.CLI) error {
 	hub.AddRemoteRunner([]string{proto.ToolPlanPhaseUpdate, proto.ToolPlanPropose}, planSvc.RunRemote)
 	mcpSvc := mcp.New(db, box, auditLog, cfg.MCPCommands, cfg.MCPBinDir)
 	hub.SetMCP(mcpSvc.Tools, mcpSvc.RunRemote)
+	autonomySvc := autonomy.New(db, auditLog)
+	hub.SetAutonomy(autonomySvc)
 	gw.Mount(func(agentID string, mux *http.ServeMux) {
 		mux.Handle(proto.GitProxyPath, coderSvc.GitProxy(agentID))
 	})
@@ -170,7 +173,7 @@ func runServer(cli *okapicli.CLI) error {
 	chatSvc := chat.New(db, box, b, auditLog, hub, taskSvc, elector)
 
 	h := &handlers.Handlers{Cfg: cfg, DB: db, Bus: b, Audit: auditLog, Auth: authSvc, Fleet: fleetSvc, Tunnels: tunnels,
-		Sessions: hub, Tasks: taskSvc, Box: box, Coder: coderSvc, Miabi: miabiSvc, OIDC: sso, SIEM: forwarder, Chat: chatSvc, Lessons: lessonSvc, Plans: planSvc, MCP: mcpSvc, Mail: mailer}
+		Sessions: hub, Tasks: taskSvc, Box: box, Coder: coderSvc, Miabi: miabiSvc, OIDC: sso, SIEM: forwarder, Chat: chatSvc, Lessons: lessonSvc, Plans: planSvc, MCP: mcpSvc, Mail: mailer, Autonomy: autonomySvc}
 	routes.Register(app, h, middlewares.NewAuthenticator(db, authSvc))
 
 	return cli.RunServer(&okapicli.RunOptions{

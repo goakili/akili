@@ -40,6 +40,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/miabi', name: 'miabi', component: () => import('./views/MiabiView.vue'), meta: { title: 'Miabi' } },
   { path: '/chat', name: 'chat', component: () => import('./views/ChatView.vue'), meta: { title: 'Chat' } },
   { path: '/approvals', name: 'approvals', component: () => import('./views/ApprovalsView.vue'), meta: { title: 'Approvals' } },
+  { path: '/autonomy', name: 'autonomy', component: () => import('./views/AutonomyView.vue'), meta: { title: 'Autonomy' } },
   { path: '/lessons', name: 'lessons', component: () => import('./views/LessonsView.vue'), meta: { title: 'Lessons' } },
   { path: '/skills', name: 'skills', component: () => import('./views/SkillsView.vue'), meta: { title: 'Skills' } },
   { path: '/policies', name: 'policies', component: () => import('./views/PoliciesView.vue'), meta: { title: 'Policies' } },

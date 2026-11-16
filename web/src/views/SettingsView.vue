@@ -10,6 +10,7 @@ import PageHeader from '../components/PageHeader.vue'
 import Icon, { type IconName } from '../components/Icon'
 import ProvidersTab from './settings/ProvidersTab.vue'
 import SandboxTab from './settings/SandboxTab.vue'
+import AutonomyTab from './settings/AutonomyTab.vue'
 import UsersTab from './settings/UsersTab.vue'
 import ApiKeysTab from './settings/ApiKeysTab.vue'
 import UsageTab from './settings/UsageTab.vue'
@@ -39,6 +40,7 @@ const SECTIONS: Section[] = [
   { id: 'users', label: 'Users', icon: 'users', admin: true, group: 'Organization', title: 'Users', desc: 'Roles: viewer (read) < operator (chat, tasks, approvals) < admin (agents, policies, providers) < owner.', comp: UsersTab },
   { id: 'usage', label: 'Usage & spend', icon: 'gauge', admin: false, group: 'Organization', title: 'Usage & spend', desc: 'Model calls, tokens and cost per agent and model.', comp: UsageTab },
   { id: 'sandbox', label: 'Sandbox', icon: 'box', admin: true, group: 'Organization', title: 'Sandbox', desc: 'How project sandboxes run the commands agents give them (builds, tests, installs).', comp: SandboxTab },
+  { id: 'autonomy', label: 'Autonomy', icon: 'key', admin: true, group: 'Organization', title: 'Autonomy', desc: 'How long grants may last, when a stuck task is paused, and how much evidence a suggestion needs. Grants, windows and runbooks are on the Autonomy page.', comp: AutonomyTab },
   { id: 'kill', label: 'Kill switch', icon: 'power', admin: true, group: 'Organization', title: 'Kill switch', desc: 'An emergency stop for the whole fleet.', comp: KillSwitchTab },
   { id: 'security', label: 'Security', icon: 'lock', admin: true, group: 'Organization', title: 'Security', desc: 'Encryption at rest, audit export to your SIEM, and how people and agents authenticate. Read-only: these are set in the control-plane environment and CLI.', comp: SecurityTab },
   { id: 'audit', label: 'Audit log', icon: 'scroll', admin: true, group: 'Organization', title: 'Audit log', desc: '', href: '/audit' },

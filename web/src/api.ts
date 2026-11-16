@@ -288,6 +288,8 @@ export interface Question extends Base {
   answered_by: string | null
   answered_at: ISODate | null
   expires_at: ISODate
+  /** "stop" when Akili paused the task itself; answering never runs the paused call. */
+  kind?: '' | 'stop'
 }
 
 export interface Approval extends Base {
@@ -743,6 +745,7 @@ export interface AlertRoute extends Base {
   match: Record<string, string> | null
   autonomy: Autonomy
   instructions: string
+  runbook_id: string | null
   last_alert_at: ISODate | null
   created_by: string
 }
@@ -756,6 +759,7 @@ export interface AlertRouteInput {
   match?: Record<string, string>
   autonomy?: Autonomy
   instructions?: string
+  runbook_id?: string | null
 }
 
 /** Create and rotate return the webhook URL (with its secret token) exactly once. */
@@ -919,6 +923,129 @@ export interface LinkCode {
 export type LessonStatus = 'proposed' | 'approved' | 'rejected'
 
 /** A short fact an agent proposed (lesson_propose); only approved ones reach the system prompt. */
+/** Bounds one argument: exactly one of equals, glob, one_of, or a min/max range. */
+export interface Constraint {
+  equals?: unknown
+  glob?: string
+  one_of?: string[]
+  min?: number
+  max?: number
+}
+
+export interface ApprovalGrant extends Base {
+  agent_id: string | null
+  labels: string[] | null
+  tool: string
+  /** Every top-level argument of a covered call must be listed here. */
+  match: Record<string, Constraint> | null
+  runbook_id: string | null
+  runbook_hash: string
+  max_risk: Risk
+  windowed: boolean
+  expires_at: ISODate
+  /** 0 means no limit. */
+  max_uses: number
+  uses: number
+  last_used_at: ISODate | null
+  reason: string
+  created_by: string
+  revoked_at: ISODate | null
+  revoked_by: string | null
+  approval_id: string | null
+}
+
+export interface GrantInput {
+  agent_id?: string | null
+  labels?: string[]
+  tool: string
+  match?: Record<string, Constraint>
+  runbook_id?: string | null
+  max_risk: Risk
+  windowed?: boolean
+  expires_in_hours: number
+  max_uses?: number
+  reason: string
+  approval_id?: string | null
+}
+
+export type WindowKind = 'window' | 'freeze'
+
+export interface ChangeWindow extends Base {
+  name: string
+  kind: WindowKind
+  cron: string
+  duration_min: number
+  starts_at: ISODate | null
+  ends_at: ISODate | null
+  timezone: string
+  labels: string[] | null
+  enabled: boolean
+  created_by: string
+  active: boolean
+}
+
+export type WindowInput = Pick<ChangeWindow, 'name' | 'kind' | 'cron' | 'duration_min' | 'starts_at' | 'ends_at' | 'timezone' | 'labels' | 'enabled'>
+
+export interface RunbookParam {
+  name: string
+  description?: string
+  bounds: Constraint
+}
+
+export interface Runbook extends Base {
+  name: string
+  description: string
+  plan: unknown
+  params: RunbookParam[] | null
+  hash: string
+  version: number
+  enabled: boolean
+  source_change_id: string | null
+  created_by: string
+}
+
+export interface RunbookInput {
+  name: string
+  description: string
+  plan: unknown
+  params: RunbookParam[]
+  enabled: boolean
+  source_change_id?: string | null
+}
+
+export interface AutonomySuggestion {
+  key: string
+  kind: 'grant' | 'tighten'
+  agent_id: string
+  tool: string
+  target: string
+  approved: number
+  denied: number
+  expired: number
+  approvers: number
+  first_at: ISODate
+  last_at: ISODate
+  max_risk: Risk
+  match?: Record<string, Constraint>
+  text: string
+}
+
+export interface AgentAutonomy {
+  grants: ApprovalGrant[] | null
+  suggestions: AutonomySuggestion[] | null
+}
+
+/** 0 takes the default. */
+export interface AutonomySettings {
+  grant_max_hours: number
+  stop_repeat_failures: number
+  stop_error_streak: number
+  stop_max_tool_calls: number
+  suggest_min_approvals: number
+  suggest_min_approvers: number
+  suggest_min_days: number
+}
+
 export interface Lesson {
   id: string
   /** null: applies to every agent. */
@@ -1429,6 +1556,25 @@ export const api = {
   updateAlertRoute: (id: string, b: AlertRouteInput) => put<AlertRoute>(`/alert-routes/${enc(id)}`, b),
   rotateAlertRoute: (id: string) => post<AlertRouteCreated>(`/alert-routes/${enc(id)}/rotate`),
   deleteAlertRoute: (id: string) => del<MessageResponse>(`/alert-routes/${enc(id)}`),
+
+  listGrants: (p: { agent_id?: string; active?: boolean } = {}, o?: RequestOptions) => get<ApprovalGrant[] | null>('/grants' + qs(p), o),
+  createGrant: (b: GrantInput) => post<ApprovalGrant>('/grants', b),
+  revokeGrant: (id: string) => post<ApprovalGrant>(`/grants/${enc(id)}/revoke`),
+  listWindows: (o?: RequestOptions) => get<ChangeWindow[] | null>('/change-windows', o),
+  createWindow: (b: WindowInput) => post<ChangeWindow>('/change-windows', b),
+  updateWindow: (id: string, b: WindowInput) => put<ChangeWindow>(`/change-windows/${enc(id)}`, b),
+  deleteWindow: (id: string) => del<MessageResponse>(`/change-windows/${enc(id)}`),
+  listRunbooks: (o?: RequestOptions) => get<Runbook[] | null>('/runbooks', o),
+  createRunbook: (b: RunbookInput) => post<Runbook>('/runbooks', b),
+  updateRunbook: (id: string, b: RunbookInput) => put<Runbook>(`/runbooks/${enc(id)}`, b),
+  deleteRunbook: (id: string) => del<MessageResponse>(`/runbooks/${enc(id)}`),
+  runbookDraft: (changeId: string) => get<RunbookInput>(`/changes/${enc(changeId)}/runbook-draft`),
+  agentAutonomy: (id: string, o?: RequestOptions) => get<AgentAutonomy>(`/agents/${enc(id)}/autonomy`, o),
+  acceptSuggestion: (agentId: string, key: string, b: { expires_in_hours: number; max_uses?: number; reason?: string }) =>
+    post<ApprovalGrant>(`/agents/${enc(agentId)}/autonomy/suggestions/${enc(key)}/accept`, b),
+  dismissSuggestion: (agentId: string, key: string) => post<MessageResponse>(`/agents/${enc(agentId)}/autonomy/suggestions/${enc(key)}/dismiss`),
+  autonomySettings: () => get<AutonomySettings>('/system/autonomy'),
+  setAutonomySettings: (b: AutonomySettings) => put<AutonomySettings>('/system/autonomy', b),
   listMiabiWatches: (o?: RequestOptions) => get<MiabiWatch[] | null>('/miabi-watches', o),
   createMiabiWatch: (b: MiabiWatchInput, o?: RequestOptions) => post<MiabiWatch>('/miabi-watches', b, o),
   updateMiabiWatch: (id: string, b: MiabiWatchInput, o?: RequestOptions) => put<MiabiWatch>(`/miabi-watches/${enc(id)}`, b, o),

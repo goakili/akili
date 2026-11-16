@@ -13,6 +13,7 @@ import { useNow } from '../lib/now'
 import Badge from './Badge.vue'
 import JsonBlock from './JsonBlock'
 import PlanView from './PlanView.vue'
+import GrantDialog from './GrantDialog.vue'
 import Icon from './Icon'
 import { parsePlan } from '../lib/tools'
 
@@ -44,6 +45,14 @@ const left = computed(() => countdown(props.approval.expires_at, now.value))
 const expired = computed(() => pending.value && left.value === 'expired')
 const urgent = computed(() => pending.value && new Date(props.approval.expires_at).getTime() - now.value < 60_000)
 const canDecide = computed(() => pending.value && auth.isOperator && !expired.value && !busy.value)
+// Change plans are granted through runbooks, and critical calls always need a person.
+const canGrant = computed(() => !plan.value && props.approval.risk !== 'critical')
+const granting = ref(false)
+
+function granted(_: unknown, a: Approval | null) {
+  granting.value = false
+  if (a) emit('resolved', a)
+}
 
 async function decide(allow: boolean) {
   if (!canDecide.value) return
@@ -117,10 +126,14 @@ function onKey(e: KeyboardEvent) {
       <label :for="noteId" class="sr-only">Note</label>
       <input :id="noteId" v-model="note" class="input sm grow" maxlength="500" placeholder="Optional note for the audit log" style="min-width: 160px" />
       <button type="button" class="btn btn-sm" :disabled="!canDecide" @click="decide(false)"><Icon name="x" />Deny<kbd v-if="keyboard" class="hide-mobile">D</kbd></button>
+      <button v-if="canGrant" type="button" class="btn btn-sm" :disabled="!canDecide" title="Approve, and let matching calls run without asking for a while" @click="granting = true">
+        <Icon name="check" />Approve and allow similar…
+      </button>
       <button type="submit" class="btn btn-sm btn-primary" :disabled="!canDecide">
         <span v-if="busy" class="spinner" /><Icon v-else name="check" />{{ plan ? 'Approve plan' : 'Approve' }}<kbd v-if="keyboard" class="hide-mobile" style="background: transparent; color: inherit; border-color: rgb(255 255 255 / 50%)">A</kbd>
       </button>
     </form>
     <div v-else class="small muted">Operators can approve or deny this {{ plan ? 'plan' : 'call' }}.</div>
+    <GrantDialog v-if="canGrant" :open="granting" :approval="approval" @close="granting = false" @granted="granted" />
   </div>
 </template>

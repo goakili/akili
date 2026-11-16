@@ -57,6 +57,7 @@ The platform ships as three parts:
 ## Core features
 
 - **Policy before every action**: allow, deny or approve, decided by the agent and the control plane independently, with risk from a shared catalog. Autonomy levels L0 to L3; critical actions always need a human. [How a tool call is decided](#how-a-tool-call-is-decided)
+- **Earned autonomy**: approve once and allow similar calls for a few hours, open change windows or declare freezes, grant runbooks with bounded parameters, and see suggestions drawn from what people kept approving. Grants never cover a policy denial or a critical call, and a stuck task pauses to ask instead of looping.
 - **Coding agents**: projects on GitHub, GitLab or Gitea, a branch per task, pull requests, sandboxed tests, and a git proxy that keeps forge credentials off the agent. [Coding](#coding-projects-branches-and-pull-requests)
 - **Operations**: alerts become triage tasks; fixes are change plans approved once, run step by step and rolled back automatically if a check fails. A recorded browser terminal. [Operations](#operations-alerts-change-plans-and-a-recorded-terminal)
 - **Miabi**: deploys, rollbacks, databases and workspaces, scoped by policy, with every deploy verified on real traffic. [Miabi](#miabi-workspaces-deploys-databases-and-more)

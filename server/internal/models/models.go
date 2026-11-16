@@ -52,9 +52,10 @@ type Organization struct {
 	Slug       string `gorm:"size:120;uniqueIndex" json:"slug"`
 	KillSwitch bool   `json:"kill_switch"`
 	// SandboxRoot runs project sandboxes as root (still without capabilities); off by default.
-	SandboxRoot bool      `gorm:"not null;default:false" json:"sandbox_root"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	SandboxRoot bool             `gorm:"not null;default:false" json:"sandbox_root"`
+	Autonomy    AutonomySettings `gorm:"type:jsonb;serializer:json" json:"autonomy"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
 }
 
 // Roles, lowest to highest.
@@ -362,9 +363,11 @@ type AlertRoute struct {
 	Match     map[string]string `gorm:"type:jsonb;serializer:json" json:"match"` // required label values
 	Autonomy  proto.Autonomy    `json:"autonomy"`
 	// Instructions are added to every triage goal (e.g. escalation contacts, runbook hints).
-	Instructions string     `gorm:"type:text" json:"instructions"`
-	LastAlertAt  *time.Time `json:"last_alert_at"`
-	CreatedBy    string     `gorm:"size:40" json:"created_by"`
+	Instructions string `gorm:"type:text" json:"instructions"`
+	// RunbookID is a hint for the agent; only a grant lets the runbook run unattended.
+	RunbookID   *string    `gorm:"size:40" json:"runbook_id"`
+	LastAlertAt *time.Time `json:"last_alert_at"`
+	CreatedBy   string     `gorm:"size:40" json:"created_by"`
 }
 
 // MiabiWatch reacts to a Miabi app's events: verify each deploy, triage failures.
@@ -614,7 +617,12 @@ type Question struct {
 	AnsweredBy *string    `gorm:"size:40" json:"answered_by"`
 	AnsweredAt *time.Time `json:"answered_at"`
 	ExpiresAt  time.Time  `json:"expires_at"`
+	// Kind is "" for an agent's ask_user, or QuestionStop when Akili paused the task itself.
+	Kind string `gorm:"size:20" json:"kind"`
 }
+
+// QuestionStop marks a question Akili asked because a stop condition fired; answering it never runs the paused call.
+const QuestionStop = "stop"
 
 // Deadline excludes time spent waiting on a person; ok is false without a timeout, before start, or while waiting.
 func (t *Task) Deadline() (at time.Time, ok bool) {
@@ -800,7 +808,7 @@ func All() []any {
 		&ChatSession{}, &SessionMessage{}, &SessionEvent{}, &Attachment{}, &Approval{}, &Task{}, &Schedule{}, &Usage{},
 		&AuditLog{}, &Setting{}, &UpgradeStep{}, &Integration{}, &Project{}, &Change{}, &AlertRoute{}, &TerminalSession{}, &MiabiWatch{},
 		&MiabiWorkspace{}, &MCPServer{}, &MCPTool{}, &Lesson{}, &ChatChannel{}, &ChatIdentity{}, &ChatLinkCode{}, &ChatConversation{},
-		&ProjectPlan{}, &PlanPhase{}, &TaskPlan{}, &Question{},
+		&ProjectPlan{}, &PlanPhase{}, &TaskPlan{}, &Question{}, &ApprovalGrant{}, &ChangeWindow{}, &Runbook{}, &SuggestionDismissal{},
 	}
 }
 
