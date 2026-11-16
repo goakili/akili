@@ -14,6 +14,7 @@ import Badge from './Badge.vue'
 import JsonBlock from './JsonBlock'
 import PlanView from './PlanView.vue'
 import GrantDialog from './GrantDialog.vue'
+import ReviewPanel from './ReviewPanel.vue'
 import Icon from './Icon'
 import { parsePlan } from '../lib/tools'
 
@@ -45,6 +46,7 @@ const left = computed(() => countdown(props.approval.expires_at, now.value))
 const expired = computed(() => pending.value && left.value === 'expired')
 const urgent = computed(() => pending.value && new Date(props.approval.expires_at).getTime() - now.value < 60_000)
 const canDecide = computed(() => pending.value && auth.isOperator && !expired.value && !busy.value)
+const reviewTarget = computed(() => props.changeId || props.approval.change_id || '')
 // Change plans are granted through runbooks, and critical calls always need a person.
 const canGrant = computed(() => !plan.value && props.approval.risk !== 'critical')
 const granting = ref(false)
@@ -119,6 +121,7 @@ function onKey(e: KeyboardEvent) {
     <div v-if="plan && pending" class="small muted">
       Approving runs every step, then every check; if anything fails the agent runs the rollback. Each call must match this plan exactly.
     </div>
+    <ReviewPanel v-if="plan && reviewTarget" compact target-type="change" :target-id="reviewTarget" :author-agent-id="approval.agent_id" />
     <div v-if="!pending" class="small muted">
       {{ approval.status }}{{ approval.decided_at ? ' ' + relTime(approval.decided_at, now) : '' }}{{ approval.note ? ` · “${approval.note}”` : '' }}
     </div>

@@ -25,6 +25,7 @@ import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
 import DiffViewer from '../components/DiffViewer.vue'
 import PrLink from '../components/PrLink.vue'
+import ReviewPanel from '../components/ReviewPanel.vue'
 import TriggerChip from '../components/TriggerChip.vue'
 import Icon, { type IconName } from '../components/Icon'
 
@@ -247,6 +248,15 @@ onUnmounted(() => {
   off?.()
   offRe?.()
 })
+
+const CI_STATES: Record<string, string> = {
+  watching: 'waiting for checks',
+  fixing: 'checks failed; the agent is fixing them',
+  passed: 'checks passed',
+  failed: 'checks failed',
+  gave_up: 'checks still fail after every fix round; a person needs to look',
+  none: 'no checks reported',
+}
 </script>
 
 <template>
@@ -312,6 +322,13 @@ onUnmounted(() => {
             <PrLink v-if="task.pr_url" :url="task.pr_url" :number="task.pr_number" />
             <span v-else class="muted">{{ terminal ? 'none was opened' : 'not opened yet' }}</span>
           </dd>
+          <template v-if="task.ci_state">
+            <dt>CI</dt>
+            <dd>
+              {{ CI_STATES[task.ci_state] ?? task.ci_state }}<span v-if="task.ci_rounds" class="muted"> · {{ task.ci_rounds }} fix round{{ task.ci_rounds === 1 ? '' : 's' }}</span>
+              <div v-if="task.ci_detail" class="small muted">{{ task.ci_detail }}</div>
+            </dd>
+          </template>
           <template v-if="task.trigger && task.trigger !== 'manual'">
             <dt>Trigger</dt>
             <dd>{{ TRIGGERS[task.trigger] ?? task.trigger }}<span v-if="task.trigger_ref" class="mono small muted"> · {{ task.trigger_ref }}</span></dd>
@@ -333,6 +350,13 @@ onUnmounted(() => {
           </DiffViewer>
         </template>
         <p v-else class="small muted" style="margin: 0"><Icon name="gitDiff" :size="14" style="vertical-align: -2px" /> The diff appears here once the agent opens a pull request.</p>
+      </div>
+    </section>
+
+    <section v-if="terminal && task.kind !== 'review'" class="card" aria-labelledby="reviews-title">
+      <div class="card-head"><h2 id="reviews-title"><Icon name="eye" />Reviews</h2></div>
+      <div class="card-body">
+        <ReviewPanel target-type="task" :target-id="task.id" :author-agent-id="task.assigned_agent_id" />
       </div>
     </section>
 

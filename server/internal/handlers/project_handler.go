@@ -200,6 +200,7 @@ type ProjectRequest struct {
 		SandboxImage  string   `json:"sandbox_image"`
 		Instructions  string   `json:"instructions"`
 		TriggerLabel  string   `json:"trigger_label"`
+		CIFixRounds   int      `json:"ci_fix_rounds" description:"times a task goes back to fix failing CI on its PR: 0 default (3), -1 off, at most 10" minimum:"-1" maximum:"10"`
 		Autonomy      *int     `json:"autonomy" description:"autonomy of the scaffold task (default 2)"`
 	} `json:"body"`
 }
@@ -208,7 +209,7 @@ func (r *ProjectRequest) input() coder.ProjectInput {
 	b := r.Body
 	return coder.ProjectInput{Name: b.Name, Description: b.Description, IntegrationID: b.IntegrationID, Owner: strings.TrimSpace(b.Owner),
 		Repo: strings.TrimSpace(b.Repo), AgentID: b.AgentID, Selector: b.Selector, SandboxImage: b.SandboxImage, Instructions: b.Instructions,
-		TriggerLabel: b.TriggerLabel, CreateRepo: b.CreateRepo, Private: b.Private}
+		TriggerLabel: b.TriggerLabel, CIFixRounds: b.CIFixRounds, CreateRepo: b.CreateRepo, Private: b.Private}
 }
 
 type ProjectCreated struct {

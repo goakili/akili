@@ -54,16 +54,16 @@ func PolicyTemplates() []Policy {
 	return []Policy{
 		{
 			Name:    "read-only",
-			Version: 7,
+			Version: 8,
 			// plan_propose only creates a draft a person must activate, so read-only agents can plan work.
-			Tools:   Rule{Allow: []string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolGitStatus, ToolGitDiff, ToolLessonPropose, ToolPlanPropose, ToolAskUser}},
+			Tools:   Rule{Allow: []string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolGitStatus, ToolGitDiff, ToolLessonPropose, ToolPlanPropose, ToolAskUser, ToolReviewSubmit}},
 			Paths:   Rule{Allow: []string{"$WORKDIR/**", "/var/log/**", "/etc/**"}, Deny: commonDenyPaths},
 			MaxRisk: RiskLow,
 		},
 		{
 			Name:       "operator-safe",
-			Version:    8,
-			Tools:      Rule{Allow: append(append([]string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolShell, ToolHTTPFetch, ToolLessonPropose, ToolAskUser}, readHostTools...), miabiReadTools...)},
+			Version:    9,
+			Tools:      Rule{Allow: append(append([]string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolShell, ToolHTTPFetch, ToolLessonPropose, ToolAskUser, ToolReviewSubmit}, readHostTools...), miabiReadTools...)},
 			Apps:       Rule{Allow: []string{"*"}},
 			Services:   Rule{Allow: []string{"*"}},
 			Containers: Rule{Allow: []string{"*"}},
@@ -86,9 +86,9 @@ func PolicyTemplates() []Policy {
 		},
 		{
 			Name:    "operator",
-			Version: 6,
+			Version: 7,
 			Tools: Rule{Allow: append(append(append([]string{ToolFSRead, ToolFSList, ToolSearch, ToolHostInfo, ToolHTTPFetch, ToolShell, ToolFSEdit, ToolFSWrite,
-				ToolServiceRestart, ToolDockerRestart, ToolChangeRun, ToolLessonPropose, ToolAskUser}, readHostTools...), miabiReadTools...), miabiWriteTools...)},
+				ToolServiceRestart, ToolDockerRestart, ToolChangeRun, ToolLessonPropose, ToolAskUser, ToolReviewSubmit}, readHostTools...), miabiReadTools...), miabiWriteTools...)},
 			Apps:       Rule{Allow: []string{"*"}},
 			Paths:      Rule{Allow: []string{"$WORKDIR/**", "/var/log/**", "/etc/**", "/tmp/**", "/var/tmp/**", "/opt/**", "/srv/**"}, Deny: commonDenyPaths},
 			Commands:   Rule{Allow: []string{"*"}, Deny: append([]string{"*sudo su*", "*sudo -i*", "*sudo bash*", "*sudo sh*", "*passwd*", "*visudo*", "*iptables -F*"}, commonDenyCommands...)},

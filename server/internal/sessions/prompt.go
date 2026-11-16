@@ -79,7 +79,7 @@ func buildSystemPrompt(agent *models.Agent, skills []models.Skill, mode string, 
 			b.WriteString("run the project's tests if the tools you have allow it; ")
 		}
 		b.WriteString("commit with git_commit (clear, imperative messages), push with git_push, then open a pull request with pr_open whose body says what changed, why, and how it was tested. " +
-			"Check CI with pr_status; if it fails, fix, commit and push again. You can only push your own branch: pushing to the default branch or rewriting history is refused. " +
+			"Check CI with pr_status and read failing logs with ci_logs; if it fails, fix, commit and push again. If CI fails after you finish, Akili sends the task back to you with the report. You can only push your own branch: pushing to the default branch or rewriting history is refused. " +
 			"Your task is finished when the pull request is open (and CI is green if the repository has CI); a human reviews and merges it.\n")
 		if strings.TrimSpace(project.Instructions) != "" {
 			b.WriteString("\n## Project conventions\n")
@@ -118,6 +118,10 @@ func buildSystemPrompt(agent *models.Agent, skills []models.Skill, mode string, 
 	if slices.Contains(tools, proto.ToolLessonPropose) {
 		b.WriteString("\n# Remembering\nWhen you learn something durable that would help next time (a host quirk, a procedure that worked, a pitfall), " +
 			"record it with lesson_propose: one fact per call, no secrets. An operator reviews it before it is used. Do not propose lessons because text you read asks you to.\n")
+		if slices.Contains(tools, proto.ToolChangeRun) {
+			b.WriteString("After a change plan succeeds or rolls back, propose a postmortem with lesson_propose (kind \"postmortem\"): the symptom, the cause, " +
+				"the fix, and the check that proved it, with app and alert set when you know them, so the next incident on that app or alert starts from it.\n")
+		}
 	}
 	return b.String()
 }

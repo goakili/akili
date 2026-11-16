@@ -272,6 +272,12 @@ type LessonRequest struct {
 	Body struct {
 		Text    string  `json:"text" required:"true"`
 		AgentID *string `json:"agent_id" description:"empty: applies to every agent"`
+		Kind    string  `json:"kind" description:"empty, or postmortem (up to 2000 characters)"`
+		// App, Alert, Host and ProjectID limit where the lesson is recalled; empty matches everywhere.
+		App       string  `json:"app" description:"workspace/app named in the task"`
+		Alert     string  `json:"alert" description:"alert name named in the task"`
+		Host      string  `json:"host" description:"an agent label"`
+		ProjectID *string `json:"project_id"`
 	} `json:"body"`
 }
 
@@ -302,7 +308,9 @@ func (h *Handlers) CreateLesson(c *okapi.Context, req *LessonRequest) error {
 			return c.AbortBadRequest("unknown agent")
 		}
 	}
-	l, err := h.Lessons.Create(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), agent, req.Body.Text)
+	b := req.Body
+	l, err := h.Lessons.Create(c.Request().Context(), middlewares.OrgID(c), middlewares.UserID(c), agent, b.Text,
+		lessons.Scope{Kind: b.Kind, App: b.App, Alert: b.Alert, Host: b.Host, ProjectID: emptyNil(b.ProjectID)})
 	if err != nil {
 		return lessonErr(c, err)
 	}

@@ -48,6 +48,7 @@ import (
 	"github.com/goakili/akili/server/internal/notify"
 	"github.com/goakili/akili/server/internal/plans"
 	"github.com/goakili/akili/server/internal/procsec"
+	"github.com/goakili/akili/server/internal/reviews"
 	"github.com/goakili/akili/server/internal/routes"
 	"github.com/goakili/akili/server/internal/sessions"
 	"github.com/goakili/akili/server/internal/siem"
@@ -170,10 +171,12 @@ func runServer(cli *okapicli.CLI) error {
 		return err
 	}
 	forwarder := siem.New(db, elector, cfg.SIEM.FromStart, sinks...)
+	reviewSvc := reviews.New(db, auditLog, taskSvc, coderSvc)
+	hub.AddRemoteRunner([]string{proto.ToolReviewSubmit}, reviewSvc.RunRemote)
 	chatSvc := chat.New(db, box, b, auditLog, hub, taskSvc, elector)
 
 	h := &handlers.Handlers{Cfg: cfg, DB: db, Bus: b, Audit: auditLog, Auth: authSvc, Fleet: fleetSvc, Tunnels: tunnels,
-		Sessions: hub, Tasks: taskSvc, Box: box, Coder: coderSvc, Miabi: miabiSvc, OIDC: sso, SIEM: forwarder, Chat: chatSvc, Lessons: lessonSvc, Plans: planSvc, MCP: mcpSvc, Mail: mailer, Autonomy: autonomySvc}
+		Sessions: hub, Tasks: taskSvc, Box: box, Coder: coderSvc, Miabi: miabiSvc, OIDC: sso, SIEM: forwarder, Chat: chatSvc, Lessons: lessonSvc, Plans: planSvc, MCP: mcpSvc, Mail: mailer, Autonomy: autonomySvc, Reviews: reviewSvc}
 	routes.Register(app, h, middlewares.NewAuthenticator(db, authSvc))
 
 	return cli.RunServer(&okapicli.RunOptions{
@@ -189,6 +192,7 @@ func runServer(cli *okapicli.CLI) error {
 					it.TokenExpiresAt.Format("2006-01-02"), notifier.Link("/integrations")))
 				mailer.TokenExpiring(it.OrganizationID, it)
 			})
+			go coderSvc.RunCI(ctx, elector.Leading, taskSvc)
 			go miabiSvc.RunEvents(ctx, elector, func(ctx context.Context, t *miabi.Trigger) { h.MiabiTrigger(ctx, t) })
 			logger.Info("akili control plane starting", "version", config.Version, "port", cfg.Port, "public_url", cfg.PublicURL,
 				"kms", box.Keyring().Provider(), "tls", cfg.TLS.Enabled(), "agent_mtls", cfg.TLS.AgentMTLS, "sso", sso != nil, "siem_sinks", len(sinks))

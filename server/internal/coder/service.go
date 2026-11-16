@@ -392,6 +392,7 @@ type ProjectInput struct {
 	SandboxImage  string
 	Instructions  string
 	TriggerLabel  string
+	CIFixRounds   int
 	// CreateRepo creates the repository on the forge instead of connecting an existing one.
 	CreateRepo bool
 	Private    bool
@@ -434,6 +435,9 @@ func validOwner(kind, owner string) bool {
 
 // CreateProject connects (or creates) a repository and registers it as a project.
 func (s *Service) CreateProject(ctx context.Context, org, userID string, in ProjectInput) (*models.Project, error) {
+	if in.CIFixRounds < -1 || in.CIFixRounds > 10 {
+		return nil, errors.New("ci_fix_rounds must be between -1 (off) and 10")
+	}
 	in.Owner = strings.Trim(strings.TrimSpace(in.Owner), "/")
 	if !repoNameRE.MatchString(in.Repo) {
 		return nil, errors.New("repo must be a plain name (letters, digits, . _ -)")
@@ -485,7 +489,7 @@ func (s *Service) CreateProject(ctx context.Context, org, userID string, in Proj
 	p := &models.Project{Base: models.Base{ID: models.NewID("prj"), OrganizationID: org}, Name: name, Slug: s.uniqueSlug(ctx, org, slugify(name)),
 		Description: in.Description, IntegrationID: it.ID, Forge: it.Kind, Owner: repo.Owner, Repo: repo.Name, DefaultBranch: repo.DefaultBranch,
 		WebURL: repo.WebURL, AgentID: emptyToNil(in.AgentID), Selector: nonNil(in.Selector), SandboxImage: strings.TrimSpace(in.SandboxImage),
-		Instructions: in.Instructions, TriggerLabel: strings.TrimSpace(in.TriggerLabel), CreatedBy: userID}
+		Instructions: in.Instructions, TriggerLabel: strings.TrimSpace(in.TriggerLabel), CIFixRounds: in.CIFixRounds, CreatedBy: userID}
 	if p.DefaultBranch == "" {
 		p.DefaultBranch = "main"
 	}
@@ -521,6 +525,9 @@ func (s *Service) checkGitLabAccess(ctx context.Context, it *models.Integration,
 
 // UpdateProject edits a project's settings (the repository itself is fixed).
 func (s *Service) UpdateProject(ctx context.Context, org, userID, id string, in ProjectInput) (*models.Project, error) {
+	if in.CIFixRounds < -1 || in.CIFixRounds > 10 {
+		return nil, errors.New("ci_fix_rounds must be between -1 (off) and 10")
+	}
 	p, err := s.Project(ctx, org, id)
 	if err != nil {
 		return nil, err
@@ -530,6 +537,7 @@ func (s *Service) UpdateProject(ctx context.Context, org, userID, id string, in 
 	}
 	p.Description, p.AgentID, p.Selector = in.Description, emptyToNil(in.AgentID), nonNil(in.Selector)
 	p.SandboxImage, p.Instructions, p.TriggerLabel = strings.TrimSpace(in.SandboxImage), in.Instructions, strings.TrimSpace(in.TriggerLabel)
+	p.CIFixRounds = in.CIFixRounds
 	if err := s.db.WithContext(ctx).Save(p).Error; err != nil {
 		return nil, err
 	}

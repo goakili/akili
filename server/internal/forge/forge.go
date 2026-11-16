@@ -59,6 +59,13 @@ type Check struct {
 	State       string `json:"state"` // success | pending | failure | error
 	Description string `json:"description,omitempty"`
 	URL         string `json:"url,omitempty"`
+	// JobID identifies the CI job behind the check, where the forge exposes its log.
+	JobID int64 `json:"-"`
+}
+
+// CheckLogger fetches the log of a CI job; forges whose checks carry no log do not implement it.
+type CheckLogger interface {
+	CheckLog(ctx context.Context, owner, name string, jobID int64) (string, error)
 }
 
 // Status is the combined CI state of a ref.

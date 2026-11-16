@@ -312,7 +312,32 @@ type Project struct {
 	Instructions string `gorm:"type:text" json:"instructions"`
 	// TriggerLabel creates a task when an issue gets this label (forge webhook); "" disables.
 	TriggerLabel string `gorm:"size:60" json:"trigger_label"`
-	CreatedBy    string `gorm:"size:40" json:"created_by"`
+	// CIFixRounds bounds how often a task goes back to fix failing CI on its PR: 0 takes DefaultCIFixRounds, -1 turns it off.
+	CIFixRounds int    `gorm:"not null;default:0" json:"ci_fix_rounds"`
+	CreatedBy   string `gorm:"size:40" json:"created_by"`
+}
+
+// CI states of a task's pull request after the agent finished.
+const (
+	CIWatching = "watching"
+	CIFixing   = "fixing"
+	CIPassed   = "passed"
+	CIFailed   = "failed"
+	CIGaveUp   = "gave_up"
+	CINone     = "none"
+)
+
+// DefaultCIFixRounds is the fix rounds a project gets when it sets none.
+const DefaultCIFixRounds = 3
+
+func (p *Project) FixRounds() int {
+	switch {
+	case p.CIFixRounds < 0:
+		return 0
+	case p.CIFixRounds == 0:
+		return DefaultCIFixRounds
+	}
+	return p.CIFixRounds
 }
 
 func (p *Project) FullName() string { return p.Owner + "/" + p.Repo }
@@ -454,9 +479,15 @@ const (
 // Lesson reaches system prompts only after an operator approves it, so injected text cannot quietly change behaviour.
 type Lesson struct {
 	Base
-	AgentID    *string    `gorm:"size:40;index" json:"agent_id"` // nil: applies to every agent
-	Text       string     `gorm:"size:500;not null" json:"text"`
-	Status     string     `gorm:"size:20;index;not null" json:"status"`
+	AgentID *string `gorm:"size:40;index" json:"agent_id"` // nil: applies to every agent
+	Text    string  `gorm:"type:text;not null" json:"text"`
+	Status  string  `gorm:"size:20;index;not null" json:"status"`
+	// Kind is "" or "postmortem". App, Alert, Host (an agent label) and ProjectID limit where it is recalled; empty matches everywhere.
+	Kind       string     `gorm:"size:20" json:"kind"`
+	App        string     `gorm:"size:200" json:"app"`
+	Alert      string     `gorm:"size:200" json:"alert"`
+	Host       string     `gorm:"size:120" json:"host"`
+	ProjectID  *string    `gorm:"size:40;index" json:"project_id"`
 	SessionID  *string    `gorm:"size:40" json:"session_id"` // where it was proposed
 	TaskID     *string    `gorm:"size:40" json:"task_id"`
 	ProposedBy string     `gorm:"size:40" json:"proposed_by"` // agent or user id
@@ -565,6 +596,8 @@ type ChatSession struct {
 	// System and ToolNames are fixed at first open: providers bind reasoning to the exact prompt and tool set.
 	System    string   `gorm:"type:text" json:"-"`
 	ToolNames []string `gorm:"type:jsonb;serializer:json" json:"tool_names"`
+	// ResumeGoal is the next user turn of a continued run; it is cleared once the agent has recorded it.
+	ResumeGoal string `gorm:"type:text" json:"-"`
 }
 
 // SessionMessage history is append-only: it is replayed to the provider exactly as stored.
@@ -717,6 +750,17 @@ type Task struct {
 	Branch     string     `gorm:"size:200" json:"branch"`
 	PRNumber   int        `json:"pr_number"`
 	PRURL      string     `gorm:"size:500" json:"pr_url"`
+	// CIState follows the PR's checks after the agent finished: watching, fixing, passed, failed, gave_up or none.
+	CIState  string     `gorm:"column:ci_state;size:20;index" json:"ci_state"`
+	CIRounds int        `gorm:"column:ci_rounds;not null;default:0" json:"ci_rounds"`
+	CISHA    string     `gorm:"column:ci_sha;size:64" json:"ci_sha"`
+	CISince  *time.Time `gorm:"column:ci_since" json:"ci_since"`
+	CIDetail string     `gorm:"column:ci_detail;size:1000" json:"ci_detail"`
+	// ResumeGoal is handed to the next run's session; the control plane sets it when it sends the task back.
+	ResumeGoal string `gorm:"type:text" json:"-"`
+	// Kind is "" for ordinary work, or TaskKindReview for a read-only review of another agent's work.
+	Kind     string  `gorm:"size:20;index" json:"kind"`
+	ReviewID *string `gorm:"size:40" json:"review_id"`
 	// Trigger records what created the task (manual, schedule, issue).
 	Trigger    string `gorm:"size:40" json:"trigger"`
 	TriggerRef string `gorm:"size:300" json:"trigger_ref"`
@@ -808,7 +852,7 @@ func All() []any {
 		&ChatSession{}, &SessionMessage{}, &SessionEvent{}, &Attachment{}, &Approval{}, &Task{}, &Schedule{}, &Usage{},
 		&AuditLog{}, &Setting{}, &UpgradeStep{}, &Integration{}, &Project{}, &Change{}, &AlertRoute{}, &TerminalSession{}, &MiabiWatch{},
 		&MiabiWorkspace{}, &MCPServer{}, &MCPTool{}, &Lesson{}, &ChatChannel{}, &ChatIdentity{}, &ChatLinkCode{}, &ChatConversation{},
-		&ProjectPlan{}, &PlanPhase{}, &TaskPlan{}, &Question{}, &ApprovalGrant{}, &ChangeWindow{}, &Runbook{}, &SuggestionDismissal{},
+		&ProjectPlan{}, &PlanPhase{}, &TaskPlan{}, &Question{}, &ApprovalGrant{}, &ChangeWindow{}, &Runbook{}, &SuggestionDismissal{}, &Review{},
 	}
 }
 
@@ -856,6 +900,9 @@ type PlanPhase struct {
 	DoneByTask *string `gorm:"size:40" json:"done_by_task"`
 	// UpdatedBy is a user id, or "agent:<id>" for a change reported through plan_phase_update.
 	UpdatedBy string `gorm:"size:60" json:"updated_by"`
+	// AgentID and Selector pick who works on the phase when a task for it names no agent.
+	AgentID  *string  `gorm:"size:40" json:"agent_id"`
+	Selector []string `gorm:"type:jsonb;serializer:json" json:"selector"`
 }
 
 // TaskPlan snapshots the plan at task creation: the agent works from it and the audit shows exactly what it was given.

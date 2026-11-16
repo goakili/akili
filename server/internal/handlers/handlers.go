@@ -44,6 +44,7 @@ import (
 	"github.com/goakili/akili/server/internal/middlewares"
 	"github.com/goakili/akili/server/internal/notify"
 	"github.com/goakili/akili/server/internal/plans"
+	"github.com/goakili/akili/server/internal/reviews"
 	"github.com/goakili/akili/server/internal/sessions"
 	"github.com/goakili/akili/server/internal/siem"
 	"github.com/goakili/akili/server/internal/storage/pagination"
@@ -73,6 +74,7 @@ type Handlers struct {
 	MCP      *mcp.Service
 	Mail     *notify.Mailer
 	Autonomy *autonomy.Service
+	Reviews  *reviews.Service
 }
 
 func ok[T any](c *okapi.Context, data T) error {

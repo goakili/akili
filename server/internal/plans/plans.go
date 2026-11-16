@@ -74,6 +74,9 @@ type PhaseInput struct {
 	Title    string `json:"title"`
 	Detail   string `json:"detail,omitempty"`
 	DoneWhen string `json:"done_when,omitempty" description:"what finished means for this phase"`
+	// AgentID and Selector target the phase's tasks when they name no agent of their own.
+	AgentID  *string  `json:"agent_id,omitempty"`
+	Selector []string `json:"selector,omitempty"`
 }
 
 type CreateInput struct {
@@ -178,10 +181,11 @@ func MergePhases(existing []models.PlanPhase, in []PhaseInput) (keep []models.Pl
 		if st, ok := byID[s.ID]; ok && !used[s.ID] {
 			used[s.ID] = true
 			st.Title, st.Detail, st.DoneWhen, st.Position = s.Title, s.Detail, s.DoneWhen, i
+			st.AgentID, st.Selector = emptyNil(s.AgentID), nonNil(s.Selector)
 			keep = append(keep, st)
 			continue
 		}
-		create = append(create, PhaseInput{Title: s.Title, Detail: s.Detail, DoneWhen: s.DoneWhen})
+		create = append(create, PhaseInput{Title: s.Title, Detail: s.Detail, DoneWhen: s.DoneWhen, AgentID: s.AgentID, Selector: s.Selector})
 		positions = append(positions, i)
 	}
 	for _, st := range existing {
@@ -323,7 +327,8 @@ func (s *Service) create(ctx context.Context, org, projectID string, in CreateIn
 		}
 		for i, st := range in.Phases {
 			if err := tx.Create(&models.PlanPhase{Base: models.Base{ID: models.NewID("phs"), OrganizationID: org}, PlanID: p.ID, Position: i,
-				Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Status: models.PhaseTodo, UpdatedBy: phaseBy}).Error; err != nil {
+				Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Status: models.PhaseTodo, UpdatedBy: phaseBy,
+				AgentID: emptyNil(st.AgentID), Selector: nonNil(st.Selector)}).Error; err != nil {
 				return err
 			}
 		}
@@ -428,14 +433,16 @@ func (s *Service) ReplacePhases(ctx context.Context, org, userID, id string, in 
 			}
 		}
 		for _, st := range keep {
-			if err := tx.Model(&models.PlanPhase{}).Where("id = ?", st.ID).
-				Updates(map[string]any{"title": st.Title, "detail": st.Detail, "done_when": st.DoneWhen, "position": st.Position}).Error; err != nil {
+			// Struct update with Select: a map update would bypass the JSON serializer on selector.
+			if err := tx.Model(&models.PlanPhase{}).Where("id = ?", st.ID).Select("title", "detail", "done_when", "position", "agent_id", "selector").
+				Updates(&models.PlanPhase{Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Position: st.Position, AgentID: st.AgentID, Selector: st.Selector}).Error; err != nil {
 				return err
 			}
 		}
 		for i, st := range create {
 			if err := tx.Create(&models.PlanPhase{Base: models.Base{ID: models.NewID("phs"), OrganizationID: org}, PlanID: p.ID,
-				Position: positions[i], Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Status: models.PhaseTodo, UpdatedBy: userID}).Error; err != nil {
+				Position: positions[i], Title: st.Title, Detail: st.Detail, DoneWhen: st.DoneWhen, Status: models.PhaseTodo, UpdatedBy: userID,
+				AgentID: emptyNil(st.AgentID), Selector: nonNil(st.Selector)}).Error; err != nil {
 				return err
 			}
 		}
@@ -705,3 +712,17 @@ func (s *Service) phaseUpdate(ctx context.Context, sess *models.ChatSession, inp
 
 // IsAgentUpdate reports whether a phase's last change came from an agent.
 func IsAgentUpdate(st models.PlanPhase) bool { return strings.HasPrefix(st.UpdatedBy, agentUpdaterPfx) }
+
+func emptyNil(s *string) *string {
+	if s == nil || *s == "" {
+		return nil
+	}
+	return s
+}
+
+func nonNil(l []string) []string {
+	if l == nil {
+		return []string{}
+	}
+	return l
+}

@@ -25,6 +25,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,8 +38,11 @@ import (
 	"gorm.io/gorm"
 )
 
-// MaxInPrompt bounds how many approved lessons enter a system prompt (newest first).
+// MaxInPrompt bounds how many approved lessons enter a system prompt (most specific, then newest, first).
 const MaxInPrompt = 20
+
+// maxPromptChars caps the lessons' share of a system prompt; postmortems can be long.
+const maxPromptChars = 6000
 
 // maxPerSession limits proposals so a looping or manipulated model cannot flood the review queue.
 const maxPerSession = 5
@@ -50,7 +56,7 @@ func New(db *gorm.DB, a *audit.Logger) *Service { return &Service{db: db, audit:
 
 var (
 	ErrNotFound = errors.New("lesson not found")
-	ErrInvalid  = errors.New("a lesson must be 10-400 characters")
+	ErrInvalid  = errors.New("a lesson must be 10-400 characters (a postmortem up to 2000)")
 )
 
 // RunRemote executes lesson_propose for a session (a remote tool runner).
@@ -60,6 +66,9 @@ func (s *Service) RunRemote(ctx context.Context, sess *models.ChatSession, _ str
 		return proto.RemoteResult{Output: "error: invalid input", IsError: true}
 	}
 	text := clean(in.Lesson)
+	if in.Kind == "lesson" {
+		in.Kind = ""
+	}
 	var n int64
 	s.db.WithContext(ctx).Model(&models.Lesson{}).Where("session_id = ?", sess.ID).Count(&n)
 	if n >= maxPerSession {
@@ -73,7 +82,8 @@ func (s *Service) RunRemote(ctx context.Context, sess *models.ChatSession, _ str
 	}
 	agent := sess.AgentID
 	l := &models.Lesson{Base: models.Base{ID: models.NewID("lsn"), OrganizationID: sess.OrganizationID}, AgentID: &agent, Text: text,
-		Status: models.LessonProposed, SessionID: &sess.ID, TaskID: sess.TaskID, ProposedBy: sess.AgentID}
+		Status: models.LessonProposed, SessionID: &sess.ID, TaskID: sess.TaskID, ProposedBy: sess.AgentID,
+		Kind: in.Kind, App: clean(in.App), Alert: clean(in.Alert), ProjectID: sess.ProjectID}
 	if err := s.db.WithContext(ctx).Create(l).Error; err != nil {
 		return proto.RemoteResult{Output: "error: could not store the lesson", IsError: true}
 	}
@@ -85,21 +95,85 @@ func (s *Service) RunRemote(ctx context.Context, sess *models.ChatSession, _ str
 // clean collapses whitespace: a lesson is one line in the prompt.
 func clean(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-func valid(text string) bool {
+func valid(text, kind string) bool {
+	limit := proto.MaxLessonLen
+	if kind == proto.LessonKindPostmortem {
+		limit = proto.MaxPostmortemLen
+	}
 	n := len([]rune(text))
-	return n >= 10 && n <= proto.MaxLessonLen
+	return n >= 10 && n <= limit
 }
 
-// ForPrompt returns the approved lessons for an agent: its own and the organization-wide ones.
-func (s *Service) ForPrompt(ctx context.Context, org, agentID string) []string {
+// ForPrompt recalls the approved lessons that fit a session: unscoped ones, and those whose app, alert, host label or project match.
+func (s *Service) ForPrompt(ctx context.Context, org string, q models.LessonQuery) []models.PromptLesson {
 	var rows []models.Lesson
-	s.db.WithContext(ctx).Where("organization_id = ? AND status = ? AND (agent_id = ? OR agent_id IS NULL)", org, models.LessonApproved, agentID).
-		Order("decided_at DESC").Limit(MaxInPrompt).Find(&rows)
-	out := make([]string, len(rows))
-	for i, r := range rows {
-		out[i] = r.Text
+	db := s.db.WithContext(ctx).Where("organization_id = ? AND status = ? AND (agent_id = ? OR agent_id IS NULL)", org, models.LessonApproved, q.AgentID)
+	if q.ProjectID != "" {
+		db = db.Where("project_id IS NULL OR project_id = ?", q.ProjectID)
+	} else {
+		db = db.Where("project_id IS NULL")
+	}
+	db.Order("decided_at DESC").Limit(500).Find(&rows)
+	text := strings.ToLower(q.Text)
+	type scored struct {
+		l     models.Lesson
+		score int
+	}
+	var fit []scored
+	for _, l := range rows {
+		// A scoped lesson needs one of its app, alert or host label to match; more matches rank it higher.
+		scoped, score := false, 0
+		for _, scope := range []struct {
+			value   string
+			matches func(string) bool
+		}{
+			{l.App, func(v string) bool { return strings.Contains(text, strings.ToLower(v)) }},
+			{l.Alert, func(v string) bool { return strings.Contains(text, strings.ToLower(v)) }},
+			{l.Host, func(v string) bool { return slices.Contains(q.Labels, v) }},
+		} {
+			if scope.value != "" {
+				scoped = true
+				if scope.matches(scope.value) {
+					score++
+				}
+			}
+		}
+		if scoped && score == 0 {
+			continue
+		}
+		if l.ProjectID != nil {
+			score++
+		}
+		fit = append(fit, scored{l, score})
+	}
+	sort.SliceStable(fit, func(i, j int) bool { return fit[i].score > fit[j].score })
+	var out []models.PromptLesson
+	used := 0
+	for _, f := range fit {
+		line := promptLine(&f.l)
+		if len(out) >= MaxInPrompt || used+len(line) > maxPromptChars {
+			break
+		}
+		used += len(line)
+		out = append(out, models.PromptLesson{ID: f.l.ID, Text: line})
 	}
 	return out
+}
+
+func promptLine(l *models.Lesson) string {
+	if l.Kind != proto.LessonKindPostmortem {
+		return l.Text
+	}
+	var scope []string
+	for _, v := range []string{l.App, l.Alert} {
+		if v != "" {
+			scope = append(scope, v)
+		}
+	}
+	if len(scope) == 0 {
+		return "Postmortem: " + l.Text
+	}
+	return fmt.Sprintf("Postmortem (%s): %s", strings.Join(scope, ", "), l.Text)
 }
 
 type Filter struct {
@@ -119,15 +193,28 @@ func (s *Service) List(ctx context.Context, org string, f Filter, p pagination.P
 	return pagination.Find[models.Lesson](q, p, "created_at DESC, id DESC")
 }
 
+// Scope limits where an operator-written lesson is recalled; the zero value recalls it everywhere.
+type Scope struct {
+	Kind      string
+	App       string
+	Alert     string
+	Host      string
+	ProjectID *string
+}
+
 // Create adds an operator-written lesson, approved at once. agentID nil applies it to every agent.
-func (s *Service) Create(ctx context.Context, org, userID string, agentID *string, text string) (*models.Lesson, error) {
+func (s *Service) Create(ctx context.Context, org, userID string, agentID *string, text string, scope Scope) (*models.Lesson, error) {
 	text = clean(text)
-	if !valid(text) {
+	if scope.Kind != "" && scope.Kind != proto.LessonKindPostmortem {
+		return nil, errors.New("kind must be empty or postmortem")
+	}
+	if !valid(text, scope.Kind) {
 		return nil, ErrInvalid
 	}
 	now := time.Now().UTC()
 	l := &models.Lesson{Base: models.Base{ID: models.NewID("lsn"), OrganizationID: org}, AgentID: agentID, Text: text,
-		Status: models.LessonApproved, ProposedBy: userID, DecidedBy: &userID, DecidedAt: &now}
+		Status: models.LessonApproved, ProposedBy: userID, DecidedBy: &userID, DecidedAt: &now,
+		Kind: scope.Kind, App: clean(scope.App), Alert: clean(scope.Alert), Host: clean(scope.Host), ProjectID: scope.ProjectID}
 	if err := s.db.WithContext(ctx).Create(l).Error; err != nil {
 		return nil, err
 	}
@@ -147,7 +234,7 @@ func (s *Service) Decide(ctx context.Context, org, userID, id string, approve bo
 		if text = clean(text); text == "" {
 			text = l.Text
 		}
-		if !valid(text) {
+		if !valid(text, l.Kind) {
 			return nil, ErrInvalid
 		}
 		l.Text = text

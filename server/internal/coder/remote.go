@@ -59,6 +59,8 @@ func (s *Service) runRemote(ctx context.Context, sess *models.ChatSession, tool 
 		return s.openPR(ctx, sess, p, f, in)
 	case proto.ToolPRStatus:
 		return s.prStatus(ctx, sess, p, f)
+	case proto.ToolCILogs:
+		return s.ciLogsTool(ctx, sess, p, f)
 	}
 	return "", fmt.Errorf("%s is not a remote tool", tool)
 }

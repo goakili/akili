@@ -6,6 +6,7 @@
 // Phases keep their id, so the server keeps their status.
 import { nextTick, ref } from 'vue'
 import type { PlanPhaseInput } from '../api'
+import { splitList } from '../lib/format'
 import Icon from './Icon'
 
 const phases = defineModel<PlanPhaseInput[]>({ required: true })
@@ -49,6 +50,13 @@ function remove(i: number) {
           />
           <textarea v-model="s.detail" class="textarea" rows="1" maxlength="4000" :aria-label="`Phase ${i + 1} detail`" placeholder="Detail (optional)" />
           <input v-model="s.done_when" class="input phases-done-when" maxlength="2000" :aria-label="`Phase ${i + 1}: done when`" placeholder="Done when… (optional), e.g. merged with a test" />
+          <input
+            :value="(s.selector ?? []).join(', ')"
+            class="input phases-done-when mono"
+            :aria-label="`Phase ${i + 1}: agent labels`"
+            placeholder="Agent labels (optional): who works on this phase, e.g. frontend"
+            @change="s.selector = splitList(($event.target as HTMLInputElement).value)"
+          />
         </div>
         <div class="phases-edit-actions">
           <button type="button" class="btn btn-ghost btn-icon btn-sm" :disabled="i === 0" :aria-label="`Move phase ${i + 1} up`" @click="move(i, -1)"><Icon name="chevronDown" style="transform: rotate(180deg)" /></button>

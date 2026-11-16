@@ -199,7 +199,7 @@ async function save() {
 const editingPhases = ref(false)
 const ePhases = ref<PlanPhaseInput[]>([])
 function editPhases() {
-  ePhases.value = detailPhases.value.map((s) => ({ id: s.id, title: s.title, detail: s.detail, done_when: s.done_when }))
+  ePhases.value = detailPhases.value.map((s) => ({ id: s.id, title: s.title, detail: s.detail, done_when: s.done_when, agent_id: s.agent_id ?? null, selector: s.selector ?? [] }))
   editingPhases.value = true
 }
 async function savePhases() {

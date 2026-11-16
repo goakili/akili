@@ -73,6 +73,16 @@ const errors = computed(() => (props.showErrors ? projectFormErrors(form.value) 
       <span v-if="errors.sandbox" class="error-msg"><Icon name="alert" />{{ errors.sandbox }}</span>
       <span v-else class="hint"><Icon name="box" :size="12" style="vertical-align: -1px" /> Builds and tests run in a disposable container from this image (the <code>sandbox_exec</code> tool), with the workspace mounted and no host access. Empty disables the sandbox.</span>
     </div>
+    <div class="field">
+      <label :for="`${p}-ci`">When CI fails on a pull request</label>
+      <select :id="`${p}-ci`" v-model.number="form.ci_fix_rounds" class="select">
+        <option :value="0">Send the task back to fix it, up to 3 times</option>
+        <option :value="1">Send it back once</option>
+        <option :value="5">Send it back up to 5 times</option>
+        <option :value="-1">Don't send it back; just report</option>
+      </select>
+      <span class="hint">After the agent finishes, Akili watches the PR's checks. Each round gives the agent the failing logs; after the last, the task is marked failed for a person.</span>
+    </div>
     <div class="field span-all">
       <label :for="`${p}-instr`">Instructions <span class="opt">(optional)</span></label>
       <textarea

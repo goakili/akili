@@ -278,6 +278,7 @@ func (g *GitHub) CommitStatus(ctx context.Context, owner, name, ref string) (*St
 	}
 	var runs struct {
 		CheckRuns []struct {
+			ID         int64  `json:"id"`
 			Name       string `json:"name"`
 			Status     string `json:"status"`
 			Conclusion string `json:"conclusion"`
@@ -295,11 +296,18 @@ func (g *GitHub) CommitStatus(ctx context.Context, owner, name, ref string) (*St
 					state = "failure"
 				}
 			}
-			out.Checks = append(out.Checks, Check{Name: r.Name, State: state, Description: r.Conclusion, URL: r.HTMLURL})
+			out.Checks = append(out.Checks, Check{Name: r.Name, State: state, Description: r.Conclusion, URL: r.HTMLURL, JobID: r.ID})
 		}
 	}
 	out.State = combine(out.Checks)
 	return out, nil
+}
+
+// CheckLog reads an Actions job log; a check run of a GitHub Actions job shares the job's id.
+func (g *GitHub) CheckLog(ctx context.Context, owner, name string, jobID int64) (string, error) {
+	var log string
+	err := g.c.do(ctx, http.MethodGet, fmt.Sprintf("/repos/%s/%s/actions/jobs/%d/logs", esc(owner), esc(name), jobID), nil, &log, "text/plain")
+	return log, err
 }
 
 func (g *GitHub) PRDiff(ctx context.Context, owner, name string, number int) (string, error) {

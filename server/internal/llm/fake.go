@@ -131,6 +131,13 @@ func (f *Fake) Stream(ctx context.Context, req Request, onDelta DeltaFunc) (Resu
 			script = append(script, d)
 		}
 	}
+	if len(script) == 0 && strings.HasPrefix(text, "CI failed on") {
+		script = onCIFail(req.Messages[:start])
+	}
+	reviewing := len(script) == 0 && (strings.HasPrefix(text, "Review a change plan") || strings.HasPrefix(text, "Review the work"))
+	if reviewing {
+		script = reviewScript
+	}
 	done := 0
 	var lastResult *proto.Block
 	for _, m := range req.Messages[start+1:] {
@@ -143,7 +150,8 @@ func (f *Fake) Stream(ctx context.Context, req Request, onDelta DeltaFunc) (Resu
 	}
 	if done < len(script) {
 		d := script[done]
-		if !hasTool(req.Tools, d.tool) {
+		// A reviewer's write is sent although it is not offered, to prove the control plane refuses it.
+		if !hasTool(req.Tools, d.tool) && !(reviewing && d.tool == proto.ToolFSWrite) {
 			return f.text(ctx, fmt.Sprintf("BLOCKED: I need the %s tool, which is not available in this session.", d.tool), usage, onDelta)
 		}
 		raw, _ := json.Marshal(d.input)
@@ -173,6 +181,31 @@ func (f *Fake) Stream(ctx context.Context, req Request, onDelta DeltaFunc) (Resu
 		return f.text(ctx, fmt.Sprintf("The tool call %s:\n\n```\n%s\n```\n\nDone.", status, strings.TrimSpace(out)), usage, onDelta)
 	}
 	return f.text(ctx, "Echo: "+text, usage, onDelta)
+}
+
+// reviewScript first tries a write a reviewer is never offered, then submits a fixed review.
+var reviewScript = []directive{
+	{tool: proto.ToolFSWrite, input: proto.FSWriteInput{Path: "reviewer-was-here.txt", Content: "x"}},
+	{tool: proto.ToolReviewSubmit, input: proto.ReviewSubmitInput{Verdict: proto.VerdictConcerns, Summary: "Scripted review: the plan has no rollback.",
+		Concerns: []string{"There is no rollback step."}}},
+}
+
+// onCIFail scripts the reply to a CI report from "on-ci-fail: <directive>" lines of the original goal; the report itself is never parsed.
+func onCIFail(earlier []proto.Message) []directive {
+	var script []directive
+	for _, m := range earlier {
+		if m.Role != proto.RoleUser {
+			continue
+		}
+		for _, line := range strings.Split(m.Text(), "\n") {
+			if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "on-ci-fail:"); ok {
+				if d, ok := parseDirective(strings.TrimSpace(rest)); ok {
+					script = append(script, d)
+				}
+			}
+		}
+	}
+	return script
 }
 
 func (f *Fake) text(ctx context.Context, s string, usage Usage, onDelta DeltaFunc) (Result, error) {

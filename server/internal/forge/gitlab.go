@@ -326,13 +326,20 @@ func (g *GitLab) CommitStatus(ctx context.Context, owner, name, ref string) (*St
 		if s.Status == "failed" && s.AllowFailure {
 			desc = strings.TrimSpace("allowed to fail " + desc)
 		}
-		out.Checks = append(out.Checks, Check{Name: s.Name, State: state, Description: desc, URL: s.TargetURL})
+		out.Checks = append(out.Checks, Check{Name: s.Name, State: state, Description: desc, URL: s.TargetURL, JobID: s.ID})
 	}
 	out.State = combine(out.Checks)
 	return out, nil
 }
 
 // PRDiff uses raw_diffs (GitLab 17.6+) and pages through /diffs on older instances.
+// CheckLog reads a job's trace; a pipeline job's commit status has the job's id.
+func (g *GitLab) CheckLog(ctx context.Context, owner, name string, jobID int64) (string, error) {
+	var log string
+	err := g.c.do(ctx, http.MethodGet, fmt.Sprintf("%s/jobs/%d/trace", g.project(owner, name), jobID), nil, &log, "text/plain")
+	return log, err
+}
+
 func (g *GitLab) PRDiff(ctx context.Context, owner, name string, number int) (string, error) {
 	mr := fmt.Sprintf("%s/merge_requests/%d", g.project(owner, name), number)
 	var diff string

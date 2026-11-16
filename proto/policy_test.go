@@ -80,6 +80,8 @@ func TestEveryToolHasADenyCase(t *testing.T) {
 		ToolSandboxExec:       {"developer", SandboxExecInput{Command: "sudo rm -rf /"}},
 		ToolPROpen:            {"read-only", PROpenInput{Title: "x"}},
 		ToolPRStatus:          {"operator-safe", EmptyInput{}},
+		ToolCILogs:            {"read-only", EmptyInput{}},
+		ToolReviewSubmit:      {"developer", ReviewSubmitInput{Verdict: "approve", Summary: "ship it"}},
 		ToolServiceStatus:     {"developer", ServiceInput{Unit: "nginx"}},
 		ToolServiceRestart:    {"operator", ServiceInput{Unit: "sshd"}},
 		ToolJournalLogs:       {"read-only", JournalInput{}},
@@ -473,6 +475,20 @@ func TestAskUserInputIsBounded(t *testing.T) {
 		d := Evaluate(template(t, "read-only"), AutonomyL1, wd, Call{Tool: ToolAskUser, Input: input(t, c.in)})
 		if d.Effect != c.want {
 			t.Errorf("%s: got %s (%s), want %s", c.name, d.Effect, d.Reason, c.want)
+		}
+	}
+}
+
+func TestReviewToolsAreReadOnly(t *testing.T) {
+	for _, name := range reviewTools {
+		spec, ok := LookupTool(name)
+		if !ok || spec.Risk != RiskLow {
+			t.Errorf("review tool %s is not a known low-risk tool", name)
+		}
+	}
+	for _, name := range []string{ToolShell, ToolFSWrite, ToolFSEdit, ToolGitCommit, ToolGitPush, ToolPROpen, ToolChangeRun, ToolHTTPFetch, ToolLessonPropose, ToolAskUser, ToolMiabiRestart} {
+		if IsReviewTool(name) {
+			t.Errorf("reviewers may call %s", name)
 		}
 	}
 }
