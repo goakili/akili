@@ -343,10 +343,9 @@ func (f *Fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.ParseInt(p[5], 10, 64)
 		ok(w, 200, map[string]any{"id": id, "number": ws.Pipeline, "status": "succeeded", "branch": "main", "commit": "abc1234"})
 	case len(p) >= 6 && p[4] == "apps":
-		id, _ := strconv.ParseInt(p[5], 10, 64)
 		var a *app
 		for _, x := range ws.Apps {
-			if x.ID == id {
+			if x.Name == p[5] || fmt.Sprintf("uid-%d", x.ID) == p[5] || strconv.FormatInt(x.ID, 10) == p[5] {
 				a = x
 			}
 		}
